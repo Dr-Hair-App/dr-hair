@@ -156,6 +156,12 @@ class ApiEndpoints {
   static const String patientAppointments = '/api/v1/patient/appointments';
   static String patientAppointmentById(String appointmentId) =>
       '/api/v1/patient/appointments/${Uri.encodeComponent(appointmentId)}';
+  static const String patientAppointmentBillingConfig =
+      '/api/v1/patient/appointments/billing-config';
+  static const String patientAppointmentCreatePaymentIntent =
+      '/api/v1/patient/appointments/create-payment-intent';
+  static const String patientAppointmentVerifyAndBook =
+      '/api/v1/patient/appointments/verify-and-book';
   static const String appointmentsClosedDates =
       '/api/v1/appointments/closed-dates';
 

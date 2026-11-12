@@ -4,7 +4,7 @@ import 'package:dr_hair/features/shop/data/repositories/notifications_repository
 import 'package:dr_hair/features/shop/presentation/viewmodels/notifications_cubit.dart';
 import 'package:dr_hair/features/shop/presentation/viewmodels/notifications_state.dart';
 import 'package:dr_hair/features/shop/presentation/views/notifications_view.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 

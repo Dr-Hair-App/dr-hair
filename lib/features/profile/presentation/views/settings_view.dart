@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -260,8 +260,12 @@ class _SettingsViewState extends State<SettingsView> {
                           reason,
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                            color: isSelected ? Colors.white : AppColors.primaryDark,
+                            fontWeight: isSelected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: isSelected
+                                ? Colors.white
+                                : AppColors.primaryDark,
                           ),
                         ),
                         selected: isSelected,
@@ -270,7 +274,9 @@ class _SettingsViewState extends State<SettingsView> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                           side: BorderSide(
-                            color: isSelected ? AppColors.primary : AppColors.border,
+                            color: isSelected
+                                ? AppColors.primary
+                                : AppColors.border,
                           ),
                         ),
                         onSelected: (val) {
@@ -330,12 +336,15 @@ class _SettingsViewState extends State<SettingsView> {
           context,
           const SnackBar(
             backgroundColor: AppColors.primaryDark,
-            content: Text('Your account and profile have been permanently deleted.'),
+            content: Text(
+              'Your account and profile have been permanently deleted.',
+            ),
           ),
         );
       }
     } else {
-      final error = authCubit?.state.errorMessage ??
+      final error =
+          authCubit?.state.errorMessage ??
           'Could not complete account deletion. Please try again.';
       AppToast.show(
         context,
@@ -444,11 +453,15 @@ class _SettingsViewState extends State<SettingsView> {
                         value: user.patientId,
                         trailing: InkWell(
                           onTap: () {
-                            Clipboard.setData(ClipboardData(text: user.patientId));
+                            Clipboard.setData(
+                              ClipboardData(text: user.patientId),
+                            );
                             AppToast.show(
                               context,
                               const SnackBar(
-                                content: Text('Patient ID copied to clipboard!'),
+                                content: Text(
+                                  'Patient ID copied to clipboard!',
+                                ),
                               ),
                             );
                           },
@@ -464,19 +477,25 @@ class _SettingsViewState extends State<SettingsView> {
                     _buildInfoRow(
                       icon: LucideIcons.user,
                       label: 'Full Name',
-                      value: user?.name.isNotEmpty == true ? user!.name : 'Patient User',
+                      value: user?.name.isNotEmpty == true
+                          ? user!.name
+                          : 'Patient User',
                     ),
                     const Divider(height: 20),
                     _buildInfoRow(
                       icon: LucideIcons.mail,
                       label: 'Email',
-                      value: user?.email?.isNotEmpty == true ? user!.email! : 'Not linked',
+                      value: user?.email?.isNotEmpty == true
+                          ? user!.email!
+                          : 'Not linked',
                     ),
                     const Divider(height: 20),
                     _buildInfoRow(
                       icon: LucideIcons.phone,
                       label: 'Mobile',
-                      value: user?.phone?.isNotEmpty == true ? user!.phone! : 'Not linked',
+                      value: user?.phone?.isNotEmpty == true
+                          ? user!.phone!
+                          : 'Not linked',
                     ),
                     const Divider(height: 20),
                     InkWell(
@@ -486,7 +505,11 @@ class _SettingsViewState extends State<SettingsView> {
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           children: const [
-                            Icon(LucideIcons.userPen, size: 18, color: AppColors.primary),
+                            Icon(
+                              LucideIcons.userPen,
+                              size: 18,
+                              color: AppColors.primary,
+                            ),
                             SizedBox(width: 10),
                             Text(
                               'Edit Profile & Details',
@@ -497,7 +520,11 @@ class _SettingsViewState extends State<SettingsView> {
                               ),
                             ),
                             Spacer(),
-                            Icon(LucideIcons.chevronRight, size: 16, color: AppColors.textSecondary),
+                            Icon(
+                              LucideIcons.chevronRight,
+                              size: 16,
+                              color: AppColors.textSecondary,
+                            ),
                           ],
                         ),
                       ),
@@ -534,7 +561,8 @@ class _SettingsViewState extends State<SettingsView> {
                     _buildNavRow(
                       icon: LucideIcons.receipt,
                       title: 'Return & Refund Policy',
-                      subtitle: 'Guidelines for product returns and clinic fees',
+                      subtitle:
+                          'Guidelines for product returns and clinic fees',
                       onTap: () => context.push(RouteNames.returnsRefunds),
                     ),
                     const Divider(height: 20),
@@ -548,7 +576,8 @@ class _SettingsViewState extends State<SettingsView> {
                     _buildNavRow(
                       icon: LucideIcons.database,
                       title: 'Manage Device Data',
-                      subtitle: 'Export or delete local diagnostic session cache',
+                      subtitle:
+                          'Export or delete local diagnostic session cache',
                       onTap: () => _showDeviceDataControls(context),
                     ),
                   ],
@@ -647,7 +676,10 @@ class _SettingsViewState extends State<SettingsView> {
                         icon: const Icon(LucideIcons.trash2, size: 16),
                         label: const Text(
                           'Delete My Account',
-                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
                         ),
                         onPressed: () => _showDeleteAccountSheet(context),
                       ),
@@ -664,7 +696,10 @@ class _SettingsViewState extends State<SettingsView> {
     );
   }
 
-  Widget _buildSectionTitle(String title, {Color color = AppColors.secondaryDark}) {
+  Widget _buildSectionTitle(
+    String title, {
+    Color color = AppColors.secondaryDark,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(left: 4),
       child: Text(
@@ -725,10 +760,7 @@ class _SettingsViewState extends State<SettingsView> {
             color: AppColors.primaryDark,
           ),
         ),
-        if (trailing != null) ...[
-          const SizedBox(width: 6),
-          trailing,
-        ],
+        if (trailing != null) ...[const SizedBox(width: 6), trailing],
       ],
     );
   }
@@ -778,7 +810,11 @@ class _SettingsViewState extends State<SettingsView> {
                 ],
               ),
             ),
-            const Icon(LucideIcons.chevronRight, size: 16, color: AppColors.textSecondary),
+            const Icon(
+              LucideIcons.chevronRight,
+              size: 16,
+              color: AppColors.textSecondary,
+            ),
           ],
         ),
       ),

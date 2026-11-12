@@ -1,6 +1,6 @@
-import 'package:flutter/cupertino.dart'
+import 'package:cupertino_ui/cupertino_ui.dart'
     show CupertinoDatePicker, CupertinoDatePickerMode;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -487,94 +487,97 @@ class _AddReminderBottomSheetState extends State<AddReminderBottomSheet> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (sheetContext) {
-        return Container(
-          height: 310,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 20,
-                offset: Offset(0, -4),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              children: [
-                Center(
-                  child: Container(
-                    margin: const EdgeInsets.only(top: 10, bottom: 4),
-                    width: 38,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.border,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(sheetContext),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      const Text(
-                        'Select Time',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.primaryDark,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          HapticFeedback.selectionClick();
-                          setState(() => _selectedTime = tempTime);
-                          Navigator.pop(sheetContext);
-                        },
-                        child: const Text(
-                          'Done',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, color: AppColors.border),
-                Expanded(
-                  child: CupertinoDatePicker(
-                    mode: CupertinoDatePickerMode.time,
-                    initialDateTime: initialDateTime,
-                    use24hFormat: false,
-                    onDateTimeChanged: (DateTime newDateTime) {
-                      tempTime = TimeOfDay(
-                        hour: newDateTime.hour,
-                        minute: newDateTime.minute,
-                      );
-                    },
-                  ),
+        return Material(
+          color: Colors.transparent,
+          child: Container(
+            height: 310,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 20,
+                  offset: Offset(0, -4),
                 ),
               ],
+            ),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 10, bottom: 4),
+                      width: 38,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(sheetContext),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const Text(
+                          'Select Time',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primaryDark,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            HapticFeedback.selectionClick();
+                            setState(() => _selectedTime = tempTime);
+                            Navigator.pop(sheetContext);
+                          },
+                          child: const Text(
+                            'Done',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1, color: AppColors.border),
+                  Expanded(
+                    child: CupertinoDatePicker(
+                      mode: CupertinoDatePickerMode.time,
+                      initialDateTime: initialDateTime,
+                      use24hFormat: false,
+                      onDateTimeChanged: (DateTime newDateTime) {
+                        tempTime = TimeOfDay(
+                          hour: newDateTime.hour,
+                          minute: newDateTime.minute,
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -589,583 +592,596 @@ class _AddReminderBottomSheetState extends State<AddReminderBottomSheet> {
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
-      child: Container(
-        constraints: BoxConstraints(maxHeight: viewHeight * 0.90),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 20,
-              offset: Offset(0, -4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 12),
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(2),
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          constraints: BoxConstraints(maxHeight: viewHeight * 0.90),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 20,
+                offset: Offset(0, -4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary5,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      LucideIcons.bellRing,
-                      color: AppColors.primary,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _isEditing ? 'Edit Care Reminder' : 'Add Care Reminder',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primaryDark,
-                        letterSpacing: -0.2,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary5,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        LucideIcons.bellRing,
+                        color: AppColors.primary,
+                        size: 18,
                       ),
                     ),
-                  ),
-                  if (_isEditing)
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _isEditing ? 'Edit Care Reminder' : 'Add Care Reminder',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primaryDark,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                    if (_isEditing)
+                      IconButton(
+                        tooltip: 'Delete reminder',
+                        icon: _isDeleting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                LucideIcons.trash2,
+                                color: AppColors.danger,
+                                size: 20,
+                              ),
+                        onPressed: _isDeleting ? null : _confirmDelete,
+                      ),
                     IconButton(
-                      tooltip: 'Delete reminder',
-                      icon: _isDeleting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(
-                              LucideIcons.trash2,
-                              color: AppColors.danger,
-                              size: 20,
-                            ),
-                      onPressed: _isDeleting ? null : _confirmDelete,
+                      tooltip: 'Close',
+                      icon: const Icon(
+                        LucideIcons.x,
+                        color: AppColors.textSecondary,
+                        size: 20,
+                      ),
+                      onPressed: () => Navigator.pop(context),
                     ),
-                  IconButton(
-                    tooltip: 'Close',
-                    icon: const Icon(
-                      LucideIcons.x,
-                      color: AppColors.textSecondary,
-                      size: 20,
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const Divider(height: 1, color: AppColors.border),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 1. Quick Presets Section (for new reminders)
-                    if (!_isEditing) ...[
-                      Row(
-                        children: [
-                          const Icon(
-                            LucideIcons.sparkles,
-                            size: 14,
-                            color: AppColors.primary,
+              const Divider(height: 1, color: AppColors.border),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1. Quick Presets Section (for new reminders)
+                      if (!_isEditing) ...[
+                        Row(
+                          children: [
+                            const Icon(
+                              LucideIcons.sparkles,
+                              size: 14,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Quick Clinical Suggestions',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primaryDark,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 38,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: _clinicalPresets.length,
+                            separatorBuilder: (context, index) =>
+                                const SizedBox(width: 8),
+                            itemBuilder: (context, index) {
+                              final preset = _clinicalPresets[index];
+                              return ActionChip(
+                                avatar: Icon(
+                                  preset.icon,
+                                  size: 14,
+                                  color: AppColors.primary,
+                                ),
+                                label: Text(
+                                  preset.title.length > 24
+                                      ? '${preset.title.substring(0, 22)}...'
+                                      : preset.title,
+                                ),
+                                labelStyle: const TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primaryDark,
+                                ),
+                                backgroundColor: AppColors.primary5,
+                                side: const BorderSide(color: AppColors.border),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                onPressed: () => _applyPreset(preset),
+                              );
+                            },
                           ),
-                          const SizedBox(width: 6),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // 2. Title Field
+                      TextField(
+                        controller: _titleController,
+                        focusNode: _titleFocus,
+                        onChanged: (_) {
+                          if (_titleError != null) {
+                            setState(() => _titleError = null);
+                          }
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'Reminder Title',
+                          hintText: 'e.g. Dr. Hair 5% Minoxidil Booster',
+                          errorText: _titleError,
+                          prefixIcon: const Icon(LucideIcons.tag, size: 18),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(
+                              color: AppColors.border,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 3. Treatment Category Chips
+                      const Text(
+                        'Treatment / Regimen Category',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryDark,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: _treatmentTypeMeta.map((meta) {
+                          final type = meta['name'] as String;
+                          final icon = meta['icon'] as IconData;
+                          final isSelected = _treatmentType == type;
+                          return ChoiceChip(
+                            avatar: Icon(
+                              icon,
+                              size: 14,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.textSecondary,
+                            ),
+                            label: Text(type),
+                            selected: isSelected,
+                            selectedColor: AppColors.primary5,
+                            labelStyle: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: isSelected
+                                  ? AppColors.primary
+                                  : AppColors.textSecondary,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              side: BorderSide(
+                                color: isSelected
+                                    ? AppColors.primary
+                                    : AppColors.border,
+                              ),
+                            ),
+                            onSelected: (val) {
+                              if (val) setState(() => _treatmentType = type);
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 18),
+
+                      // 4. Scheduled Time with Quick Time Slots
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
                           const Text(
-                            'Quick Clinical Suggestions',
+                            'Scheduled Time',
                             style: TextStyle(
-                              fontSize: 12.5,
+                              fontSize: 13,
                               fontWeight: FontWeight.w700,
                               color: AppColors.primaryDark,
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () => _showCupertinoTimePicker(context),
+                            child: const Text(
+                              'Pick custom time',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      SizedBox(
-                        height: 38,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          itemCount: _clinicalPresets.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(width: 8),
-                          itemBuilder: (context, index) {
-                            final preset = _clinicalPresets[index];
-                            return ActionChip(
-                              avatar: Icon(
-                                preset.icon,
-                                size: 14,
-                                color: AppColors.primary,
+                      Row(
+                        children: [
+                          InkWell(
+                            onTap: () => _showCupertinoTimePicker(context),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 11,
                               ),
-                              label: Text(
-                                preset.title.length > 24
-                                    ? '${preset.title.substring(0, 22)}...'
-                                    : preset.title,
+                              decoration: BoxDecoration(
+                                color: AppColors.background,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.border),
                               ),
-                              labelStyle: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primaryDark,
-                              ),
-                              backgroundColor: AppColors.primary5,
-                              side: const BorderSide(color: AppColors.border),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              onPressed: () => _applyPreset(preset),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // 2. Title Field
-                    TextField(
-                      controller: _titleController,
-                      focusNode: _titleFocus,
-                      onChanged: (_) {
-                        if (_titleError != null) {
-                          setState(() => _titleError = null);
-                        }
-                      },
-                      decoration: InputDecoration(
-                        labelText: 'Reminder Title',
-                        hintText: 'e.g. Dr. Hair 5% Minoxidil Booster',
-                        errorText: _titleError,
-                        prefixIcon: const Icon(LucideIcons.tag, size: 18),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppColors.border),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // 3. Treatment Category Chips
-                    const Text(
-                      'Treatment / Regimen Category',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: _treatmentTypeMeta.map((meta) {
-                        final type = meta['name'] as String;
-                        final icon = meta['icon'] as IconData;
-                        final isSelected = _treatmentType == type;
-                        return ChoiceChip(
-                          avatar: Icon(
-                            icon,
-                            size: 14,
-                            color: isSelected
-                                ? AppColors.primary
-                                : AppColors.textSecondary,
-                          ),
-                          label: Text(type),
-                          selected: isSelected,
-                          selectedColor: AppColors.primary5,
-                          labelStyle: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                            color: isSelected
-                                ? AppColors.primary
-                                : AppColors.textSecondary,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            side: BorderSide(
-                              color: isSelected
-                                  ? AppColors.primary
-                                  : AppColors.border,
-                            ),
-                          ),
-                          onSelected: (val) {
-                            if (val) setState(() => _treatmentType = type);
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 18),
-
-                    // 4. Scheduled Time with Quick Time Slots
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Scheduled Time',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primaryDark,
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () => _showCupertinoTimePicker(context),
-                          child: const Text(
-                            'Pick custom time',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        InkWell(
-                          onTap: () => _showCupertinoTimePicker(context),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 11,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.background,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  LucideIcons.clock,
-                                  size: 18,
-                                  color: AppColors.primary,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _selectedTime.format(context),
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.primaryDark,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    LucideIcons.clock,
+                                    size: 18,
+                                    color: AppColors.primary,
                                   ),
-                                ),
-                                const SizedBox(width: 6),
-                                const Icon(
-                                  LucideIcons.chevronDown,
-                                  size: 14,
-                                  color: AppColors.textMuted,
-                                ),
-                              ],
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _selectedTime.format(context),
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.primaryDark,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Icon(
+                                    LucideIcons.chevronDown,
+                                    size: 14,
+                                    color: AppColors.textMuted,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            physics: const BouncingScrollPhysics(),
-                            child: Row(
-                              children: _quickTimeSlots.map((slot) {
-                                final time = slot['time'] as TimeOfDay;
-                                final label = slot['label'] as String;
-                                final isPicked =
-                                    _selectedTime.hour == time.hour &&
-                                    _selectedTime.minute == time.minute;
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 6),
-                                  child: ChoiceChip(
-                                    label: Text(label),
-                                    selected: isPicked,
-                                    labelStyle: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: isPicked
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                      color: isPicked
-                                          ? AppColors.primary
-                                          : AppColors.textSecondary,
-                                    ),
-                                    selectedColor: AppColors.primary5,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      side: BorderSide(
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              physics: const BouncingScrollPhysics(),
+                              child: Row(
+                                children: _quickTimeSlots.map((slot) {
+                                  final time = slot['time'] as TimeOfDay;
+                                  final label = slot['label'] as String;
+                                  final isPicked =
+                                      _selectedTime.hour == time.hour &&
+                                      _selectedTime.minute == time.minute;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: ChoiceChip(
+                                      label: Text(label),
+                                      selected: isPicked,
+                                      labelStyle: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: isPicked
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
                                         color: isPicked
                                             ? AppColors.primary
-                                            : AppColors.border,
+                                            : AppColors.textSecondary,
                                       ),
+                                      selectedColor: AppColors.primary5,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: BorderSide(
+                                          color: isPicked
+                                              ? AppColors.primary
+                                              : AppColors.border,
+                                        ),
+                                      ),
+                                      onSelected: (val) {
+                                        if (val) {
+                                          setState(() => _selectedTime = time);
+                                        }
+                                      },
                                     ),
-                                    onSelected: (val) {
-                                      if (val) {
-                                        setState(() => _selectedTime = time);
-                                      }
-                                    },
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-
-                    // 5. Repeat Days
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Repeat Days',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primaryDark,
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            GestureDetector(
-                              onTap: () =>
-                                  _setPresetDays([1, 2, 3, 4, 5, 6, 7]),
-                              child: const Text(
-                                'Everyday',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primary,
-                                ),
+                                  );
+                                }).toList(),
                               ),
                             ),
-                            const Text(
-                              ' · ',
-                              style: TextStyle(color: AppColors.textMuted),
-                            ),
-                            GestureDetector(
-                              onTap: () => _setPresetDays([1, 2, 3, 4, 5]),
-                              child: const Text(
-                                'Weekdays',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                            const Text(
-                              ' · ',
-                              style: TextStyle(color: AppColors.textMuted),
-                            ),
-                            GestureDetector(
-                              onTap: () => _setPresetDays([1, 3, 5]),
-                              child: const Text(
-                                'Alt Days',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: List.generate(7, (index) {
-                        final dayNumber = index + 1;
-                        final isSelected = _selectedDays.contains(dayNumber);
-                        return Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.only(right: index < 6 ? 6 : 0),
-                            child: Semantics(
-                              label:
-                                  '${_fullDayLabels[dayNumber]}, ${isSelected ? "selected" : "not selected"}',
-                              button: true,
-                              child: InkWell(
-                                onTap: () => _toggleDay(dayNumber),
-                                borderRadius: BorderRadius.circular(10),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 180),
-                                  height: 42,
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? AppColors.primary
-                                        : Colors.white,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? AppColors.primary
-                                          : AppColors.border,
-                                      width: isSelected ? 1.5 : 1.0,
-                                    ),
-                                    boxShadow: isSelected
-                                        ? [
-                                            BoxShadow(
-                                              blurRadius: 4,
-                                              color: AppColors.primary
-                                                  .withValues(alpha: 0.20),
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ]
-                                        : [],
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    _dayLabels[dayNumber]!,
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: isSelected
-                                          ? Colors.white
-                                          : AppColors.textPrimary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 18),
-
-                    // 6. Notes Field
-                    TextField(
-                      controller: _notesController,
-                      maxLines: 2,
-                      decoration: InputDecoration(
-                        labelText: 'Optional Dosage / Application Notes',
-                        hintText: 'e.g. 1ml onto clean dry scalp before bed',
-                        prefixIcon: const Icon(
-                          LucideIcons.notepadText,
-                          size: 18,
-                        ),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppColors.border),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // 7. Active Notification Switch
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _isEnabled ? LucideIcons.bell : LucideIcons.bellOff,
-                            size: 18,
-                            color: _isEnabled
-                                ? AppColors.primary
-                                : AppColors.textMuted,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Active Reminder Alert',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.primaryDark,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _isEnabled
-                                      ? 'Notification alarm scheduled'
-                                      : 'Reminder is paused',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.secondaryDark,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Switch.adaptive(
-                            value: _isEnabled,
-                            activeTrackColor: AppColors.primary,
-                            onChanged: (val) {
-                              HapticFeedback.lightImpact();
-                              setState(() => _isEnabled = val);
-                            },
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Fixed Save button with Loading State
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(
-                  top: BorderSide(color: AppColors.border, width: 0.5),
-                ),
-              ),
-              child: SafeArea(
-                top: false,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: AppButton(
-                    text: _isEditing ? 'Update Reminder' : 'Save Reminder',
-                    variant: AppButtonVariant.filled,
-                    size: AppButtonSize.large,
-                    isLoading: _isSaving,
-                    icon: const Icon(
-                      LucideIcons.check,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                    onPressed: _isSaving ? null : _saveReminder,
+                      const SizedBox(height: 18),
+
+                      // 5. Repeat Days
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Repeat Days',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primaryDark,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              GestureDetector(
+                                onTap: () =>
+                                    _setPresetDays([1, 2, 3, 4, 5, 6, 7]),
+                                child: const Text(
+                                  'Everyday',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                              const Text(
+                                ' · ',
+                                style: TextStyle(color: AppColors.textMuted),
+                              ),
+                              GestureDetector(
+                                onTap: () => _setPresetDays([1, 2, 3, 4, 5]),
+                                child: const Text(
+                                  'Weekdays',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                              const Text(
+                                ' · ',
+                                style: TextStyle(color: AppColors.textMuted),
+                              ),
+                              GestureDetector(
+                                onTap: () => _setPresetDays([1, 3, 5]),
+                                child: const Text(
+                                  'Alt Days',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: List.generate(7, (index) {
+                          final dayNumber = index + 1;
+                          final isSelected = _selectedDays.contains(dayNumber);
+                          return Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                right: index < 6 ? 6 : 0,
+                              ),
+                              child: Semantics(
+                                label:
+                                    '${_fullDayLabels[dayNumber]}, ${isSelected ? "selected" : "not selected"}',
+                                button: true,
+                                child: InkWell(
+                                  onTap: () => _toggleDay(dayNumber),
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 180),
+                                    height: 42,
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? AppColors.primary
+                                            : AppColors.border,
+                                        width: isSelected ? 1.5 : 1.0,
+                                      ),
+                                      boxShadow: isSelected
+                                          ? [
+                                              BoxShadow(
+                                                blurRadius: 4,
+                                                color: AppColors.primary
+                                                    .withValues(alpha: 0.20),
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ]
+                                          : [],
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      _dayLabels[dayNumber]!,
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 18),
+
+                      // 6. Notes Field
+                      TextField(
+                        controller: _notesController,
+                        maxLines: 2,
+                        decoration: InputDecoration(
+                          labelText: 'Optional Dosage / Application Notes',
+                          hintText: 'e.g. 1ml onto clean dry scalp before bed',
+                          prefixIcon: const Icon(
+                            LucideIcons.notepadText,
+                            size: 18,
+                          ),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(
+                              color: AppColors.border,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // 7. Active Notification Switch
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _isEnabled
+                                  ? LucideIcons.bell
+                                  : LucideIcons.bellOff,
+                              size: 18,
+                              color: _isEnabled
+                                  ? AppColors.primary
+                                  : AppColors.textMuted,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Active Reminder Alert',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primaryDark,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _isEnabled
+                                        ? 'Notification alarm scheduled'
+                                        : 'Reminder is paused',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.secondaryDark,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Switch.adaptive(
+                              value: _isEnabled,
+                              activeTrackColor: AppColors.primary,
+                              onChanged: (val) {
+                                HapticFeedback.lightImpact();
+                                setState(() => _isEnabled = val);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
-          ],
+              // Fixed Save button with Loading State
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(color: AppColors.border, width: 0.5),
+                  ),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: AppButton(
+                      text: _isEditing ? 'Update Reminder' : 'Save Reminder',
+                      variant: AppButtonVariant.filled,
+                      size: AppButtonSize.large,
+                      isLoading: _isSaving,
+                      icon: const Icon(
+                        LucideIcons.check,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      onPressed: _isSaving ? null : _saveReminder,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

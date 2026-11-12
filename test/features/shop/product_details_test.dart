@@ -1,7 +1,7 @@
 import 'package:dr_hair/features/shop/presentation/viewmodels/product_details_cubit.dart';
 import 'package:dr_hair/features/shop/presentation/viewmodels/product_details_state.dart';
 import 'package:dr_hair/features/shop/presentation/views/product_details_view.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:skeletonizer/skeletonizer.dart';

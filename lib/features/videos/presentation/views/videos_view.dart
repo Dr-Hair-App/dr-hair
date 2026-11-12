@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -16,6 +16,7 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/custom_app_bar.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
+import '../../../../core/widgets/shell_tab_visibility.dart';
 import '../../domain/models/video_story_model.dart';
 import '../viewmodels/videos_cubit.dart';
 import '../viewmodels/videos_state.dart';
@@ -62,6 +63,7 @@ class _VideosContentState extends State<_VideosContent>
   late final PageController _pageController;
   late VideosCubit _cubit;
   String? _targetVideoIdToOpen;
+  bool _wasShellTabActive = true;
 
   @override
   void initState() {
@@ -126,6 +128,13 @@ class _VideosContentState extends State<_VideosContent>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _cubit = context.read<VideosCubit>();
+    final shellTabVisibility = ShellTabVisibility.maybeOf(context);
+    final isShellTabActive =
+        shellTabVisibility == null || shellTabVisibility.activeIndex == 2;
+    if (_wasShellTabActive && !isShellTabActive) {
+      _cubit.pauseAll();
+    }
+    _wasShellTabActive = isShellTabActive;
   }
 
   @override
@@ -140,6 +149,10 @@ class _VideosContentState extends State<_VideosContent>
 
   @override
   Widget build(BuildContext context) {
+    final shellTabVisibility = ShellTabVisibility.maybeOf(context);
+    final isVideosTabActive =
+        shellTabVisibility == null || shellTabVisibility.activeIndex == 2;
+
     return BlocConsumer<VideosCubit, VideosState>(
       listenWhen: (previous, current) =>
           previous.selectedFilterIndex != current.selectedFilterIndex ||
@@ -190,7 +203,8 @@ class _VideosContentState extends State<_VideosContent>
                     },
                     itemBuilder: (context, index) {
                       final video = filtered[index];
-                      final bool isActive = index == state.activeIndex;
+                      final bool isActive =
+                          isVideosTabActive && index == state.activeIndex;
 
                       return VisibilityDetector(
                         key: Key('video_story_${video.id}'),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
@@ -107,8 +107,8 @@ class _UpdateProfileViewState extends State<UpdateProfileView> {
           if (!mounted) return;
           AppToast.show(
             context,
-            const SnackBar(
-              behavior: SnackBarBehavior.floating,
+            SnackBar(
+              // behavior: SnackBarBehavior.floating,
               content: Text(
                 'Could not access that photo. Check photo permissions and try again.',
               ),
@@ -227,7 +227,7 @@ class _UpdateProfileViewState extends State<UpdateProfileView> {
       AppToast.show(
         context,
         SnackBar(
-          behavior: SnackBarBehavior.floating,
+          // behavior: SnackBarBehavior.floating,
           backgroundColor: AppColors.danger,
           content: Text(
             auth.state.errorMessage ?? 'Could not update your profile.',

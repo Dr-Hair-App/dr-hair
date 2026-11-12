@@ -24,6 +24,52 @@ class PatientAppointmentApi {
     return items.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
   }
 
+  Future<Map<String, dynamic>> getBillingConfig(String? token) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      ApiEndpoints.patientAppointmentBillingConfig,
+      options: token != null && token.isNotEmpty ? _authorized(token) : null,
+    );
+    return _readData(response.data);
+  }
+
+  Future<Map<String, dynamic>> createPaymentIntent({
+    required String token,
+    required DateTime startsAt,
+    required String reason,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      ApiEndpoints.patientAppointmentCreatePaymentIntent,
+      data: {
+        'starts_at': startsAt.toUtc().toIso8601String(),
+        'reason': reason,
+      },
+      options: _authorized(token),
+    );
+    return _readData(response.data);
+  }
+
+  Future<Map<String, dynamic>> verifyAndBook({
+    required String token,
+    required DateTime startsAt,
+    required String reason,
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      ApiEndpoints.patientAppointmentVerifyAndBook,
+      data: {
+        'starts_at': startsAt.toUtc().toIso8601String(),
+        'reason': reason,
+        'razorpay_order_id': razorpayOrderId,
+        'razorpay_payment_id': razorpayPaymentId,
+        'razorpay_signature': razorpaySignature,
+      },
+      options: _authorized(token),
+    );
+    return _readData(response.data);
+  }
+
   Future<Map<String, dynamic>> create({
     required String token,
     required DateTime startsAt,

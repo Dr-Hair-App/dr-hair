@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../constants/app_colors.dart';
 
@@ -17,7 +17,9 @@ class AppToast {
     // Remove old feedback immediately instead of queueing messages behind it.
     messenger.clearSnackBars();
     messenger.removeCurrentSnackBar();
-    final duration = message.action == null ? _messageDuration : _actionDuration;
+    final duration = message.action == null
+        ? _messageDuration
+        : _actionDuration;
     messenger.showSnackBar(
       SnackBar(
         content: message.content,

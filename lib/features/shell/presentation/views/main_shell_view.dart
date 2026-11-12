@@ -1,5 +1,5 @@
 import 'package:dr_hair/features/hair_test/presentation/viewmodels/hair_test_cubit.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/widgets/custom_app_bar.dart';
+import '../../../../core/widgets/shell_tab_visibility.dart';
 import '../../../app_config/presentation/viewmodels/app_config_cubit.dart';
 import '../../../shop/presentation/viewmodels/cart_cubit.dart';
 import '../widgets/shell_bottom_nav_bar.dart';
@@ -103,7 +104,10 @@ class _MainShellViewState extends State<MainShellView> {
           }
           return false;
         },
-        child: widget.navigationShell,
+        child: ShellTabVisibility(
+          activeIndex: currentTab,
+          child: widget.navigationShell,
+        ),
       ),
       // Dedicated dual-element bottom navigation bar
       // The nav widget applies its own bottom-only SafeArea. Wrapping it here
@@ -118,8 +122,9 @@ class _MainShellViewState extends State<MainShellView> {
               appConfig?.isFeatureEnabled('shop') ?? true;
           final bool isAssessmentEnabled =
               appConfig?.isFeatureEnabled('assessment') ?? true;
-          final bool showActionButton =
-              isTestCompleted ? isShopEnabled : isAssessmentEnabled;
+          final bool showActionButton = isTestCompleted
+              ? isShopEnabled
+              : isAssessmentEnabled;
 
           return BlocBuilder<CartCubit, CartState>(
             builder: (context, cartState) => RepaintBoundary(

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+// ignore: implementation_imports
+import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
@@ -109,21 +110,24 @@ class _CheckoutViewState extends State<CheckoutView> {
     final intent = _pendingPaymentOrder?['paymentIntent'];
     if (intent is! Map) return;
     final keyId = RazorpayConfig.keyId;
-    if (keyId.isEmpty || intent['keyId'] != keyId) {
+    final backendKey = intent['keyId']?.toString().trim() ?? '';
+    final activeKeyId = backendKey.isNotEmpty ? backendKey : keyId;
+    if (activeKeyId.isEmpty) {
       setState(() => _isSubmitting = false);
       _showPaymentMessage(
-        'Razorpay key mismatch. Make the app and backend use the same Test Mode Key ID.',
+        'Razorpay Key ID is not configured. Check the app or backend environment.',
       );
       return;
     }
     try {
       _razorpay.open({
-        'key': keyId,
+        'key': activeKeyId,
         'order_id': intent['intentId'],
         'amount': (intent['amount'] as num?)?.toInt(),
         'currency': intent['currency'] ?? 'INR',
-        'name': 'Dr Hair',
-        'description': 'Dr Hair order',
+        'name': 'Dr. Hair Clinic',
+        'description': 'Dr. Hair Order Payment',
+        'theme': {'color': '#0F766E'},
         'prefill': {
           'contact': _selectedAddress?.phone ?? '',
           'name': _selectedAddress?.name ?? '',

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -94,7 +94,7 @@ class _ProductDetailsContentState extends State<_ProductDetailsContent>
     AppToast.show(
       context,
       SnackBar(
-        behavior: SnackBarBehavior.floating,
+        //  behavior: SnackBarBehavior.floating,
         backgroundColor: AppColors.primaryDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         content: const Row(
@@ -209,754 +209,440 @@ class _ProductDetailsContentState extends State<_ProductDetailsContent>
                   parent: BouncingScrollPhysics(),
                 ),
                 slivers: [
-                // Clean Pinned App Bar
-                SliverAppBar(
-                  pinned: true,
-                  surfaceTintColor: Colors.white,
-                  elevation: 0,
-                  scrolledUnderElevation: 0.5,
-                  backgroundColor: Colors.white,
-                  leading: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Semantics(
-                      label: 'Go back',
-                      button: true,
-                      child: _buildHeaderIconButton(
-                        icon: LucideIcons.arrowLeft,
-                        tooltip: 'Back',
-                        onTap: () => Navigator.of(context).maybePop(),
-                      ),
-                    ),
-                  ),
-                  actions: [
-                    Semantics(
-                      label: state.isFavorite
-                          ? 'Remove from wishlist'
-                          : 'Add to wishlist',
-                      button: true,
-                      child: ScaleTransition(
-                        scale: _heartScale,
+                  // Clean Pinned App Bar
+                  SliverAppBar(
+                    pinned: true,
+                    surfaceTintColor: Colors.white,
+                    elevation: 0,
+                    scrolledUnderElevation: 0.5,
+                    backgroundColor: Colors.white,
+                    leading: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Semantics(
+                        label: 'Go back',
+                        button: true,
                         child: _buildHeaderIconButton(
-                          icon: state.isFavorite
-                              ? Icons.favorite
-                              : LucideIcons.heart,
-                          iconColor: state.isFavorite
-                              ? AppColors.danger
-                              : AppColors.primaryDark,
-                          tooltip: 'Wishlist',
-                          onTap: () {
-                            cubit.toggleFavorite();
-                            if (!MediaQuery.disableAnimationsOf(context)) {
-                              _heartAnimController.forward(from: 0.0);
-                            }
-                          },
+                          icon: LucideIcons.arrowLeft,
+                          tooltip: 'Back',
+                          onTap: () => Navigator.of(context).maybePop(),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Semantics(
-                      label: 'Share product',
-                      button: true,
-                      child: _buildHeaderIconButton(
-                        icon: LucideIcons.share2,
-                        tooltip: 'Share',
-                        onTap: _onShare,
+                    actions: [
+                      Semantics(
+                        label: state.isFavorite
+                            ? 'Remove from wishlist'
+                            : 'Add to wishlist',
+                        button: true,
+                        child: ScaleTransition(
+                          scale: _heartScale,
+                          child: _buildHeaderIconButton(
+                            icon: state.isFavorite
+                                ? Icons.favorite
+                                : LucideIcons.heart,
+                            iconColor: state.isFavorite
+                                ? AppColors.danger
+                                : AppColors.primaryDark,
+                            tooltip: 'Wishlist',
+                            onTap: () {
+                              cubit.toggleFavorite();
+                              if (!MediaQuery.disableAnimationsOf(context)) {
+                                _heartAnimController.forward(from: 0.0);
+                              }
+                            },
+                          ),
+                        ),
                       ),
-                    ),
-
-                    Semantics(
-                      label: 'Notifications',
-                      button: true,
-                      child: _buildHeaderIconButton(
-                        icon: LucideIcons.bell,
-                        tooltip: 'Notifications',
-                        onTap: () => context.push(RouteNames.notifications),
+                      const SizedBox(width: 6),
+                      Semantics(
+                        label: 'Share product',
+                        button: true,
+                        child: _buildHeaderIconButton(
+                          icon: LucideIcons.share2,
+                          tooltip: 'Share',
+                          onTap: _onShare,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                  ],
-                ),
 
-                // Hero Image Gallery with Zoom trigger and Thumbnails
-                SliverToBoxAdapter(
-                  child: Container(
-                    color: Colors.white,
-                    child: Column(
-                      children: [
-                        // Image PageView with Tap to Zoom
-                        SizedBox(
-                          height: heroHeight,
-                          child: Stack(
-                            children: [
-                              Semantics(
-                                label: 'Product image, tap to view fullscreen',
-                                button: true,
-                                child: GestureDetector(
-                                  onTap: () =>
-                                      _openFullscreenViewer(context, state),
-                                  child: PageView.builder(
-                                    controller: _imagePageController,
-                                    itemCount: state.images.length,
-                                    onPageChanged: (index) {
-                                      if (!_isProgrammaticScroll) {
-                                        cubit.selectImage(index);
-                                      }
-                                    },
-                                    itemBuilder: (context, index) {
-                                      return Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 12,
-                                        ),
-                                        child: Hero(
-                                          tag:
-                                              'product_image_${product.id}_$index',
-                                          child: CustomCachedImage(
-                                            imageUrl: state.images[index],
-                                            fit: BoxFit.contain,
-                                            width: double.infinity,
-                                            height: double.infinity,
-                                            borderRadius: 0,
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
+                      Semantics(
+                        label: 'Notifications',
+                        button: true,
+                        child: _buildHeaderIconButton(
+                          icon: LucideIcons.bell,
+                          tooltip: 'Notifications',
+                          onTap: () => context.push(RouteNames.notifications),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                    ],
+                  ),
 
-                              // Fullscreen zoom indicator button
-                              Positioned(
-                                bottom: 12,
-                                right: 16,
-                                child: Semantics(
-                                  label: 'Open fullscreen image viewer',
+                  // Hero Image Gallery with Zoom trigger and Thumbnails
+                  SliverToBoxAdapter(
+                    child: Container(
+                      color: Colors.white,
+                      child: Column(
+                        children: [
+                          // Image PageView with Tap to Zoom
+                          SizedBox(
+                            height: heroHeight,
+                            child: Stack(
+                              children: [
+                                Semantics(
+                                  label:
+                                      'Product image, tap to view fullscreen',
                                   button: true,
-                                  child: Material(
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                    shape: const CircleBorder(),
-                                    elevation: 2,
-                                    shadowColor: Colors.black26,
-                                    child: IconButton(
-                                      icon: const Icon(
-                                        LucideIcons.maximize2,
-                                        size: 18,
-                                        color: AppColors.primaryDark,
-                                      ),
-                                      tooltip: 'View fullscreen',
-                                      onPressed: () =>
-                                          _openFullscreenViewer(context, state),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Restrained Tappable Thumbnail Strip
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16, top: 4),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: List.generate(state.images.length, (
-                              index,
-                            ) {
-                              final isSelected =
-                                  state.activeImageIndex == index;
-                              return Semantics(
-                                label: 'Select image ${index + 1}',
-                                button: true,
-                                selected: isSelected,
-                                child: GestureDetector(
-                                  onTap: () => _onThumbnailTap(index, cubit),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 180),
-                                    margin: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                    ),
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border(
-                                        top: BorderSide(
-                                          color: isSelected
-                                              ? AppColors.primary
-                                              : AppColors.border,
-                                          width: isSelected ? 2.0 : 1.0,
-                                        ),
-                                      ),
-                                      color: Colors.white,
-                                    ),
-                                    padding: const EdgeInsets.all(2),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: CustomCachedImage(
-                                        imageUrl: state.images[index],
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Product Info & Selection Section
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Category Tag
-                        Text(
-                          product.category.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.1,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-
-                        // Product Title
-                        Text(
-                          product.name,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.primaryDark,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-
-                        // Subtitle
-                        Text(
-                          product.subtitle,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.secondaryDark,
-                            height: 1.4,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary5,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppColors.primary100),
-                          ),
-                          child: const Text(
-                            'Demo catalog: product details and outcome figures are sample content for presentation. They are not a personal recommendation or a medical diagnosis.',
-                            style: TextStyle(
-                              fontSize: 10,
-                              height: 1.35,
-                              color: AppColors.secondaryDark,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-
-                        // Rating & Stock Row (Wrap prevents any overflow on small devices)
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary5,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    LucideIcons.star,
-                                    color: AppColors.starGold,
-                                    size: 14,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${product.rating}',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.primaryDark,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '(${product.reviewsCount} reviews)',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.success.withValues(
-                                  alpha: 0.12,
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    LucideIcons.check,
-                                    color: AppColors.success,
-                                    size: 13,
-                                  ),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'In Stock • Ships Free',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.success,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        // Price and Discount
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 6,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              '₹${state.currentUnitPrice}',
-                              style: const TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w900,
-                                color: AppColors.primaryDark,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            Text(
-                              'MRP ₹${state.currentUnitMrp}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                decoration: TextDecoration.lineThrough,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.success.withValues(
-                                  alpha: 0.15,
-                                ),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                'Save ${state.discountPercentage}%',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.success,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Inclusive of all taxes • Authentic Formulation Guaranteed',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // Supply Plan Selection
-                        // Supply Plan Selection Header
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Expanded(
-                              child: Text(
-                                'Choose Your Regrowth Plan',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.primaryDark,
-                                  letterSpacing: -0.2,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary5,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Text(
-                                'Doctor Recommended',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Plans 3-Card Row
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: List.generate(state.supplyPlans.length, (
-                            index,
-                          ) {
-                            final plan = state.supplyPlans[index];
-                            final isSelected =
-                                state.selectedSupplyIndex == index;
-                            final badgeText =
-                                plan.badge != null && plan.badge!.isNotEmpty
-                                ? plan.badge!
-                                : index == 0
-                                ? 'Starter'
-                                : index == 1
-                                ? 'Most Popular'
-                                : 'Best Value';
-
-                            return Expanded(
-                              child: Semantics(
-                                label:
-                                    '${plan.title} plan, ₹${plan.price}, MRP ₹${plan.mrp}. $badgeText. ${isSelected ? 'Selected' : 'Not selected'}',
-                                button: true,
-                                selected: isSelected,
-                                child: GestureDetector(
-                                  onTap: () => cubit.selectSupplyPlan(index),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 180),
-                                    margin: EdgeInsets.only(
-                                      right:
-                                          index < state.supplyPlans.length - 1
-                                          ? 8
-                                          : 0,
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 10,
-                                      horizontal: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border(
-                                        top: BorderSide(
-                                          color: isSelected
-                                              ? AppColors.primary
-                                              : AppColors.border,
-                                          width: isSelected ? 2.0 : 1.0,
-                                        ),
-                                      ),
-                                      boxShadow: [
-                                        if (isSelected)
-                                          BoxShadow(
-                                            color: AppColors.primary.withValues(
-                                              alpha: 0.12,
-                                            ),
-                                            blurRadius: 10,
-                                            offset: const Offset(0, 3),
-                                          )
-                                        else
-                                          BoxShadow(
-                                            color: Colors.black.withValues(
-                                              alpha: 0.02,
-                                            ),
-                                            blurRadius: 4,
-                                            offset: const Offset(0, 1),
-                                          ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        // Plan Title (e.g. 1 Month, 2 Months, 3 Months)
-                                        FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          child: Text(
-                                            plan.title,
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w800,
-                                              color: isSelected
-                                                  ? AppColors.primaryDark
-                                                  : AppColors.textPrimary,
-                                            ),
-                                          ),
-                                        ),
-
-                                        const SizedBox(height: 8),
-
-                                        // Price
-                                        FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          child: Text(
-                                            '₹${plan.price}',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w900,
-                                              color: isSelected
-                                                  ? AppColors.primaryDark
-                                                  : AppColors.textPrimary,
-                                            ),
-                                          ),
-                                        ),
-
-                                        // MRP (Strikethrough)
-                                        if (plan.mrp > plan.price)
-                                          Text(
-                                            '₹${plan.mrp}',
-                                            style: const TextStyle(
-                                              fontSize: 10.5,
-                                              fontWeight: FontWeight.w500,
-                                              color: AppColors.textMuted,
-                                              decoration:
-                                                  TextDecoration.lineThrough,
-                                            ),
-                                          )
-                                        else
-                                          const SizedBox(height: 14),
-                                        const SizedBox(height: 4),
-
-                                        // Monthly Breakdown Chip
-                                        Container(
+                                  child: GestureDetector(
+                                    onTap: () =>
+                                        _openFullscreenViewer(context, state),
+                                    child: PageView.builder(
+                                      controller: _imagePageController,
+                                      itemCount: state.images.length,
+                                      onPageChanged: (index) {
+                                        if (!_isProgrammaticScroll) {
+                                          cubit.selectImage(index);
+                                        }
+                                      },
+                                      itemBuilder: (context, index) {
+                                        return Padding(
                                           padding: const EdgeInsets.symmetric(
-                                            horizontal: 4,
-                                            vertical: 2,
+                                            horizontal: 16,
+                                            vertical: 12,
                                           ),
-                                          decoration: BoxDecoration(
+                                          child: Hero(
+                                            tag:
+                                                'product_image_${product.id}_$index',
+                                            child: CustomCachedImage(
+                                              imageUrl: state.images[index],
+                                              fit: BoxFit.contain,
+                                              width: double.infinity,
+                                              height: double.infinity,
+                                              borderRadius: 0,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+
+                                // Fullscreen zoom indicator button
+                                Positioned(
+                                  bottom: 12,
+                                  right: 16,
+                                  child: Semantics(
+                                    label: 'Open fullscreen image viewer',
+                                    button: true,
+                                    child: Material(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.9,
+                                      ),
+                                      shape: const CircleBorder(),
+                                      elevation: 2,
+                                      shadowColor: Colors.black26,
+                                      child: IconButton(
+                                        icon: const Icon(
+                                          LucideIcons.maximize2,
+                                          size: 18,
+                                          color: AppColors.primaryDark,
+                                        ),
+                                        tooltip: 'View fullscreen',
+                                        onPressed: () => _openFullscreenViewer(
+                                          context,
+                                          state,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // Restrained Tappable Thumbnail Strip
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16, top: 4),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(state.images.length, (
+                                index,
+                              ) {
+                                final isSelected =
+                                    state.activeImageIndex == index;
+                                return Semantics(
+                                  label: 'Select image ${index + 1}',
+                                  button: true,
+                                  selected: isSelected,
+                                  child: GestureDetector(
+                                    onTap: () => _onThumbnailTap(index, cubit),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 180,
+                                      ),
+                                      margin: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                      ),
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border(
+                                          top: BorderSide(
                                             color: isSelected
-                                                ? AppColors.primary.withValues(
-                                                    alpha: 0.08,
-                                                  )
-                                                : const Color(0xFFF8FAFC),
-                                            borderRadius: BorderRadius.circular(
-                                              4,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            '₹${plan.monthlyPrice}/mo',
-                                            style: TextStyle(
-                                              fontSize: 9.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: isSelected
-                                                  ? AppColors.primary
-                                                  : AppColors.textSecondary,
-                                            ),
+                                                ? AppColors.primary
+                                                : AppColors.border,
+                                            width: isSelected ? 2.0 : 1.0,
                                           ),
                                         ),
-                                      ],
+                                        color: Colors.white,
+                                      ),
+                                      padding: const EdgeInsets.all(2),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: CustomCachedImage(
+                                          imageUrl: state.images[index],
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // Clinical Trust Badges (clean 3-column guarantee)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 14,
-                            horizontal: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: const Row(
-                            children: [
-                              Expanded(
-                                child: _TrustBadge(
-                                  icon: LucideIcons.shieldCheck,
-                                  label: 'Doctor\nApproved',
-                                ),
-                              ),
-                              Expanded(
-                                child: _TrustBadge(
-                                  icon: LucideIcons.leaf,
-                                  label: '100% Vegan\n& Cruelty-Free',
-                                ),
-                              ),
-                              Expanded(
-                                child: _TrustBadge(
-                                  icon: LucideIcons.award,
-                                  label: '90-Day Results\nGuarantee',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Interactive Tabs Header (Edge-to-edge scroll with 16px left and right content insets)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 24, bottom: 16),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: List.generate(_tabs.length, (index) {
-                          final isTabSelected = state.activeTab == index;
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              right: index < _tabs.length - 1 ? 8 : 0,
+                                );
+                              }),
                             ),
-                            child: Semantics(
-                              label: '${_tabs[index]} tab',
-                              selected: isTabSelected,
-                              button: true,
-                              child: GestureDetector(
-                                onTap: () => cubit.selectTab(index),
-                                child: AnimatedContainer(
-                                  duration: const Duration(
-                                    milliseconds: 180,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 8.5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isTabSelected
-                                        ? AppColors.primary
-                                        : Colors.white,
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: isTabSelected
-                                          ? AppColors.primary
-                                          : AppColors.border,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _tabs[index],
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: isTabSelected
-                                          ? FontWeight.w700
-                                          : FontWeight.w600,
-                                      color: isTabSelected
-                                          ? Colors.white
-                                          : AppColors.textPrimary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
 
-                // Tab Content Body & Suggested Products
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 60),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Tab Content Body
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          child: _buildTabContent(state.activeTab, product),
-                        ),
+                  // Product Info & Selection Section
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Category Tag
+                          Text(
+                            product.category.toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.1,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
 
-                        const SizedBox(height: 32),
+                          // Product Title
+                          Text(
+                            product.name,
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.primaryDark,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
 
-                        // Suggested Products: "You May Also Like"
-                        if (suggestions.isNotEmpty) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          // Subtitle
+                          Text(
+                            product.subtitle,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryDark,
+                              height: 1.4,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary5,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.primary100),
+                            ),
+                            child: const Text(
+                              'Demo catalog: product details and outcome figures are sample content for presentation. They are not a personal recommendation or a medical diagnosis.',
+                              style: TextStyle(
+                                fontSize: 10,
+                                height: 1.35,
+                                color: AppColors.secondaryDark,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Rating & Stock Row (Wrap prevents any overflow on small devices)
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              const Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary5,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    const Icon(
+                                      LucideIcons.star,
+                                      color: AppColors.starGold,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
                                     Text(
-                                      'You May Also Like',
-                                      style: TextStyle(
-                                        fontSize: 16,
+                                      '${product.rating}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w800,
                                         color: AppColors.primaryDark,
                                       ),
                                     ),
-                                    SizedBox(height: 2),
+                                    const SizedBox(width: 4),
                                     Text(
-                                      'Frequently paired clinical essentials (Demo)',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 11.5,
+                                      '(${product.reviewsCount} reviews)',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500,
                                         color: AppColors.textSecondary,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: () => context.push(RouteNames.cart),
-                                child: const Text(
-                                  'View All',
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.success.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      LucideIcons.check,
+                                      color: AppColors.success,
+                                      size: 13,
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'In Stock • Ships Free',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // Price and Discount
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                '₹${state.currentUnitPrice}',
+                                style: const TextStyle(
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.primaryDark,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              Text(
+                                'MRP ₹${state.currentUnitMrp}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  decoration: TextDecoration.lineThrough,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.success.withValues(
+                                    alpha: 0.15,
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Save ${state.discountPercentage}%',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.success,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Inclusive of all taxes • Authentic Formulation Guaranteed',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // Supply Plan Selection
+                          // Supply Plan Selection Header
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'Choose Your Regrowth Plan',
                                   style: TextStyle(
-                                    fontSize: 13,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.primaryDark,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary5,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'Doctor Recommended',
+                                  style: TextStyle(
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w700,
                                     color: AppColors.primary,
                                   ),
@@ -965,36 +651,355 @@ class _ProductDetailsContentState extends State<_ProductDetailsContent>
                             ],
                           ),
                           const SizedBox(height: 12),
-                          SizedBox(
-                            height: 215,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: suggestions.length,
-                              separatorBuilder: (context, index) =>
-                                  const SizedBox(width: 12),
-                              itemBuilder: (context, index) {
-                                final item = suggestions[index];
-                                return _SuggestedProductCard(
-                                  product: item,
-                                  onTap: () {
-                                    context.push(
-                                      AppDestination.product(item.id)
-                                              .location ??
-                                          RouteNames.products,
-                                    );
-                                  },
-                                );
-                              },
+
+                          // Plans 3-Card Row
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: List.generate(state.supplyPlans.length, (
+                              index,
+                            ) {
+                              final plan = state.supplyPlans[index];
+                              final isSelected =
+                                  state.selectedSupplyIndex == index;
+                              final badgeText =
+                                  plan.badge != null && plan.badge!.isNotEmpty
+                                  ? plan.badge!
+                                  : index == 0
+                                  ? 'Starter'
+                                  : index == 1
+                                  ? 'Most Popular'
+                                  : 'Best Value';
+
+                              return Expanded(
+                                child: Semantics(
+                                  label:
+                                      '${plan.title} plan, ₹${plan.price}, MRP ₹${plan.mrp}. $badgeText. ${isSelected ? 'Selected' : 'Not selected'}',
+                                  button: true,
+                                  selected: isSelected,
+                                  child: GestureDetector(
+                                    onTap: () => cubit.selectSupplyPlan(index),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 180,
+                                      ),
+                                      margin: EdgeInsets.only(
+                                        right:
+                                            index < state.supplyPlans.length - 1
+                                            ? 8
+                                            : 0,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 10,
+                                        horizontal: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border(
+                                          top: BorderSide(
+                                            color: isSelected
+                                                ? AppColors.primary
+                                                : AppColors.border,
+                                            width: isSelected ? 2.0 : 1.0,
+                                          ),
+                                        ),
+                                        boxShadow: [
+                                          if (isSelected)
+                                            BoxShadow(
+                                              color: AppColors.primary
+                                                  .withValues(alpha: 0.12),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 3),
+                                            )
+                                          else
+                                            BoxShadow(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.02,
+                                              ),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 1),
+                                            ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // Plan Title (e.g. 1 Month, 2 Months, 3 Months)
+                                          FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              plan.title,
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w800,
+                                                color: isSelected
+                                                    ? AppColors.primaryDark
+                                                    : AppColors.textPrimary,
+                                              ),
+                                            ),
+                                          ),
+
+                                          const SizedBox(height: 8),
+
+                                          // Price
+                                          FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              '₹${plan.price}',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w900,
+                                                color: isSelected
+                                                    ? AppColors.primaryDark
+                                                    : AppColors.textPrimary,
+                                              ),
+                                            ),
+                                          ),
+
+                                          // MRP (Strikethrough)
+                                          if (plan.mrp > plan.price)
+                                            Text(
+                                              '₹${plan.mrp}',
+                                              style: const TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w500,
+                                                color: AppColors.textMuted,
+                                                decoration:
+                                                    TextDecoration.lineThrough,
+                                              ),
+                                            )
+                                          else
+                                            const SizedBox(height: 14),
+                                          const SizedBox(height: 4),
+
+                                          // Monthly Breakdown Chip
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 4,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? AppColors.primary
+                                                        .withValues(alpha: 0.08)
+                                                  : const Color(0xFFF8FAFC),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              '₹${plan.monthlyPrice}/mo',
+                                              style: TextStyle(
+                                                fontSize: 9.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: isSelected
+                                                    ? AppColors.primary
+                                                    : AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+
+                          const SizedBox(height: 24),
+
+                          // Clinical Trust Badges (clean 3-column guarantee)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                              horizontal: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: const Row(
+                              children: [
+                                Expanded(
+                                  child: _TrustBadge(
+                                    icon: LucideIcons.shieldCheck,
+                                    label: 'Doctor\nApproved',
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _TrustBadge(
+                                    icon: LucideIcons.leaf,
+                                    label: '100% Vegan\n& Cruelty-Free',
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _TrustBadge(
+                                    icon: LucideIcons.award,
+                                    label: '90-Day Results\nGuarantee',
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+
+                  // Interactive Tabs Header (Edge-to-edge scroll with 16px left and right content insets)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 24, bottom: 16),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: List.generate(_tabs.length, (index) {
+                            final isTabSelected = state.activeTab == index;
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                right: index < _tabs.length - 1 ? 8 : 0,
+                              ),
+                              child: Semantics(
+                                label: '${_tabs[index]} tab',
+                                selected: isTabSelected,
+                                button: true,
+                                child: GestureDetector(
+                                  onTap: () => cubit.selectTab(index),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 180),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8.5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isTabSelected
+                                          ? AppColors.primary
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: isTabSelected
+                                            ? AppColors.primary
+                                            : AppColors.border,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _tabs[index],
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: isTabSelected
+                                            ? FontWeight.w700
+                                            : FontWeight.w600,
+                                        color: isTabSelected
+                                            ? Colors.white
+                                            : AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Tab Content Body & Suggested Products
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 60),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Tab Content Body
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: _buildTabContent(state.activeTab, product),
+                          ),
+
+                          const SizedBox(height: 32),
+
+                          // Suggested Products: "You May Also Like"
+                          if (suggestions.isNotEmpty) ...[
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'You May Also Like',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.primaryDark,
+                                        ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'Frequently paired clinical essentials (Demo)',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: () => context.push(RouteNames.cart),
+                                  child: const Text(
+                                    'View All',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              height: 215,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: suggestions.length,
+                                separatorBuilder: (context, index) =>
+                                    const SizedBox(width: 12),
+                                itemBuilder: (context, index) {
+                                  final item = suggestions[index];
+                                  return _SuggestedProductCard(
+                                    product: item,
+                                    onTap: () {
+                                      context.push(
+                                        AppDestination.product(item.id)
+                                                .location ??
+                                            RouteNames.products,
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
 
             // Purchase action stays compact until the selected product is in the cart.
             bottomNavigationBar: SafeArea(

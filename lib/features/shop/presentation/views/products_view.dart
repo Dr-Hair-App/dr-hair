@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -374,211 +374,240 @@ class _ProductsContentState extends State<_ProductsContent>
                           physics: const AlwaysScrollableScrollPhysics(),
                           key: PageStorageKey<String>(category.id),
                           slivers: <Widget>[
-                          SliverOverlapInjector(
-                            handle:
-                                NestedScrollView.sliverOverlapAbsorberHandleFor(
-                                  context,
-                                ),
-                          ),
-                          if (state.errorMessage != null &&
-                              state.products.isNotEmpty)
-                            SliverPadding(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                              sliver: SliverToBoxAdapter(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
+                            SliverOverlapInjector(
+                              handle:
+                                  NestedScrollView.sliverOverlapAbsorberHandleFor(
+                                    context,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.error.withValues(
-                                      alpha: 0.1,
-                                    ),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: AppColors.error.withValues(
-                                        alpha: 0.3,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.info_outline,
-                                        size: 16,
-                                        color: AppColors.error,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          state.errorMessage!,
-                                          style: const TextStyle(
-                                            fontSize: 11.5,
-                                            color: AppColors.error,
-                                          ),
-                                        ),
-                                      ),
-                                      TextButton(
-                                        onPressed: () => context
-                                            .read<ProductsCubit>()
-                                            .loadProducts(refresh: true),
-                                        style: TextButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          minimumSize: Size.zero,
-                                          tapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                        ),
-                                        child: const Text(
-                                          'Retry',
-                                          style: TextStyle(
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
                             ),
-                          if (state.isLoading && displayList.isEmpty) ...[
-                            SliverPadding(
-                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                              sliver: SliverToBoxAdapter(
-                                child: Skeletonizer(
-                                  enabled: true,
-                                  effect: _kProductShimmerEffect,
-                                  containersColor: Colors.white,
+                            if (state.errorMessage != null &&
+                                state.products.isNotEmpty)
+                              SliverPadding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  8,
+                                  16,
+                                  0,
+                                ),
+                                sliver: SliverToBoxAdapter(
                                   child: Container(
-                                    height: 12,
-                                    width: 76,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFE9EEF5),
-                                      borderRadius: BorderRadius.circular(4),
+                                      color: AppColors.error.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: AppColors.error.withValues(
+                                          alpha: 0.3,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.info_outline,
+                                          size: 16,
+                                          color: AppColors.error,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            state.errorMessage!,
+                                            style: const TextStyle(
+                                              fontSize: 11.5,
+                                              color: AppColors.error,
+                                            ),
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => context
+                                              .read<ProductsCubit>()
+                                              .loadProducts(refresh: true),
+                                          style: TextButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
+                                            ),
+                                            minimumSize: Size.zero,
+                                            tapTargetSize: MaterialTapTargetSize
+                                                .shrinkWrap,
+                                          ),
+                                          child: const Text(
+                                            'Retry',
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            SliverPadding(
-                              padding: const EdgeInsets.fromLTRB(10, 8, 10, 32),
-                              sliver: SliverGrid(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount:
-                                          MediaQuery.sizeOf(context).width >=
-                                              1000
-                                          ? 4
-                                          : MediaQuery.sizeOf(context).width >=
-                                                640
-                                          ? 3
-                                          : 2,
-                                      crossAxisSpacing: 8,
-                                      mainAxisSpacing: 8,
-                                      mainAxisExtent:
-                                          MediaQuery.sizeOf(context).width < 360
-                                          ? 274
-                                          : 242,
-                                    ),
-                                delegate: SliverChildBuilderDelegate((
-                                  context,
-                                  index,
-                                ) {
-                                  return Skeletonizer(
+                            if (state.isLoading && displayList.isEmpty) ...[
+                              SliverPadding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  16,
+                                  4,
+                                ),
+                                sliver: SliverToBoxAdapter(
+                                  child: Skeletonizer(
                                     enabled: true,
                                     effect: _kProductShimmerEffect,
                                     containersColor: Colors.white,
-                                    child: const _ProductGridSkeletonCard(),
-                                  );
-                                }, childCount: 6),
-                              ),
-                            ),
-                          ] else if (displayList.isEmpty)
-                            SliverFillRemaining(
-                              hasScrollBody: false,
-                              child: state.errorMessage != null
-                                  ? _buildErrorState(state.errorMessage!)
-                                  : _buildEmptyState(),
-                            )
-                          else ...[
-                            SliverPadding(
-                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                              sliver: SliverToBoxAdapter(
-                                child: Skeletonizer(
-                                  enabled: state.isLoading,
-                                  effect: _kProductShimmerEffect,
-                                  containersColor: Colors.white,
-                                  child: Text(
-                                    '${displayList.length} ${displayList.length == 1 ? 'product' : 'products'}',
-                                    style: const TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                                    child: Container(
+                                      height: 12,
+                                      width: 76,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE9EEF5),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            SliverPadding(
-                              padding: const EdgeInsets.fromLTRB(10, 8, 10, 32),
-                              sliver: SliverGrid(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount:
-                                          MediaQuery.sizeOf(context).width >=
-                                              1000
-                                          ? 4
-                                          : MediaQuery.sizeOf(context).width >=
-                                                640
-                                          ? 3
-                                          : 2,
-                                      crossAxisSpacing: 8,
-                                      mainAxisSpacing: 8,
-                                      mainAxisExtent:
-                                          MediaQuery.sizeOf(context).width < 360
-                                          ? 274
-                                          : 242,
-                                    ),
-                                delegate: SliverChildBuilderDelegate((
-                                  context,
-                                  index,
-                                ) {
-                                  final product = displayList[index];
-                                  return Skeletonizer(
+                              SliverPadding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  10,
+                                  8,
+                                  10,
+                                  32,
+                                ),
+                                sliver: SliverGrid(
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount:
+                                            MediaQuery.sizeOf(context).width >=
+                                                1000
+                                            ? 4
+                                            : MediaQuery.sizeOf(context)
+                                                      .width >=
+                                                  640
+                                            ? 3
+                                            : 2,
+                                        crossAxisSpacing: 8,
+                                        mainAxisSpacing: 8,
+                                        mainAxisExtent:
+                                            MediaQuery.sizeOf(context).width <
+                                                360
+                                            ? 274
+                                            : 242,
+                                      ),
+                                  delegate: SliverChildBuilderDelegate((
+                                    context,
+                                    index,
+                                  ) {
+                                    return Skeletonizer(
+                                      enabled: true,
+                                      effect: _kProductShimmerEffect,
+                                      containersColor: Colors.white,
+                                      child: const _ProductGridSkeletonCard(),
+                                    );
+                                  }, childCount: 6),
+                                ),
+                              ),
+                            ] else if (displayList.isEmpty)
+                              SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: state.errorMessage != null
+                                    ? _buildErrorState(state.errorMessage!)
+                                    : _buildEmptyState(),
+                              )
+                            else ...[
+                              SliverPadding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  16,
+                                  4,
+                                ),
+                                sliver: SliverToBoxAdapter(
+                                  child: Skeletonizer(
                                     enabled: state.isLoading,
                                     effect: _kProductShimmerEffect,
                                     containersColor: Colors.white,
-                                    child: _ProductGridCard(
-                                      product: product,
-                                      onTap: () => context.push(
-                                        AppDestination.product(product.id)
-                                                .location ??
-                                            RouteNames.products,
+                                    child: Text(
+                                      '${displayList.length} ${displayList.length == 1 ? 'product' : 'products'}',
+                                      style: const TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                      onAddToCart: () =>
-                                          _handleAddToCart(product),
                                     ),
-                                  );
-                                }, childCount: displayList.length),
+                                  ),
+                                ),
                               ),
-                            ),
+                              SliverPadding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  10,
+                                  8,
+                                  10,
+                                  32,
+                                ),
+                                sliver: SliverGrid(
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount:
+                                            MediaQuery.sizeOf(context).width >=
+                                                1000
+                                            ? 4
+                                            : MediaQuery.sizeOf(context)
+                                                      .width >=
+                                                  640
+                                            ? 3
+                                            : 2,
+                                        crossAxisSpacing: 8,
+                                        mainAxisSpacing: 8,
+                                        mainAxisExtent:
+                                            MediaQuery.sizeOf(context).width <
+                                                360
+                                            ? 274
+                                            : 242,
+                                      ),
+                                  delegate: SliverChildBuilderDelegate((
+                                    context,
+                                    index,
+                                  ) {
+                                    final product = displayList[index];
+                                    return Skeletonizer(
+                                      enabled: state.isLoading,
+                                      effect: _kProductShimmerEffect,
+                                      containersColor: Colors.white,
+                                      child: _ProductGridCard(
+                                        product: product,
+                                        onTap: () => context.push(
+                                          AppDestination.product(product.id)
+                                                  .location ??
+                                              RouteNames.products,
+                                        ),
+                                        onAddToCart: () =>
+                                            _handleAddToCart(product),
+                                      ),
+                                    );
+                                  }, childCount: displayList.length),
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
-                      );
-                    },
-                  ),
-                );
-              }).toList(),
+                        );
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
-          ),
-        );
-      },
-    ),
-  );
-}
+          );
+        },
+      ),
+    );
+  }
 
   Widget _buildCartButton(BuildContext context) {
     final cartCubit = context.read<CartCubit?>();

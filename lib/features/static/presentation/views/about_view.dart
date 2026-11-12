@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../../../../core/constants/app_colors.dart';
 
 class AboutView extends StatelessWidget {
@@ -66,20 +67,17 @@ class AboutView extends StatelessWidget {
             const SizedBox(height: 12),
             _buildPhilosophyCard(
               title: 'Diagnosis Before Prescription',
-              desc:
-                  'We never treat blindly. Every patient receives a comprehensive scalp & follicle evaluation to target the root cause.',
+              desc: 'We never treat blindly. Every patient receives a comprehensive scalp & follicle evaluation to target the root cause.',
               icon: LucideIcons.microscope,
             ),
             _buildPhilosophyCard(
               title: 'Personalized Formulations',
-              desc:
-                  'No generic off-the-shelf formulas. Dosages and actives are curated for your specific scalp biology and stage.',
+              desc: 'No generic off-the-shelf formulas. Dosages and actives are curated for your specific scalp biology and stage.',
               icon: LucideIcons.flaskConical,
             ),
             _buildPhilosophyCard(
               title: 'Continuous Doctor Monitoring',
-              desc:
-                  'Digital follow-ups and microscopic photo checks ensure your treatment adapts dynamically as your hair regenerates.',
+              desc: 'Digital follow-ups and microscopic photo checks ensure your treatment adapts dynamically as your hair regenerates.',
               icon: LucideIcons.shieldPlus,
             ),
 
@@ -98,8 +96,11 @@ class AboutView extends StatelessWidget {
                   CircleAvatar(
                     radius: 30,
                     backgroundColor: AppColors.primary,
-                    child: Icon(LucideIcons.userRound,
-                        color: Colors.white, size: 36),
+                    child: Icon(
+                      LucideIcons.userRound,
+                      color: Colors.white,
+                      size: 36,
+                    ),
                   ),
                   SizedBox(width: 16),
                   Expanded(

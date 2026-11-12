@@ -73,6 +73,42 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
       ..sort((a, b) => b.startsAt.compareTo(a.startsAt));
   }
 
+  Future<String?> verifyAndBookPaidAppointment({
+    required String patientId,
+    required String accessToken,
+    required DateTime startsAt,
+    required String reason,
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+  }) async {
+    if (patientId.isEmpty || patientId == 'GUEST') {
+      return 'Sign in to confirm an appointment.';
+    }
+    try {
+      final res = await api.verifyAndBook(
+        token: accessToken,
+        startsAt: startsAt,
+        reason: reason.trim(),
+        razorpayOrderId: razorpayOrderId,
+        razorpayPaymentId: razorpayPaymentId,
+        razorpaySignature: razorpaySignature,
+      );
+      final aptData = res['appointment'];
+      if (aptData is Map<String, dynamic>) {
+        final createdApt = ClinicAppointment.fromJson(aptData);
+        if (createdApt != null) {
+          emit([createdApt, ...state.where((i) => i.id != createdApt.id)]);
+          await _persist();
+        }
+      }
+      await loadFromApi(accessToken);
+      return null;
+    } catch (error) {
+      return _errorMessage(error, 'Payment verification or booking failed.');
+    }
+  }
+
   Future<String?> saveRequest({
     required String patientId,
     String? accessToken,

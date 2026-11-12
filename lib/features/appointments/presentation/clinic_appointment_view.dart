@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_cubit.dart';
+import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_state.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -92,13 +94,24 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
         ? 'General hair & scalp consultation'
         : userReason;
 
+    final billing =
+        context.read<AppConfigCubit?>()?.state.appointmentBilling ??
+        const AppointmentBillingConfig();
+    final fee = billing.consultationFee;
+    final paymentRequired = billing.paymentRequired;
+
     AppointmentPaymentResult? payment;
     if (_replacingId == null) {
       payment = await AppointmentPaymentSheet.show(
         context,
         startsAt: _startsAt!,
+        reason: finalReason,
         doctorName: 'Dr. Jai Bansal',
-        fee: 500,
+        fee: fee,
+        paymentRequired: paymentRequired,
+        patientToken: _accessToken ?? auth.state.sessionToken,
+        patientPhone: user?.phone,
+        patientName: user?.name,
       );
       if (payment == null || !mounted) {
         return;
@@ -106,17 +119,37 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     }
 
     setState(() => _saving = true);
-    final error = await context.read<ClinicAppointmentCubit>().saveRequest(
-      patientId: activePatientId,
-      accessToken: _accessToken ?? auth.state.sessionToken ?? '',
-      startsAt: _startsAt!,
-      reason: finalReason,
-      replacingId: _replacingId,
-      consultationFee: payment?.amount ?? 500,
-      paymentMethod: payment?.paymentMethod ?? 'UPI',
-      paymentStatus: payment?.paymentStatus ?? 'Paid',
-      paymentTransactionId: payment?.transactionId,
-    );
+    String? error;
+    final activeToken = _accessToken ?? auth.state.sessionToken ?? '';
+
+    if (payment != null &&
+        payment.paymentStatus == 'Paid' &&
+        payment.signature != null &&
+        payment.signature!.isNotEmpty) {
+      error = await context
+          .read<ClinicAppointmentCubit>()
+          .verifyAndBookPaidAppointment(
+            patientId: activePatientId,
+            accessToken: activeToken,
+            startsAt: _startsAt!,
+            reason: finalReason,
+            razorpayOrderId: payment.orderId ?? '',
+            razorpayPaymentId: payment.transactionId,
+            razorpaySignature: payment.signature ?? '',
+          );
+    } else {
+      error = await context.read<ClinicAppointmentCubit>().saveRequest(
+        patientId: activePatientId,
+        accessToken: activeToken,
+        startsAt: _startsAt!,
+        reason: finalReason,
+        replacingId: _replacingId,
+        consultationFee: payment?.amount ?? fee,
+        paymentMethod: payment?.paymentMethod ?? 'Pay at clinic',
+        paymentStatus: payment?.paymentStatus ?? 'Pending',
+        paymentTransactionId: payment?.transactionId,
+      );
+    }
     if (!mounted) return;
     setState(() {
       _saving = false;
@@ -295,6 +328,10 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     final user = context.watch<AuthCubit>().state.user;
     final patientId = user?.patientId ?? 'GUEST';
     final canRequest = user != null && !user.isGuest;
+    final billing =
+        context.watch<AppConfigCubit?>()?.state.appointmentBilling ??
+        const AppointmentBillingConfig();
+    final fee = billing.consultationFee;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -402,7 +439,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                               const Text(
                                 'MBBS, MD · Reg. MCI-84920 · 12+ Years Exp.',
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 10,
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.secondaryDark,
                                 ),
@@ -411,7 +448,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                               const Text(
                                 'Specialist: Hair Transplant & Scalp Trichoscopy',
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 10,
                                   color: AppColors.textSecondary,
                                 ),
                               ),
@@ -451,7 +488,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                               const Text(
                                 'Dr. Hair & Cosmodent Clinic, Jaipur, Rajasthan · 302017\nMon - Sat: 10:00 AM - 7:30 PM',
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 10,
                                   height: 1.35,
                                   color: AppColors.secondaryDark,
                                 ),
@@ -459,9 +496,14 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                               const SizedBox(height: 6),
                               InkWell(
                                 onTap: () async {
-                                  final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=Dr+Hair+Jaipur');
+                                  final uri = Uri.parse(
+                                    'https://www.google.com/maps/search/?api=1&query=Dr+Hair+Jaipur',
+                                  );
                                   if (await canLaunchUrl(uri)) {
-                                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                    await launchUrl(
+                                      uri,
+                                      mode: LaunchMode.externalApplication,
+                                    );
                                   }
                                 },
                                 borderRadius: BorderRadius.circular(6),
@@ -479,7 +521,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                       Text(
                                         'Get Directions on Google Maps',
                                         style: TextStyle(
-                                          fontSize: 11,
+                                          fontSize: 10,
                                           fontWeight: FontWeight.w700,
                                           color: AppColors.primary,
                                           decoration: TextDecoration.underline,
@@ -516,7 +558,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                             child: Text(
                               'Sitting Hours: Mon – Sat (10 AM – 1 PM & 3:30 PM – 7 PM)',
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.primary,
                               ),
@@ -554,7 +596,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                       child: Text(
                         'Clinic is Open Mon – Sat. Sundays & Public Holidays are Closed.',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: Color(0xFF1E40AF),
                         ),
@@ -613,7 +655,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                             const Text(
                               'Appointment Date & Sitting Slot',
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.textSecondary,
                               ),
@@ -624,7 +666,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                   ? 'Tap to choose date & sitting slot'
                                   : _dateLabel(_startsAt!),
                               style: TextStyle(
-                                fontSize: 13,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 color: _startsAt == null
                                     ? AppColors.textMuted
@@ -672,30 +714,34 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: AppColors.primary100),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(
+                    const Icon(
                       LucideIcons.receipt,
                       color: AppColors.primary,
                       size: 18,
                     ),
-                    SizedBox(width: 10),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Consultation & Trichoscopy Fee: ₹500',
-                            style: TextStyle(
-                              fontSize: 12.5,
+                            billing.paymentRequired
+                                ? 'Consultation & Trichoscopy Fee: ₹$fee'
+                                : 'Consultation Fee: ₹$fee (Online optional / Pay at Clinic)',
+                            style: const TextStyle(
+                              fontSize: 12,
                               fontWeight: FontWeight.w800,
                               color: AppColors.primaryDark,
                             ),
                           ),
-                          SizedBox(height: 1),
+                          const SizedBox(height: 1),
                           Text(
-                            'UPI / Card / Pay at Clinic · Full refund if cancelled 2h prior',
-                            style: TextStyle(
+                            billing.paymentRequired
+                                ? 'UPI / Card / Pay at Clinic · Full refund if cancelled 2h prior'
+                                : 'Free OPD token reservation · Pay upon arrival at reception',
+                            style: const TextStyle(
                               fontSize: 10,
                               color: AppColors.secondaryDark,
                             ),
@@ -725,7 +771,9 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                     _saving
                         ? 'Saving Request…'
                         : _replacingId == null
-                        ? 'Proceed to Book & Pay (₹500)'
+                        ? (billing.paymentRequired
+                              ? 'Proceed to Book & Pay (₹$fee)'
+                              : 'Proceed to Book (Pay at Clinic)')
                         : 'Update Sitting Slot',
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
@@ -897,7 +945,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                               const Text(
                                 'Venue: Dr. Hair & Cosmodent Clinic · Jaipur Clinic',
                                 style: TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 10,
                                   color: AppColors.textSecondary,
                                 ),
                               ),
@@ -909,7 +957,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                   if (request.tokenNumber.isNotEmpty)
                                     Container(
                                       padding: const EdgeInsets.symmetric(
-                                        horizontal: 7,
+                                        horizontal: 6,
                                         vertical: 3,
                                       ),
                                       decoration: BoxDecoration(
@@ -941,7 +989,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                     ),
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 7,
+                                      horizontal: 6,
                                       vertical: 3,
                                     ),
                                     decoration: BoxDecoration(
@@ -973,7 +1021,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                               ? '₹${request.consultationFee} Paid (${request.paymentMethod})'
                                               : '₹${request.consultationFee} Due at Clinic',
                                           style: TextStyle(
-                                            fontSize: 10.5,
+                                            fontSize: 10,
                                             fontWeight: FontWeight.w700,
                                             color:
                                                 request.paymentStatus == 'Paid'

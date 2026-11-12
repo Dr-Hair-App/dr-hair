@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -159,8 +159,12 @@ class SessionCoordinator {
 
   /// When an account is deleted by administrator: flushes patient session,
   /// displays notification, and redirects user to signin screen.
-  Future<void> handleAccountDeleted({String? message, BuildContext? context}) async {
-    final patientId = _authCubit?.state.user?.patientId ?? _lastBoundPatientId ?? 'GUEST';
+  Future<void> handleAccountDeleted({
+    String? message,
+    BuildContext? context,
+  }) async {
+    final patientId =
+        _authCubit?.state.user?.patientId ?? _lastBoundPatientId ?? 'GUEST';
     _lastBoundPatientId = null;
 
     await clearPatientSession(
@@ -182,8 +186,12 @@ class SessionCoordinator {
         SnackBar(
           backgroundColor: const Color(0xFFC53030),
           content: Text(
-            message ?? 'Your account has been deleted by clinic administration.',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            message ??
+                'Your account has been deleted by clinic administration.',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           duration: const Duration(seconds: 4),
         ),
@@ -208,8 +216,12 @@ class SessionCoordinator {
 
     _isBlockedDialogShowing = true;
 
-    final phone = (supportPhone != null && supportPhone.isNotEmpty) ? supportPhone : '+91-9876543210';
-    final email = (supportEmail != null && supportEmail.isNotEmpty) ? supportEmail : 'support@drhair.in';
+    final phone = (supportPhone != null && supportPhone.isNotEmpty)
+        ? supportPhone
+        : '+91-9876543210';
+    final email = (supportEmail != null && supportEmail.isNotEmpty)
+        ? supportEmail
+        : 'support@drhair.in';
     final desc = (message != null && message.isNotEmpty)
         ? message
         : 'Your Dr. Hair account has been suspended by clinic administration.';
@@ -221,7 +233,9 @@ class SessionCoordinator {
         builder: (dialogCtx) => PopScope(
           canPop: false,
           child: Dialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(22.0),
               child: Column(
@@ -285,12 +299,19 @@ class SessionCoordinator {
                         const SizedBox(height: 6),
                         const Text(
                           'Please reach out to Dr. Hair Clinic Support with your registered phone number or patient ID:',
-                          style: TextStyle(fontSize: 11, color: Color(0xFF718096)),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF718096),
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(Icons.phone_outlined, size: 14, color: Color(0xFF1A365D)),
+                            const Icon(
+                              Icons.phone_outlined,
+                              size: 14,
+                              color: Color(0xFF1A365D),
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               phone,
@@ -305,7 +326,11 @@ class SessionCoordinator {
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            const Icon(Icons.email_outlined, size: 14, color: Color(0xFF1A365D)),
+                            const Icon(
+                              Icons.email_outlined,
+                              size: 14,
+                              color: Color(0xFF1A365D),
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               email,
@@ -344,7 +369,10 @@ class SessionCoordinator {
                           ),
                           child: const Text(
                             'Call Support',
-                            style: TextStyle(fontSize: 12, color: Color(0xFF2D3748)),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF2D3748),
+                            ),
                           ),
                         ),
                       ),
@@ -354,7 +382,10 @@ class SessionCoordinator {
                           onPressed: () async {
                             Navigator.of(dialogCtx).pop();
                             _isBlockedDialogShowing = false;
-                            final patientId = _authCubit?.state.user?.patientId ?? _lastBoundPatientId ?? 'GUEST';
+                            final patientId =
+                                _authCubit?.state.user?.patientId ??
+                                _lastBoundPatientId ??
+                                'GUEST';
                             _lastBoundPatientId = null;
                             await clearPatientSession(
                               patientId: patientId,
@@ -380,7 +411,11 @@ class SessionCoordinator {
                           ),
                           child: const Text(
                             'Sign Out',
-                            style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),

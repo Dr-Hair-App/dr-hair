@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -140,7 +140,9 @@ class DietPlanView extends StatelessWidget {
                                         },
                                       ),
                                       IconButton(
-                                        icon: const Icon(LucideIcons.plusCircle),
+                                        icon: const Icon(
+                                          LucideIcons.plusCircle,
+                                        ),
                                         color: AppColors.primary,
                                         onPressed: () {
                                           HapticFeedback.lightImpact();
@@ -157,14 +159,16 @@ class DietPlanView extends StatelessWidget {
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(6),
                                 child: LinearProgressIndicator(
-                                  value:
-                                      (state.waterCups / 8.0).clamp(0.0, 1.0),
+                                  value: (state.waterCups / 8.0).clamp(
+                                    0.0,
+                                    1.0,
+                                  ),
                                   minHeight: 8,
                                   backgroundColor: const Color(0xFFF0F9FF),
                                   valueColor:
                                       const AlwaysStoppedAnimation<Color>(
-                                    Color(0xFF0284C7),
-                                  ),
+                                        Color(0xFF0284C7),
+                                      ),
                                 ),
                               ),
                             ],
@@ -185,8 +189,9 @@ class DietPlanView extends StatelessWidget {
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 40),
                       child: Center(
-                        child:
-                            CircularProgressIndicator(color: AppColors.primary),
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
                       ),
                     )
                   else if (!hasPlans)
@@ -287,7 +292,7 @@ class DietPlanView extends StatelessWidget {
                                 border: Border.all(
                                   color: isDone
                                       ? const Color(0xFF10B981)
-                                          .withValues(alpha: 0.3)
+                                            .withValues(alpha: 0.3)
                                       : AppColors.border,
                                   width: isDone ? 1.5 : 1.0,
                                 ),
@@ -301,12 +306,12 @@ class DietPlanView extends StatelessWidget {
                                   );
                                 },
                                 child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 200),
+                                      duration: const Duration(
+                                        milliseconds: 200,
+                                      ),
                                       width: 24,
                                       height: 24,
                                       margin: const EdgeInsets.only(top: 2),
@@ -342,8 +347,7 @@ class DietPlanView extends StatelessWidget {
                                                 meal.type.toUpperCase(),
                                                 style: const TextStyle(
                                                   fontSize: 10,
-                                                  fontWeight:
-                                                      FontWeight.w800,
+                                                  fontWeight: FontWeight.w800,
                                                   color: AppColors.primary,
                                                   letterSpacing: 0.5,
                                                 ),
@@ -352,12 +356,13 @@ class DietPlanView extends StatelessWidget {
                                               Container(
                                                 padding:
                                                     const EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 2,
-                                                ),
+                                                      horizontal: 6,
+                                                      vertical: 2,
+                                                    ),
                                                 decoration: BoxDecoration(
-                                                  color:
-                                                      const Color(0xFFECFDF5),
+                                                  color: const Color(
+                                                    0xFFECFDF5,
+                                                  ),
                                                   borderRadius:
                                                       BorderRadius.circular(6),
                                                 ),
@@ -365,8 +370,7 @@ class DietPlanView extends StatelessWidget {
                                                   meal.nutrients,
                                                   style: const TextStyle(
                                                     fontSize: 8,
-                                                    fontWeight:
-                                                      FontWeight.w700,
+                                                    fontWeight: FontWeight.w700,
                                                     color: Color(0xFF059669),
                                                   ),
                                                 ),
@@ -423,22 +427,19 @@ class DietPlanView extends StatelessWidget {
                               _buildSuperfoodRow(
                                 icon: '🫐',
                                 title: 'Amla & Berries',
-                                desc:
-                                    'Highest natural Vitamin C; drives scalp collagen.',
+                                desc: 'Highest natural Vitamin C; drives scalp collagen.',
                               ),
                               const Divider(height: 20),
                               _buildSuperfoodRow(
                                 icon: '🎃',
                                 title: 'Pumpkin Seeds',
-                                desc:
-                                    'Rich in phytosterols & zinc to suppress DHT naturally.',
+                                desc: 'Rich in phytosterols & zinc to suppress DHT naturally.',
                               ),
                               const Divider(height: 20),
                               _buildSuperfoodRow(
                                 icon: '🥬',
                                 title: 'Spinach & Methi',
-                                desc:
-                                    'Bioavailable non-heme iron to lift ferritin levels.',
+                                desc: 'Bioavailable non-heme iron to lift ferritin levels.',
                               ),
                             ],
                           ),

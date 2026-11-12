@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -274,7 +274,8 @@ class _NotificationsContent extends StatelessWidget {
                           fontSize: 12.5,
                         ),
                       ),
-                      if (notification.imageUrl != null && notification.imageUrl!.isNotEmpty) ...[
+                      if (notification.imageUrl != null &&
+                          notification.imageUrl!.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(10),

@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../../../core/constants/api_endpoints.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/network/dio_client.dart';
@@ -54,7 +55,8 @@ class _ContactViewState extends State<ContactView> {
         path: 'support@drhair.in',
         queryParameters: {
           'subject': 'Dr. Hair Clinical Inquiry from $name',
-          'body': 'Name: $name\nEmail: $email\nPhone: $phone\n\nSymptoms / Inquiry:\n$message',
+          'body':
+              'Name: $name\nEmail: $email\nPhone: $phone\n\nSymptoms / Inquiry:\n$message',
         },
       );
 
@@ -87,7 +89,8 @@ class _ContactViewState extends State<ContactView> {
         builder: (ctx) => AlertDialog(
           title: const Text('Inquiry Submitted'),
           content: const Text(
-              'Thank you for reaching out. Your message has been routed to our clinical support team at support@drhair.in. A coordinator will follow up shortly.'),
+            'Thank you for reaching out. Your message has been routed to our clinical support team at support@drhair.in. A coordinator will follow up shortly.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -132,8 +135,10 @@ class _ContactViewState extends State<ContactView> {
                     icon: const Icon(LucideIcons.messageCircle, size: 20),
                     label: const Text(
                       'WhatsApp Us',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -151,8 +156,11 @@ class _ContactViewState extends State<ContactView> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    icon: const Icon(LucideIcons.phone,
-                        color: AppColors.primary, size: 20),
+                    icon: const Icon(
+                      LucideIcons.phone,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
                     label: const Text(
                       'Call Clinic',
                       style: TextStyle(
@@ -182,19 +190,32 @@ class _ContactViewState extends State<ContactView> {
               key: _formKey,
               child: Column(
                 children: [
-                  _buildField('Full Name', _nameController, LucideIcons.userRound),
-                  const SizedBox(height: 16),
-                  _buildField('Email Address', _emailController,
-                      LucideIcons.mail,
-                      keyboardType: TextInputType.emailAddress),
+                  _buildField(
+                    'Full Name',
+                    _nameController,
+                    LucideIcons.userRound,
+                  ),
                   const SizedBox(height: 16),
                   _buildField(
-                      'Phone Number', _phoneController, LucideIcons.phone,
-                      keyboardType: TextInputType.phone),
+                    'Email Address',
+                    _emailController,
+                    LucideIcons.mail,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
                   const SizedBox(height: 16),
-                  _buildField('Your Message or Symptoms', _messageController,
-                      LucideIcons.messageCircle,
-                      maxLines: 4),
+                  _buildField(
+                    'Phone Number',
+                    _phoneController,
+                    LucideIcons.phone,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildField(
+                    'Your Message or Symptoms',
+                    _messageController,
+                    LucideIcons.messageCircle,
+                    maxLines: 4,
+                  ),
                   const SizedBox(height: 28),
                   SizedBox(
                     width: double.infinity,

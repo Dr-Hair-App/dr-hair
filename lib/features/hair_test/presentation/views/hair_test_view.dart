@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -54,7 +54,7 @@ class _HairTestContent extends StatelessWidget {
             SnackBar(
               content: Text(state.errorMessage!),
               backgroundColor: AppColors.danger,
-              behavior: SnackBarBehavior.floating,
+              // behavior: SnackBarBehavior.floating,
             ),
           );
         }
@@ -1541,4 +1541,3 @@ class _HairTestContent extends StatelessWidget {
     );
   }
 }
-

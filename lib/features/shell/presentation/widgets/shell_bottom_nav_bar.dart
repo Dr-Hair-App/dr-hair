@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -231,20 +231,13 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(36),
-              border: Border.all(
-                color: const Color(0xFFF1F5F9),
-                width: 1.2,
-              ),
+              border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
             ),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 4,
-              vertical: 4,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final double slotWidth = constraints.maxWidth / 4;
-                final double indicatorLeft =
-                    (targetSlotIndex * slotWidth) + 2;
+                final double indicatorLeft = (targetSlotIndex * slotWidth) + 2;
 
                 return Stack(
                   clipBehavior: Clip.none,

@@ -12,6 +12,8 @@ class AppConfigCubit extends Cubit<AppConfigState> {
         super(
           AppConfigState(
             features: (repository ?? AppConfigRepository()).getCachedFeatures(),
+            appointmentBilling:
+                (repository ?? AppConfigRepository()).getCachedBillingConfig(),
           ),
         ) {
     loadConfig();
@@ -21,8 +23,14 @@ class AppConfigCubit extends Cubit<AppConfigState> {
   Future<void> loadConfig() async {
     emit(state.copyWith(isLoading: true, error: null));
     try {
-      final updatedFeatures = await _repository.fetchAppFeatures();
-      emit(state.copyWith(features: updatedFeatures, isLoading: false));
+      final bundle = await _repository.fetchAppConfig();
+      emit(
+        state.copyWith(
+          features: bundle.features,
+          appointmentBilling: bundle.appointmentBilling,
+          isLoading: false,
+        ),
+      );
     } catch (e) {
       emit(state.copyWith(isLoading: false, error: e.toString()));
     }
