@@ -22,6 +22,7 @@ import '../../features/shop/presentation/views/products_view.dart';
 import '../../features/static/domain/policy_models.dart';
 import '../../features/static/presentation/views/about_view.dart';
 import '../../features/static/presentation/views/contact_view.dart';
+import '../../features/static/presentation/views/no_internet_view.dart';
 import '../../features/static/presentation/views/policy_page_view.dart';
 import '../../features/treatment/presentation/views/treatment_details_view.dart';
 import '../../features/videos/presentation/views/videos_view.dart';
@@ -280,6 +281,10 @@ class AppRouter {
         path: RouteNames.cancellationPolicy,
         builder: (context, state) =>
             const PolicyPageView(initialType: PolicyType.cancellationPolicy),
+      ),
+      GoRoute(
+        path: RouteNames.noInternet,
+        builder: (context, state) => const NoInternetView(),
       ),
     ],
   );

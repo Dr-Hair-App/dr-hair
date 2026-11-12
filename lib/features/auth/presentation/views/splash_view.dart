@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
+import '../../../../core/services/network_connection_service.dart';
 import '../../../../core/storage/app_local_cache.dart';
 import '../viewmodels/auth_cubit.dart';
 import '../viewmodels/auth_state.dart';
@@ -131,14 +132,25 @@ class _SplashViewState extends State<SplashView>
     super.dispose();
   }
 
-  void _onSplashComplete() {
+  Future<void> _onSplashComplete() async {
     if (!mounted || _hasNavigated) return;
+
+    // Check internet connectivity via connectivity_plus & DNS verification
+    final isOnline = await NetworkConnectionService.instance.hasInternet();
+    if (!mounted || _hasNavigated) return;
+
+    if (!isOnline) {
+      _hasNavigated = true;
+      context.go(RouteNames.noInternet);
+      return;
+    }
+
     final authState = context.read<AuthCubit>().state;
     if (authState.status == AuthStatus.loading) {
       return;
     }
     if (authState.status == AuthStatus.failure) {
-      _continueToSignIn();
+      await _continueToSignIn();
       return;
     }
     _hasNavigated = true;
@@ -162,8 +174,15 @@ class _SplashViewState extends State<SplashView>
     }
   }
 
-  void _continueToSignIn() {
+  Future<void> _continueToSignIn() async {
     if (!mounted || _hasNavigated) return;
+    final isOnline = await NetworkConnectionService.instance.hasInternet();
+    if (!mounted || _hasNavigated) return;
+    if (!isOnline) {
+      _hasNavigated = true;
+      context.go(RouteNames.noInternet);
+      return;
+    }
     _hasNavigated = true;
     context.go(RouteNames.signin);
   }
@@ -172,14 +191,11 @@ class _SplashViewState extends State<SplashView>
   Widget build(BuildContext context) {
     return BlocListener<AuthCubit, AuthState>(
       listener: (context, state) {
-        if (!_hasNavigated) {
+        if (!_hasNavigated && _controller.isCompleted) {
           if (state.status == AuthStatus.failure) {
             _continueToSignIn();
           } else if (state.status != AuthStatus.loading) {
-            // If the 3-second splash animation has finished, navigate immediately
-            if (_controller.isCompleted) {
-              _onSplashComplete();
-            }
+            _onSplashComplete();
           }
         }
       },

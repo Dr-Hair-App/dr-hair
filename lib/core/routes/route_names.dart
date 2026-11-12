@@ -37,4 +37,5 @@ class RouteNames {
   static const String cancellationPolicy = '/cancellation-policy';
   static const String products = '/products';
   static const String assessmentResult = '/assessment-result';
+  static const String noInternet = '/no-internet';
 }
