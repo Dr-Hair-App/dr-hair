@@ -11,6 +11,8 @@ class ClinicAppointment {
   final String paymentStatus;
   final String paymentMethod;
   final String paymentTransactionId;
+  final String cancellationReason;
+  final String rescheduleReason;
 
   const ClinicAppointment({
     required this.id,
@@ -25,6 +27,8 @@ class ClinicAppointment {
     this.paymentStatus = 'Pending',
     this.paymentMethod = 'UPI',
     this.paymentTransactionId = '',
+    this.cancellationReason = '',
+    this.rescheduleReason = '',
   });
 
   ClinicAppointment copyWith({
@@ -35,6 +39,8 @@ class ClinicAppointment {
     String? paymentStatus,
     String? paymentMethod,
     String? paymentTransactionId,
+    String? cancellationReason,
+    String? rescheduleReason,
   }) => ClinicAppointment(
     id: id,
     patientId: patientId,
@@ -48,6 +54,8 @@ class ClinicAppointment {
     paymentStatus: paymentStatus ?? this.paymentStatus,
     paymentMethod: paymentMethod ?? this.paymentMethod,
     paymentTransactionId: paymentTransactionId ?? this.paymentTransactionId,
+    cancellationReason: cancellationReason ?? this.cancellationReason,
+    rescheduleReason: rescheduleReason ?? this.rescheduleReason,
   );
 
   Map<String, dynamic> toJson() => {
@@ -63,6 +71,8 @@ class ClinicAppointment {
     'paymentStatus': paymentStatus,
     'paymentMethod': paymentMethod,
     'paymentTransactionId': paymentTransactionId,
+    'cancellationReason': cancellationReason,
+    'rescheduleReason': rescheduleReason,
   };
 
   static ClinicAppointment? fromJson(Object? value) {
@@ -84,6 +94,8 @@ class ClinicAppointment {
     final paymentStatus = value['paymentStatus']?.toString() ?? value['payment_status']?.toString() ?? 'Pending';
     final paymentMethod = value['paymentMethod']?.toString() ?? value['payment_method']?.toString() ?? 'UPI';
     final paymentTransactionId = value['paymentTransactionId']?.toString() ?? value['payment_transaction_id']?.toString() ?? '';
+    final cancellationReason = value['cancellationReason']?.toString() ?? value['cancellation_reason']?.toString() ?? '';
+    final rescheduleReason = value['rescheduleReason']?.toString() ?? value['reschedule_reason']?.toString() ?? '';
 
     if (id.isEmpty || startsAt == null) {
       return null;
@@ -101,6 +113,8 @@ class ClinicAppointment {
       paymentStatus: paymentStatus.isNotEmpty ? paymentStatus : 'Pending',
       paymentMethod: paymentMethod.isNotEmpty ? paymentMethod : 'UPI',
       paymentTransactionId: paymentTransactionId,
+      cancellationReason: cancellationReason,
+      rescheduleReason: rescheduleReason,
     );
   }
 }

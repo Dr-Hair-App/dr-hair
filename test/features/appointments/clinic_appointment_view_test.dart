@@ -421,4 +421,118 @@ void main() {
     expect(result?.paymentStatus, 'Waived');
     expect(result?.paymentMethod, 'Free First Consultation');
   });
+
+  testWidgets('renders cancellation reason banner when appointment is cancelled', (tester) async {
+    tester.view.physicalSize = const Size(1080, 1920);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _MockAppointmentApi([
+      {
+        'id': 'APT-CANCELLED-1',
+        'userId': 995,
+        'patientId': 'PAT-995',
+        'startsAt': '2026-11-20T10:30:00.000Z',
+        'reason': 'Scalp consultation',
+        'status': 'Cancelled',
+        'tokenNumber': 'OPD-0088',
+        'consultationFee': 500,
+        'paymentStatus': 'Paid',
+        'paymentMethod': 'Razorpay',
+        'cancellation_reason': 'Doctor unavailable due to emergency surgery',
+      },
+    ]);
+    final cache = AppLocalCache.inMemory();
+    final appointmentCubit = ClinicAppointmentCubit(cache: cache, api: api);
+    await appointmentCubit.loadFromApi('test-token');
+
+    final user = const UserModel(
+      id: '995',
+      patientId: 'PAT-995',
+      name: 'Rohan Sharma',
+      emailOrPhone: '9876500005',
+      phone: '9876500005',
+      age: 29,
+      gender: 'Male',
+      isGuest: false,
+    );
+    final authCubit = _FakeAuthCubit(user);
+    final appConfigCubit = _FakeAppConfigCubit(const AppointmentBillingConfig());
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<AuthCubit>.value(value: authCubit),
+          BlocProvider<ClinicAppointmentCubit>.value(value: appointmentCubit),
+          BlocProvider<AppConfigCubit>.value(value: appConfigCubit),
+        ],
+        child: const MaterialApp(
+          home: ClinicAppointmentView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify cancellation reason badge & reason text are visible
+    expect(find.text('Cancellation Reason'), findsOneWidget);
+    expect(find.text('Doctor unavailable due to emergency surgery'), findsOneWidget);
+  });
+
+  testWidgets('renders rescheduled notice when appointment has reschedule note', (tester) async {
+    tester.view.physicalSize = const Size(1080, 1920);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final api = _MockAppointmentApi([
+      {
+        'id': 'APT-RESCHEDULED-1',
+        'userId': 996,
+        'patientId': 'PAT-996',
+        'startsAt': '2026-11-22T11:00:00.000Z',
+        'reason': 'Hair thinning review',
+        'status': 'Confirmed',
+        'tokenNumber': 'OPD-0099',
+        'consultationFee': 500,
+        'paymentStatus': 'Paid',
+        'paymentMethod': 'Razorpay',
+        'reschedule_reason': 'Slot shifted by 30 mins due to clinic maintenance',
+      },
+    ]);
+    final cache = AppLocalCache.inMemory();
+    final appointmentCubit = ClinicAppointmentCubit(cache: cache, api: api);
+    await appointmentCubit.loadFromApi('test-token');
+
+    final user = const UserModel(
+      id: '996',
+      patientId: 'PAT-996',
+      name: 'Priya Patel',
+      emailOrPhone: '9876500006',
+      phone: '9876500006',
+      age: 27,
+      gender: 'Female',
+      isGuest: false,
+    );
+    final authCubit = _FakeAuthCubit(user);
+    final appConfigCubit = _FakeAppConfigCubit(const AppointmentBillingConfig());
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<AuthCubit>.value(value: authCubit),
+          BlocProvider<ClinicAppointmentCubit>.value(value: appointmentCubit),
+          BlocProvider<AppConfigCubit>.value(value: appConfigCubit),
+        ],
+        child: const MaterialApp(
+          home: ClinicAppointmentView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify rescheduled notice & reason text are visible
+    expect(find.text('Rescheduled by Clinic'), findsOneWidget);
+    expect(find.text('Slot shifted by 30 mins due to clinic maintenance'), findsOneWidget);
+  });
 }
