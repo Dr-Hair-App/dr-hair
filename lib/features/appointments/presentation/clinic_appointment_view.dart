@@ -97,8 +97,15 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     final billing =
         context.read<AppConfigCubit?>()?.state.appointmentBilling ??
         const AppointmentBillingConfig();
-    final fee = billing.consultationFee;
-    final paymentRequired = billing.paymentRequired;
+    final existingRequests = context
+        .read<ClinicAppointmentCubit>()
+        .forPatient(activePatientId, userId: user?.id);
+    final hasPriorVisit = existingRequests.any((a) => a.status != 'Cancelled');
+    final isFirstAppointment = !hasPriorVisit;
+
+    final isFirstFree = billing.firstAppointmentFree && isFirstAppointment;
+    final fee = isFirstFree ? 0 : billing.consultationFee;
+    final paymentRequired = billing.paymentRequired && !isFirstFree;
 
     AppointmentPaymentResult? payment;
     if (_replacingId == null) {
@@ -331,7 +338,14 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     final billing =
         context.watch<AppConfigCubit?>()?.state.appointmentBilling ??
         const AppointmentBillingConfig();
-    final fee = billing.consultationFee;
+    final existingRequests = context
+        .watch<ClinicAppointmentCubit>()
+        .forPatient(patientId, userId: user?.id);
+    final hasPriorVisit = existingRequests.any((a) => a.status != 'Cancelled');
+    final isFirstAppointment = !hasPriorVisit;
+
+    final isFirstFree = billing.firstAppointmentFree && isFirstAppointment;
+    final fee = isFirstFree ? 0 : billing.consultationFee;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -710,15 +724,17 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.primary5,
+                  color: isFirstFree ? const Color(0xFFF0FDF4) : AppColors.primary5,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.primary100),
+                  border: Border.all(
+                    color: isFirstFree ? const Color(0xFFBBF7D0) : AppColors.primary100,
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(
-                      LucideIcons.receipt,
-                      color: AppColors.primary,
+                    Icon(
+                      isFirstFree ? LucideIcons.gift : LucideIcons.receipt,
+                      color: isFirstFree ? const Color(0xFF16A34A) : AppColors.primary,
                       size: 18,
                     ),
                     const SizedBox(width: 10),
@@ -726,24 +742,47 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            billing.paymentRequired
-                                ? 'Consultation & Trichoscopy Fee: ₹$fee'
-                                : 'Consultation Fee: ₹$fee (Online optional / Pay at Clinic)',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primaryDark,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                isFirstFree
+                                    ? 'Special Offer: 1st Consultation FREE'
+                                    : billing.paymentRequired
+                                        ? 'Consultation & Trichoscopy Fee: ₹$fee'
+                                        : 'Consultation Fee: ₹$fee (Pay at Clinic)',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: isFirstFree
+                                      ? const Color(0xFF15803D)
+                                      : AppColors.primaryDark,
+                                ),
+                              ),
+                              if (isFirstFree) ...[
+                                const SizedBox(width: 6),
+                                Text(
+                                  '₹${billing.consultationFee}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey,
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           const SizedBox(height: 1),
                           Text(
-                            billing.paymentRequired
-                                ? 'UPI / Card / Pay at Clinic · Full refund if cancelled 2h prior'
-                                : 'Free OPD token reservation · Pay upon arrival at reception',
-                            style: const TextStyle(
+                            isFirstFree
+                                ? 'Your 1st clinic visit with Dr. Jai Bansal is 100% complimentary.'
+                                : billing.paymentRequired
+                                    ? 'UPI / Card / Pay at Clinic · Full refund if cancelled 2h prior'
+                                    : 'Free OPD token reservation · Pay upon arrival at reception',
+                            style: TextStyle(
                               fontSize: 10,
-                              color: AppColors.secondaryDark,
+                              color: isFirstFree
+                                  ? const Color(0xFF166534)
+                                  : AppColors.secondaryDark,
                             ),
                           ),
                         ],
@@ -771,9 +810,11 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                     _saving
                         ? 'Saving Request…'
                         : _replacingId == null
-                        ? (billing.paymentRequired
-                              ? 'Proceed to Book & Pay (₹$fee)'
-                              : 'Proceed to Book (Pay at Clinic)')
+                        ? (isFirstFree
+                              ? 'Book 1st Consultation (100% FREE)'
+                              : billing.paymentRequired
+                                  ? 'Proceed to Book & Pay (₹$fee)'
+                                  : 'Proceed to Book (Pay at Clinic)')
                         : 'Update Sitting Slot',
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,

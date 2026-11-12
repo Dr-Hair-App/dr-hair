@@ -4,11 +4,19 @@ class AppointmentBillingConfig extends Equatable {
   final bool paymentRequired;
   final int consultationFee;
   final String currency;
+  final bool firstAppointmentFree;
+  final bool isFirstAppointment;
+  final int? effectiveFee;
+  final bool? effectivePaymentRequired;
 
   const AppointmentBillingConfig({
     this.paymentRequired = true,
     this.consultationFee = 500,
     this.currency = 'INR',
+    this.firstAppointmentFree = false,
+    this.isFirstAppointment = false,
+    this.effectiveFee,
+    this.effectivePaymentRequired,
   });
 
   factory AppointmentBillingConfig.fromJson(Map<String, dynamic>? json) {
@@ -17,6 +25,10 @@ class AppointmentBillingConfig extends Equatable {
       paymentRequired: json['payment_required'] != false,
       consultationFee: (json['consultation_fee'] as num?)?.toInt() ?? 500,
       currency: (json['currency'] as String?) ?? 'INR',
+      firstAppointmentFree: json['first_appointment_free'] == true,
+      isFirstAppointment: json['is_first_appointment'] == true,
+      effectiveFee: (json['effective_fee'] as num?)?.toInt(),
+      effectivePaymentRequired: json['effective_payment_required'] as bool?,
     );
   }
 
@@ -24,10 +36,23 @@ class AppointmentBillingConfig extends Equatable {
     'payment_required': paymentRequired,
     'consultation_fee': consultationFee,
     'currency': currency,
+    'first_appointment_free': firstAppointmentFree,
+    'is_first_appointment': isFirstAppointment,
+    if (effectiveFee != null) 'effective_fee': effectiveFee,
+    if (effectivePaymentRequired != null)
+      'effective_payment_required': effectivePaymentRequired,
   };
 
   @override
-  List<Object?> get props => [paymentRequired, consultationFee, currency];
+  List<Object?> get props => [
+    paymentRequired,
+    consultationFee,
+    currency,
+    firstAppointmentFree,
+    isFirstAppointment,
+    effectiveFee,
+    effectivePaymentRequired,
+  ];
 }
 
 /// State containing live feature flag availability for the Dr. Hair app.

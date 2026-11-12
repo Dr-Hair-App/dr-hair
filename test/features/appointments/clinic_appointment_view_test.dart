@@ -2,6 +2,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dr_hair/core/storage/app_local_cache.dart';
+import 'package:dr_hair/features/app_config/data/app_config_repository.dart';
+import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_cubit.dart';
+import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_state.dart';
 import 'package:dr_hair/features/appointments/data/patient_appointment_api.dart';
 import 'package:dr_hair/features/appointments/presentation/clinic_appointment_cubit.dart';
 import 'package:dr_hair/features/appointments/presentation/clinic_appointment_view.dart';
@@ -37,6 +40,18 @@ class _FakeAuthCubit extends AuthCubit {
       sessionToken: user != null ? 'test-token' : null,
       isRegistered: user != null,
     ));
+  }
+}
+
+class _FakeAppConfigCubit extends AppConfigCubit {
+  _FakeAppConfigCubit(AppointmentBillingConfig billing)
+      : super(repository: AppConfigRepository(cache: AppLocalCache.inMemory())) {
+    emit(AppConfigState(appointmentBilling: billing));
+  }
+
+  @override
+  Future<void> loadConfig() async {
+    // Keep mocked billing state without triggering real network request in tests
   }
 }
 
@@ -250,5 +265,160 @@ void main() {
 
     // Verify appointment card still rendered with updated slot
     expect(find.text('Dr. Jai Bansal Clinic Chamber'), findsOneWidget);
+  });
+
+  testWidgets('renders first appointment free UI when admin enables firstAppointmentFree', (tester) async {
+    tester.view.physicalSize = const Size(1080, 1920);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final cache = AppLocalCache.inMemory();
+    final appointmentCubit = ClinicAppointmentCubit(cache: cache);
+    final user = const UserModel(
+      id: '992',
+      patientId: 'PAT-992',
+      name: 'New Patient',
+      emailOrPhone: '9876500002',
+      phone: '9876500002',
+      age: 24,
+      gender: 'Female',
+      isGuest: false,
+    );
+    final authCubit = _FakeAuthCubit(user);
+    final appConfigCubit = _FakeAppConfigCubit(
+      const AppointmentBillingConfig(
+        paymentRequired: true,
+        consultationFee: 500,
+        firstAppointmentFree: true,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<AuthCubit>.value(value: authCubit),
+          BlocProvider<ClinicAppointmentCubit>.value(value: appointmentCubit),
+          BlocProvider<AppConfigCubit>.value(value: appConfigCubit),
+        ],
+        child: const MaterialApp(
+          home: ClinicAppointmentView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify first consultation free badge and strikethrough fee
+    expect(find.text('Special Offer: 1st Consultation FREE'), findsOneWidget);
+    expect(find.text('₹500'), findsOneWidget);
+
+    // Verify button text reflects 100% free first consultation
+    final freeBookButton = find.text('Book 1st Consultation (100% FREE)');
+    await tester.ensureVisible(freeBookButton);
+    expect(freeBookButton, findsOneWidget);
+  });
+
+  testWidgets('renders pay at clinic UI when admin turns off payment_required', (tester) async {
+    tester.view.physicalSize = const Size(1080, 1920);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final cache = AppLocalCache.inMemory();
+    final appointmentCubit = ClinicAppointmentCubit(cache: cache);
+    final user = const UserModel(
+      id: '993',
+      patientId: 'PAT-993',
+      name: 'Repeat Patient',
+      emailOrPhone: '9876500003',
+      phone: '9876500003',
+      age: 30,
+      gender: 'Male',
+      isGuest: false,
+    );
+    final authCubit = _FakeAuthCubit(user);
+    final appConfigCubit = _FakeAppConfigCubit(
+      const AppointmentBillingConfig(
+        paymentRequired: false,
+        consultationFee: 450,
+        firstAppointmentFree: false,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<AuthCubit>.value(value: authCubit),
+          BlocProvider<ClinicAppointmentCubit>.value(value: appointmentCubit),
+          BlocProvider<AppConfigCubit>.value(value: appConfigCubit),
+        ],
+        child: const MaterialApp(
+          home: ClinicAppointmentView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify Pay at Clinic text
+    expect(find.text('Consultation Fee: ₹450 (Pay at Clinic)'), findsOneWidget);
+
+    // Verify button text
+    final bookButton = find.text('Proceed to Book (Pay at Clinic)');
+    await tester.ensureVisible(bookButton);
+    expect(bookButton, findsOneWidget);
+  });
+
+  testWidgets('AppointmentPaymentSheet displays free consultation mode when fee is 0', (tester) async {
+    tester.view.physicalSize = const Size(1080, 1920);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    AppointmentPaymentResult? result;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () async {
+                  result = await AppointmentPaymentSheet.show(
+                    context,
+                    startsAt: DateTime(2026, 11, 10, 10, 30),
+                    doctorName: 'Dr. Jai Bansal',
+                    fee: 0,
+                    paymentRequired: false,
+                  );
+                },
+                child: const Text('Open Free Sheet'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open Free Sheet'));
+    await tester.pumpAndSettle();
+
+    // Verify free consultation header and option
+    expect(find.text('FREE CONSULTATION CONFIRMATION'), findsOneWidget);
+    expect(find.text('100% Free Consultation (₹0)'), findsOneWidget);
+    expect(find.text('₹0 FREE'), findsOneWidget);
+
+    // Tap Confirm Free Consultation
+    final confirmButton = find.text('Confirm Free Consultation (₹0)');
+    await tester.ensureVisible(confirmButton);
+    await tester.tap(confirmButton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+
+    // Verify result
+    expect(result, isNotNull);
+    expect(result?.amount, 0);
+    expect(result?.paymentStatus, 'Waived');
+    expect(result?.paymentMethod, 'Free First Consultation');
   });
 }
