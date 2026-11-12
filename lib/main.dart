@@ -11,6 +11,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'core/constants/app_strings.dart';
 import 'core/notifications/firebase_push_service.dart';
+import 'core/services/crashlytics_service.dart';
 import 'core/routes/app_router.dart';
 import 'core/session/session_coordinator.dart';
 import 'core/storage/app_local_cache.dart';
@@ -35,6 +36,7 @@ Future<void> main() async {
     // Falls back gracefully if .env is missing or packaged differently
   }
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await CrashlyticsService.initialize();
   await FirebasePushService.initialize();
   await AppLocalCache.initialize();
   Bloc.observer = AppBlocObserver();

@@ -12,6 +12,7 @@ import '../../features/hair_test/presentation/viewmodels/hair_test_cubit.dart';
 import '../../features/shop/presentation/viewmodels/cart_cubit.dart';
 import '../routes/app_router.dart';
 import '../routes/route_names.dart';
+import '../services/crashlytics_service.dart';
 import '../storage/app_local_cache.dart';
 import '../widgets/app_toast.dart';
 
@@ -83,6 +84,7 @@ class SessionCoordinator {
           patientId.isNotEmpty &&
           patientId != _lastBoundPatientId) {
         _lastBoundPatientId = patientId;
+        unawaited(CrashlyticsService.setPatientIdentifier(patientId));
         final token = state.sessionToken;
         careCubit.bindPatient(patientId, sessionToken: token);
         hairTestCubit.bindPatient(patientId, sessionToken: token);
@@ -94,6 +96,7 @@ class SessionCoordinator {
         _lastBoundPatientId != null) {
       final oldPatientId = _lastBoundPatientId!;
       _lastBoundPatientId = null;
+      unawaited(CrashlyticsService.clearPatientIdentifier());
       unawaited(
         clearPatientSession(
           patientId: oldPatientId,
