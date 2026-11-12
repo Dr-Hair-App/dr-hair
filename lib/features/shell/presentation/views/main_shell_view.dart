@@ -118,6 +118,8 @@ class _MainShellViewState extends State<MainShellView> {
               appConfig?.isFeatureEnabled('shop') ?? true;
           final bool isAssessmentEnabled =
               appConfig?.isFeatureEnabled('assessment') ?? true;
+          final bool showActionButton =
+              isTestCompleted ? isShopEnabled : isAssessmentEnabled;
 
           return BlocBuilder<CartCubit, CartState>(
             builder: (context, cartState) => RepaintBoundary(
@@ -126,6 +128,8 @@ class _MainShellViewState extends State<MainShellView> {
                 cartItemCount: isShopEnabled ? cartState.itemCount : 0,
                 cartSubtotal: isShopEnabled ? cartState.subtotal : null,
                 isTestCompleted: isTestCompleted,
+                isProductEnabled: isShopEnabled,
+                showActionButton: showActionButton,
                 isHidden: isNavHidden && !isVideosTab,
                 showBackground: !isVideosTab,
                 onTabSelected: _onTabSelected,

@@ -7,12 +7,33 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:141443100024:android:6d6627a7f61968daa62c8d",
+        "mobilesdk_app_id": "1:141443100024:android:e62dfd207856ac47a62c8d",
         "android_client_info": {
-          "package_name": "com.drhair.app"
+          "package_name": "com.drhair"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "141443100024-7pb5jka6einu9cn389kefl7d8q0756c5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.drhair",
+            "certificate_hash": "be5cb7a84108f3b76b297195037fc8ee0e5432b2"
+          }
+        },
+        {
+          "client_id": "141443100024-9ucfas5tfbdfsvjjk7d1aqo380pt9nd7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.drhair",
+            "certificate_hash": "8a13e5db492a56deb7141885a246e4f4c8693398"
+          }
+        },
+        {
+          "client_id": "141443100024-ootcl7edmtcuk9qtbd8e9m3mtulqd75s.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAhHEIKU_YWIYFEo0amjAXskiaSzZmmcG4"
@@ -20,7 +41,63 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "141443100024-ootcl7edmtcuk9qtbd8e9m3mtulqd75s.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "141443100024-3oe1iu2u9r764p5ekdbd441nqcqojeh2.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.drhair.app"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:141443100024:android:6d6627a7f61968daa62c8d",
+        "android_client_info": {
+          "package_name": "com.drhair.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "141443100024-plrleajmv7e11dk179i06103jq92d9dq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.drhair.app",
+            "certificate_hash": "8a13e5db492a56deb7141885a246e4f4c8693398"
+          }
+        },
+        {
+          "client_id": "141443100024-ootcl7edmtcuk9qtbd8e9m3mtulqd75s.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAhHEIKU_YWIYFEo0amjAXskiaSzZmmcG4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "141443100024-ootcl7edmtcuk9qtbd8e9m3mtulqd75s.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "141443100024-3oe1iu2u9r764p5ekdbd441nqcqojeh2.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.drhair.app"
+              }
+            }
+          ]
         }
       }
     }

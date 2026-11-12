@@ -65,12 +65,16 @@ class CommerceRemoteDataSource {
     String? addressId,
     DeliveryAddress? shippingAddress,
     required List<Map<String, dynamic>> items,
+    String paymentGateway = 'cod',
     String? couponCode,
   }) async {
     final headers = await _buildHeaders(token: token);
     headers['Idempotency-Key'] = idempotencyKey;
 
-    final body = <String, dynamic>{'items': items};
+    final body = <String, dynamic>{
+      'items': items,
+      'payment_gateway': paymentGateway,
+    };
     if (addressId != null && addressId.isNotEmpty) {
       body['address_id'] = addressId;
     }

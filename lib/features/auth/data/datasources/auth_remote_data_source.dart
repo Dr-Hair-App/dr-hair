@@ -90,7 +90,6 @@ class AuthRemoteDataSource {
       data: {
         'provider': provider,
         'id_token': idToken,
-        'provider_id': idToken,
         'email': ?(email?.trim().toLowerCase()),
         'name': ?name?.trim(),
       },

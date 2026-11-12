@@ -102,4 +102,51 @@ void main() {
     expect(find.byIcon(LucideIcons.pill), findsOneWidget);
     expect(find.byTooltip('Products'), findsOneWidget);
   });
+
+  testWidgets('hides circular action button and centers pill when showActionButton is false', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ShellBottomNavBar(
+            currentIndex: 0,
+            showActionButton: false,
+            onTabSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byTooltip('Products'), findsNothing);
+    expect(find.byTooltip('AI Hair Analysis'), findsNothing);
+
+    // Verify it is centered and constrained (not expanding to full screen width)
+    final constrainedBoxFinder = find.byWidgetPredicate(
+      (w) => w is ConstrainedBox && w.constraints.maxWidth == 300,
+    );
+    expect(constrainedBoxFinder, findsOneWidget);
+    expect(find.ancestor(of: constrainedBoxFinder, matching: find.byType(Center)), findsOneWidget);
+  });
+
+  testWidgets('does not show Products action when isProductEnabled is false', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ShellBottomNavBar(
+            currentIndex: 0,
+            isTestCompleted: true,
+            isProductEnabled: false,
+            onTabSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(LucideIcons.pill), findsNothing);
+    expect(find.byTooltip('Products'), findsNothing);
+    expect(find.byTooltip('AI Hair Analysis'), findsOneWidget);
+  });
 }

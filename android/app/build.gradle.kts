@@ -28,7 +28,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.drhair.app"
+        // Existing Google Play listing package name.
+        applicationId = "com.drhair"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -46,11 +47,8 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            // Never silently sign a Play release with the debug key.
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

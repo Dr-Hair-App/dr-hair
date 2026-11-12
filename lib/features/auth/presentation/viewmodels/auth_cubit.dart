@@ -291,7 +291,13 @@ class AuthCubit extends Cubit<AuthState> {
   Future<bool> loginWithGoogle() async {
     emit(state.copyWith(status: AuthStatus.loading, clearError: true));
     try {
-      final googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+      final googleSignIn = GoogleSignIn(
+        scopes: ['email', 'profile'],
+        // This is the project's web OAuth client ID. It makes Google return
+        // an ID token whose audience the API can validate.
+        serverClientId:
+            '141443100024-ootcl7edmtcuk9qtbd8e9m3mtulqd75s.apps.googleusercontent.com',
+      );
       // Always disconnect or signOut prior to prompt so Android/iOS presents the account chooser dialog
       try {
         await googleSignIn.signOut();
@@ -303,7 +309,12 @@ class AuthCubit extends Cubit<AuthState> {
         return false;
       }
       final auth = await account.authentication;
-      final idToken = auth.idToken ?? auth.accessToken ?? account.id;
+      final idToken = auth.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw const AuthRepositoryException(
+          'Google did not return an ID token. Check the Android app signing fingerprints in Firebase.',
+        );
+      }
 
       final repo = repository;
       if (repo == null) {

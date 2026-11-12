@@ -1,4 +1,6 @@
 import 'package:dr_hair/core/constants/app_strings.dart';
+import 'package:dr_hair/features/app_config/data/app_config_repository.dart';
+import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_cubit.dart';
 import 'package:dr_hair/features/hair_test/presentation/viewmodels/hair_test_cubit.dart';
 import 'package:dr_hair/features/hair_test/presentation/viewmodels/hair_test_state.dart';
 import 'package:dr_hair/features/hair_test/presentation/views/assessment_result_view.dart';
@@ -6,6 +8,18 @@ import 'package:dr_hair/features/profile/presentation/views/profile_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+class _FakeDisabledShopConfigRepository extends AppConfigRepository {
+  @override
+  Map<String, bool> getCachedFeatures() {
+    return const {'shop': false, 'clinic_appointment': true, 'routine': true};
+  }
+
+  @override
+  Future<Map<String, bool>> fetchAppFeatures() async {
+    return const {'shop': false, 'clinic_appointment': true, 'routine': true};
+  }
+}
 
 class _MockCompletedHairTestCubit extends HairTestCubit {
   _MockCompletedHairTestCubit() : super() {
@@ -110,6 +124,40 @@ void main() {
         find.text('Alerts, account info, policies, and deletion'),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'ProfileView displays Sign out and Settings when shop feature is disabled',
+    (tester) async {
+      final appConfigCubit = AppConfigCubit(
+        repository: _FakeDisabledShopConfigRepository(),
+      );
+
+      await tester.pumpWidget(
+        BlocProvider<AppConfigCubit>.value(
+          value: appConfigCubit,
+          child: const MaterialApp(home: ProfileView()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Orders section should be hidden
+      expect(find.text('ORDERS'), findsNothing);
+      expect(find.text('Orders & delivery'), findsNothing);
+      expect(find.text('My cart'), findsNothing);
+
+      // Scroll to verify Settings & preferences and Sign out are visible
+      final signOutFinder = find.text('Sign out');
+      await tester.scrollUntilVisible(
+        signOutFinder,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+
+      expect(find.text('Settings & preferences'), findsOneWidget);
+      expect(signOutFinder, findsOneWidget);
+      expect(find.text('App Version ${AppStrings.appVersion}'), findsOneWidget);
     },
   );
 }

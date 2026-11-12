@@ -58,7 +58,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyAhHEIKU_YWIYFEo0amjAXskiaSzZmmcG4',
-    appId: '1:141443100024:android:6d6627a7f61968daa62c8d',
+    appId: '1:141443100024:android:e62dfd207856ac47a62c8d',
     messagingSenderId: '141443100024',
     projectId: 'dr-hair-fcad1',
     storageBucket: 'dr-hair-fcad1.firebasestorage.app',

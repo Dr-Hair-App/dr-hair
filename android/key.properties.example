@@ -1,8 +1,9 @@
 # Example key.properties for Google Play Store release builds.
-# Copy this file to 'key.properties' in this directory and replace with your actual keystore values.
+# Copy this file to 'key.properties' in this directory and enter the existing
+# Google Play upload keystore values. storeFile is relative to android/app/.
 # NEVER commit 'key.properties' or your .jks/.keystore file to version control.
 
 keyAlias=upload
 keyPassword=your_key_password_here
-storeFile=upload-keystore.jks
+storeFile=../upload-keystore.jks
 storePassword=your_keystore_password_here

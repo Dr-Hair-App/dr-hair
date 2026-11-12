@@ -6,8 +6,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_urls.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/session/session_coordinator.dart';
 import '../../../../core/storage/app_local_cache.dart';
@@ -2183,7 +2185,10 @@ class _SigninViewState extends State<SigninView>
             style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
           ),
           GestureDetector(
-            onTap: () => context.push(RouteNames.privacyPolicy),
+            onTap: () => launchUrl(
+              Uri.parse(AppUrls.privacyPolicy),
+              mode: LaunchMode.externalApplication,
+            ),
             child: const Text(
               'Privacy Policy',
               style: TextStyle(

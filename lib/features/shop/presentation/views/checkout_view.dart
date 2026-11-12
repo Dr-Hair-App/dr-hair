@@ -1,9 +1,14 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/config/razorpay_config.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_urls.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/storage/secure_session_store.dart';
 import '../../../auth/presentation/viewmodels/auth_cubit.dart';
@@ -11,6 +16,7 @@ import '../../../care/domain/models/care_models.dart';
 import '../../data/datasources/commerce_remote_data_source.dart';
 import '../../data/models/delivery_address_model.dart';
 import '../widgets/delivery_address_bottom_sheet.dart';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/widgets/app_toast.dart';
@@ -30,12 +36,24 @@ class _CheckoutViewState extends State<CheckoutView> {
   List<DeliveryAddress> _addresses = const [];
   DeliveryAddress? _selectedAddress;
   bool _isSubmitting = false;
-  late final CommerceRemoteDataSource _commerceDataSource = CommerceRemoteDataSource();
+  String _selectedPaymentGateway = 'cod';
+  final Razorpay _razorpay = Razorpay();
+  Map<String, dynamic>? _pendingPaymentOrder;
+  String? _pendingPaymentToken;
+  String? _pendingPaymentId;
+  String? _pendingPaymentSignature;
+  String? _pendingPaymentError;
+  late final CommerceRemoteDataSource _commerceDataSource =
+      CommerceRemoteDataSource();
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialAddresses != null && widget.initialAddresses!.isNotEmpty) {
+    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+    if (widget.initialAddresses != null &&
+        widget.initialAddresses!.isNotEmpty) {
       _addresses = widget.initialAddresses!;
       _selectedAddress = _addresses.firstWhere(
         (a) => a.isDefault,
@@ -43,6 +61,121 @@ class _CheckoutViewState extends State<CheckoutView> {
       );
     } else {
       _loadAddresses();
+    }
+  }
+
+  @override
+  void dispose() {
+    _razorpay.clear();
+    super.dispose();
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) {
+    final paymentId = response.paymentId;
+    final signature = response.signature;
+    if (paymentId == null || signature == null) {
+      if (mounted) setState(() => _isSubmitting = false);
+      _showPaymentMessage(
+        'Razorpay returned an incomplete payment response. Retry verification from checkout.',
+      );
+      return;
+    }
+    _pendingPaymentId = paymentId;
+    _pendingPaymentSignature = signature;
+    _verifyPendingPayment();
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    if (!mounted) return;
+    setState(() {
+      _isSubmitting = false;
+      _pendingPaymentError =
+          response.message ??
+          'Payment was not completed. You can retry this order.';
+    });
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    _showPaymentMessage(
+      'Selected external wallet: ${response.walletName ?? 'wallet'}',
+    );
+  }
+
+  void _showPaymentMessage(String message) {
+    if (mounted) AppToast.show(context, SnackBar(content: Text(message)));
+  }
+
+  void _openPendingRazorpayPayment() {
+    final intent = _pendingPaymentOrder?['paymentIntent'];
+    if (intent is! Map) return;
+    final keyId = RazorpayConfig.keyId;
+    if (keyId.isEmpty || intent['keyId'] != keyId) {
+      setState(() => _isSubmitting = false);
+      _showPaymentMessage(
+        'Razorpay key mismatch. Make the app and backend use the same Test Mode Key ID.',
+      );
+      return;
+    }
+    try {
+      _razorpay.open({
+        'key': keyId,
+        'order_id': intent['intentId'],
+        'amount': (intent['amount'] as num?)?.toInt(),
+        'currency': intent['currency'] ?? 'INR',
+        'name': 'Dr Hair',
+        'description': 'Dr Hair order',
+        'prefill': {
+          'contact': _selectedAddress?.phone ?? '',
+          'name': _selectedAddress?.name ?? '',
+        },
+        'retry': {'enabled': true, 'max_count': 2},
+        'send_sms_hash': true,
+      });
+    } catch (_) {
+      setState(() => _isSubmitting = false);
+      _showPaymentMessage(
+        'Could not open Razorpay checkout. Check that the Test Key ID is configured.',
+      );
+    }
+  }
+
+  Future<void> _verifyPendingPayment() async {
+    final order = _pendingPaymentOrder?['order'];
+    final orderId = order is Map ? order['order_id']?.toString() : null;
+    final token = _pendingPaymentToken;
+    final paymentId = _pendingPaymentId;
+    final signature = _pendingPaymentSignature;
+    if (orderId == null ||
+        token == null ||
+        paymentId == null ||
+        signature == null) {
+      return;
+    }
+    if (mounted) setState(() => _isSubmitting = true);
+    try {
+      final verified = await _commerceDataSource.verifyPayment(
+        token: token,
+        orderId: orderId,
+        paymentId: paymentId,
+        paymentSignature: signature,
+      );
+      final paidOrder = CareOrder.fromJson(verified);
+      if (mounted) {
+        context.read<CareCubit>().addOrder(paidOrder);
+        context.read<CartCubit?>()?.clear();
+        _pendingPaymentOrder = null;
+        _pendingPaymentToken = null;
+        _pendingPaymentId = null;
+        _pendingPaymentSignature = null;
+        context.push(RouteNames.orders);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _pendingPaymentError = 'Payment was submitted, but confirmation is still pending. Tap Retry Payment to verify it; do not pay again.';
+        });
+      }
     }
   }
 
@@ -85,15 +218,32 @@ class _CheckoutViewState extends State<CheckoutView> {
 
   Future<void> _handlePlaceOrder() async {
     if (_isSubmitting) return;
+    if (_pendingPaymentOrder != null) {
+      if (_pendingPaymentId != null) {
+        await _verifyPendingPayment();
+      } else {
+        setState(() => _isSubmitting = true);
+        _openPendingRazorpayPayment();
+      }
+      return;
+    }
     final address = _selectedAddress;
     final cartState = context.read<CartCubit?>()?.state;
     final items = cartState?.items ?? [];
     if (address == null) {
-      AppToast.show(context, const SnackBar(content: Text('Select a delivery address first.')));
+      AppToast.show(
+        context,
+        const SnackBar(content: Text('Select a delivery address first.')),
+      );
       return;
     }
     if (items.isEmpty) {
-      AppToast.show(context, const SnackBar(content: Text('Your cart is empty. Add a product before checkout.')));
+      AppToast.show(
+        context,
+        const SnackBar(
+          content: Text('Your cart is empty. Add a product before checkout.'),
+        ),
+      );
       return;
     }
 
@@ -105,7 +255,10 @@ class _CheckoutViewState extends State<CheckoutView> {
 
     if (token == null || token.isEmpty) {
       if (!mounted) return;
-      AppToast.show(context, const SnackBar(content: Text('Please sign in to place your order.')));
+      AppToast.show(
+        context,
+        const SnackBar(content: Text('Please sign in to place your order.')),
+      );
       context.push(RouteNames.signin);
       return;
     }
@@ -116,18 +269,19 @@ class _CheckoutViewState extends State<CheckoutView> {
 
     try {
       final checkoutItems = items.map((item) {
-        final rawId = (item['productId'] ?? item['product_id'] ?? item['id'] ?? '').toString();
-        final productId = rawId.contains('::') ? rawId.split('::').first : rawId;
+        final rawId =
+            (item['productId'] ?? item['product_id'] ?? item['id'] ?? '')
+                .toString();
+        final productId = rawId.contains('::')
+            ? rawId.split('::').first
+            : rawId;
         final plan = item['plan']?.toString() ?? 'Standard';
         final qty = (item['quantity'] as num?)?.toInt() ?? 1;
-        return {
-          'productId': productId,
-          'plan': plan,
-          'quantity': qty,
-        };
+        return {'productId': productId, 'plan': plan, 'quantity': qty};
       }).toList();
 
-      final idempotencyKey = 'idem_${DateTime.now().millisecondsSinceEpoch}_${address.id}';
+      final idempotencyKey =
+          'idem_${DateTime.now().millisecondsSinceEpoch}_${address.id}';
 
       final result = await _commerceDataSource.checkout(
         token: token,
@@ -135,11 +289,27 @@ class _CheckoutViewState extends State<CheckoutView> {
         addressId: address.id.startsWith('addr_') ? null : address.id,
         shippingAddress: address,
         items: checkoutItems,
+        paymentGateway: _selectedPaymentGateway,
       );
 
       final rawOrder = result['order'] is Map<String, dynamic>
           ? result['order'] as Map<String, dynamic>
           : <String, dynamic>{};
+      if (_selectedPaymentGateway == 'razorpay') {
+        final intent = result['paymentIntent'];
+        if (intent is! Map ||
+            intent['intentId'] == null ||
+            intent['amount'] == null) {
+          throw const FormatException(
+            'Backend did not return a valid Razorpay payment order.',
+          );
+        }
+        _pendingPaymentOrder = result;
+        _pendingPaymentToken = token;
+        _pendingPaymentError = null;
+        _openPendingRazorpayPayment();
+        return;
+      }
       final placedOrder = CareOrder.fromJson(rawOrder);
 
       if (mounted) {
@@ -147,7 +317,9 @@ class _CheckoutViewState extends State<CheckoutView> {
         context.read<CartCubit?>()?.clear();
         AppToast.show(
           context,
-          SnackBar(content: Text('Order #${placedOrder.orderId} placed successfully!')),
+          SnackBar(
+            content: Text('Order #${placedOrder.orderId} placed successfully!'),
+          ),
         );
         context.push(RouteNames.orders);
       }
@@ -387,46 +559,40 @@ class _CheckoutViewState extends State<CheckoutView> {
               ),
             ),
             const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.primary5,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.primary100),
-              ),
-              child: const Row(
-                children: [
-                  Icon(
-                    LucideIcons.walletCards,
-                    color: AppColors.primary,
-                    size: 24,
-                  ),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Pay on Delivery / Pay at Clinic',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.primaryDark,
-                          ),
-                        ),
-                        Text(
-                          'Cash on Delivery & clinic counter payment supported',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: AppColors.secondaryDark,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            _PaymentMethodCard(
+              title: 'Cash on Delivery',
+              subtitle: 'Pay the courier when your order arrives.',
+              icon: LucideIcons.walletCards,
+              selected: _selectedPaymentGateway == 'cod',
+              onTap: _isSubmitting
+                  ? null
+                  : () => setState(() => _selectedPaymentGateway = 'cod'),
             ),
+            if (!kIsWeb) ...[
+              const SizedBox(height: 8),
+              _PaymentMethodCard(
+                title: 'Pay Online (Razorpay Test Mode)',
+                subtitle: RazorpayConfig.keyId.isEmpty
+                    ? 'Add RAZORPAY_KEY_ID to flutter_app/.env to enable test checkout.'
+                    : 'Cards, UPI and wallets through Razorpay test checkout.',
+                icon: LucideIcons.creditCard,
+                selected: _selectedPaymentGateway == 'razorpay',
+                enabled:
+                    RazorpayConfig.keyId.isNotEmpty ||
+                    _selectedPaymentGateway == 'razorpay',
+                onTap: _isSubmitting || RazorpayConfig.keyId.isEmpty
+                    ? null
+                    : () =>
+                          setState(() => _selectedPaymentGateway = 'razorpay'),
+              ),
+            ],
+            if (_pendingPaymentError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _pendingPaymentError!,
+                style: const TextStyle(color: Colors.deepOrange, fontSize: 12),
+              ),
+            ],
 
             const SizedBox(height: 16),
 
@@ -444,11 +610,7 @@ class _CheckoutViewState extends State<CheckoutView> {
                   const _SummaryRow('Express Delivery', 'FREE'),
                   const _SummaryRow('Doctor Review Fee', 'WAIVED'),
                   const Divider(color: AppColors.border, height: 10),
-                  _SummaryRow(
-                    'Total Payable',
-                    '₹$amount',
-                    isTotal: true,
-                  ),
+                  _SummaryRow('Total Payable', '₹$amount', isTotal: true),
                 ],
               ),
             ),
@@ -474,14 +636,16 @@ class _CheckoutViewState extends State<CheckoutView> {
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            'Place Order • ₹$amount',
+                            '${_pendingPaymentOrder != null ? (_pendingPaymentId != null ? 'Retry Payment Verification' : 'Retry Payment') : (_selectedPaymentGateway == 'razorpay' ? 'Pay Securely' : 'Place Order')} • ₹$amount',
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -505,7 +669,11 @@ class _CheckoutViewState extends State<CheckoutView> {
               ),
               child: const Row(
                 children: [
-                  Icon(LucideIcons.shieldCheck, size: 16, color: AppColors.primary),
+                  Icon(
+                    LucideIcons.shieldCheck,
+                    size: 16,
+                    color: AppColors.primary,
+                  ),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -543,7 +711,10 @@ class _CheckoutViewState extends State<CheckoutView> {
                   ),
                   const Text('·', style: TextStyle(color: AppColors.textMuted)),
                   GestureDetector(
-                    onTap: () => context.push(RouteNames.privacyPolicy),
+                    onTap: () => launchUrl(
+                      Uri.parse(AppUrls.privacyPolicy),
+                      mode: LaunchMode.externalApplication,
+                    ),
                     child: const Text(
                       'Privacy Policy',
                       style: TextStyle(
@@ -609,6 +780,76 @@ class _SummaryRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PaymentMethodCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback? onTap;
+
+  const _PaymentMethodCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = enabled ? AppColors.primary : AppColors.secondaryDark;
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary5 : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AppColors.secondaryDark,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              selected ? LucideIcons.circleCheck : LucideIcons.circle,
+              color: color,
+              size: 18,
+            ),
+          ],
+        ),
       ),
     );
   }

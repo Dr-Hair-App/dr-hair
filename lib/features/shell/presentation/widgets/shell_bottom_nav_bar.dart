@@ -19,6 +19,8 @@ class ShellBottomNavBar extends StatefulWidget {
   final int? cartSubtotal;
   final VoidCallback? onActionPressed;
   final bool isTestCompleted;
+  final bool isProductEnabled;
+  final bool showActionButton;
 
   const ShellBottomNavBar({
     super.key,
@@ -31,6 +33,8 @@ class ShellBottomNavBar extends StatefulWidget {
     this.cartSubtotal,
     this.onActionPressed,
     this.isTestCompleted = false,
+    this.isProductEnabled = true,
+    this.showActionButton = true,
   });
 
   @override
@@ -59,7 +63,7 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
     if (widget.onActionPressed != null) {
       widget.onActionPressed!();
     } else {
-      if (widget.isTestCompleted) {
+      if (widget.isTestCompleted && widget.isProductEnabled) {
         context.push(RouteNames.products);
       } else {
         context.push(RouteNames.hairTest);
@@ -150,149 +154,168 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16)
                     .copyWith(bottom: isIOS ? 0 : 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Floating Pill with Navigation Tabs & Sliding Capsule Indicator
-                    Expanded(
-                      child: IgnorePointer(
-                        ignoring: widget.isHidden,
-                        child: AnimatedSlide(
-                          duration: motionDuration,
-                          curve: Curves.easeInOutCubic,
-                          offset: Offset(0, widget.isHidden ? 1.5 : 0),
-                          child: AnimatedOpacity(
-                            duration: motionDuration,
-                            curve: Curves.easeInOutCubic,
-                            opacity: widget.isHidden ? 0 : 1,
-                            child: Container(
-                              width: double.infinity,
-                              height: barHeight,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(36),
-                                border: Border.all(
-                                  color: const Color(0xFFF1F5F9),
-                                  width: 1.2,
+                child: widget.showActionButton
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // Floating Pill with Navigation Tabs & Sliding Capsule Indicator
+                          Expanded(
+                            child: _buildPill(
+                              barHeight: barHeight,
+                              motionDuration: motionDuration,
+                              targetSlotIndex: targetSlotIndex,
+                              isPillIndicatorVisible: isPillIndicatorVisible,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+
+                          // Standalone Circular Action Button
+                          IgnorePointer(
+                            ignoring: widget.isHidden,
+                            child: AnimatedSlide(
+                              duration: motionDuration,
+                              curve: Curves.easeInOutCubic,
+                              offset: Offset(widget.isHidden ? 1.5 : 0, 0),
+                              child: AnimatedOpacity(
+                                duration: motionDuration,
+                                curve: Curves.easeInOutCubic,
+                                opacity: widget.isHidden ? 0 : 1,
+                                child: _buildCircularActionButton(
+                                  isSelected: false,
+                                  motionDuration: motionDuration,
+                                  size: actionSize,
                                 ),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 4,
-                              ),
-                              child: LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final double slotWidth =
-                                      constraints.maxWidth / 4;
-                                  final double indicatorLeft =
-                                      (targetSlotIndex * slotWidth) + 2;
-
-                                  return Stack(
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      // Fluid Sliding Capsule Indicator
-                                      AnimatedPositioned(
-                                        duration: motionDuration,
-                                        curve: Curves.easeOutCubic,
-                                        left: indicatorLeft,
-                                        top: 2,
-                                        bottom: 2,
-                                        width: slotWidth - 4,
-                                        child: AnimatedOpacity(
-                                          duration: motionDuration,
-                                          opacity: isPillIndicatorVisible
-                                              ? 1.0
-                                              : 0.0,
-                                          curve: Curves.easeOutCubic,
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFF1F3F5),
-                                              borderRadius:
-                                                  BorderRadius.circular(25),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withValues(alpha: 0.025),
-                                                  blurRadius: 6,
-                                                  offset: const Offset(0, 1),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-
-                                      // Tab Items Row
-                                      Positioned.fill(
-                                        child: Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            _buildTabItem(
-                                              index: 0,
-                                              icon: LucideIcons.home,
-                                              label: 'Home',
-                                              motionDuration: motionDuration,
-                                            ),
-                                            _buildTabItem(
-                                              index: 1,
-                                              icon: LucideIcons.listChecks,
-                                              label: 'Reviews',
-                                              motionDuration: motionDuration,
-                                            ),
-                                            _buildTabItem(
-                                              index: 2,
-                                              icon: LucideIcons.circlePlay,
-                                              label: 'Videos',
-                                              motionDuration: motionDuration,
-                                            ),
-                                            _buildTabItem(
-                                              index: 3,
-                                              icon: LucideIcons.userRound,
-                                              label: 'Profile',
-                                              motionDuration: motionDuration,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 12),
-
-                    // Standalone Circular Action Button
-                    IgnorePointer(
-                      ignoring: widget.isHidden,
-                      child: AnimatedSlide(
-                        duration: motionDuration,
-                        curve: Curves.easeInOutCubic,
-                        offset: Offset(widget.isHidden ? 1.5 : 0, 0),
-                        child: AnimatedOpacity(
-                          duration: motionDuration,
-                          curve: Curves.easeInOutCubic,
-                          opacity: widget.isHidden ? 0 : 1,
-                          child: _buildCircularActionButton(
-                            isSelected: false,
+                        ],
+                      )
+                    : Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 300),
+                          child: _buildPill(
+                            barHeight: barHeight,
                             motionDuration: motionDuration,
-                            size: actionSize,
+                            targetSlotIndex: targetSlotIndex,
+                            isPillIndicatorVisible: isPillIndicatorVisible,
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPill({
+    required double barHeight,
+    required Duration motionDuration,
+    required int targetSlotIndex,
+    required bool isPillIndicatorVisible,
+  }) {
+    return IgnorePointer(
+      ignoring: widget.isHidden,
+      child: AnimatedSlide(
+        duration: motionDuration,
+        curve: Curves.easeInOutCubic,
+        offset: Offset(0, widget.isHidden ? 1.5 : 0),
+        child: AnimatedOpacity(
+          duration: motionDuration,
+          curve: Curves.easeInOutCubic,
+          opacity: widget.isHidden ? 0 : 1,
+          child: Container(
+            width: double.infinity,
+            height: barHeight,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(36),
+              border: Border.all(
+                color: const Color(0xFFF1F5F9),
+                width: 1.2,
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: 4,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final double slotWidth = constraints.maxWidth / 4;
+                final double indicatorLeft =
+                    (targetSlotIndex * slotWidth) + 2;
+
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Fluid Sliding Capsule Indicator
+                    AnimatedPositioned(
+                      duration: motionDuration,
+                      curve: Curves.easeOutCubic,
+                      left: indicatorLeft,
+                      top: 2,
+                      bottom: 2,
+                      width: slotWidth - 4,
+                      child: AnimatedOpacity(
+                        duration: motionDuration,
+                        opacity: isPillIndicatorVisible ? 1.0 : 0.0,
+                        curve: Curves.easeOutCubic,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F3F5),
+                            borderRadius: BorderRadius.circular(25),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.025),
+                                blurRadius: 6,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Tab Items Row
+                    Positioned.fill(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildTabItem(
+                            index: 0,
+                            icon: LucideIcons.home,
+                            label: 'Home',
+                            motionDuration: motionDuration,
+                          ),
+                          _buildTabItem(
+                            index: 1,
+                            icon: LucideIcons.listChecks,
+                            label: 'Reviews',
+                            motionDuration: motionDuration,
+                          ),
+                          _buildTabItem(
+                            index: 2,
+                            icon: LucideIcons.circlePlay,
+                            label: 'Videos',
+                            motionDuration: motionDuration,
+                          ),
+                          _buildTabItem(
+                            index: 3,
+                            icon: LucideIcons.userRound,
+                            label: 'Profile',
+                            motionDuration: motionDuration,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -467,7 +490,7 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
     required Duration motionDuration,
     required double size,
   }) {
-    final bool isCompleted = widget.isTestCompleted;
+    final bool isCompleted = widget.isTestCompleted && widget.isProductEnabled;
     final String label = isCompleted ? 'Products' : 'AI Hair Analysis';
 
     return Semantics(

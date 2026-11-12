@@ -235,47 +235,48 @@ class ProfileView extends StatelessWidget {
             builder: (context) {
               final appConfig = context.watch<AppConfigCubit?>()?.state;
               final showShop = appConfig?.isFeatureEnabled('shop') ?? true;
-              if (!showShop) return const SizedBox.shrink();
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 22),
-                  _buildSectionHeader(
-                    title: 'ORDERS',
-                    subtitle: 'Your products and deliveries',
-                  ),
-                  const SizedBox(height: 10),
-                  _buildGroupedCard([
-                    _ProfileMenuTile(
-                      icon: LucideIcons.packageCheck,
-                      iconColor: const Color(0xFF059669),
-                      iconBgColor: const Color(0xFFECFDF5),
-                      title: 'Orders & delivery',
-                      subtitle: 'Check your order status',
-                      onTap: () => context.push(RouteNames.orders),
+                  if (showShop) ...[
+                    const SizedBox(height: 22),
+                    _buildSectionHeader(
+                      title: 'ORDERS',
+                      subtitle: 'Your products and deliveries',
                     ),
-                    Builder(
-                      builder: (context) {
-                        final cart = context.read<CartCubit?>();
-                        Widget tile(int itemCount) => _ProfileMenuTile(
-                          icon: LucideIcons.shoppingBag,
-                          iconColor: const Color(0xFF0284C7),
-                          iconBgColor: const Color(0xFFF0F9FF),
-                          title: 'My cart',
-                          subtitle: itemCount == 0
-                              ? 'Your cart is empty'
-                              : '$itemCount ${itemCount == 1 ? 'item' : 'items'} ready to review',
-                          onTap: () => context.push(RouteNames.cart),
-                          showDivider: false,
-                        );
-                        if (cart == null) return tile(0);
-                        return BlocBuilder<CartCubit, CartState>(
-                          builder: (context, state) => tile(state.itemCount),
-                        );
-                      },
-                    ),
-                  ]),
+                    const SizedBox(height: 10),
+                    _buildGroupedCard([
+                      _ProfileMenuTile(
+                        icon: LucideIcons.packageCheck,
+                        iconColor: const Color(0xFF059669),
+                        iconBgColor: const Color(0xFFECFDF5),
+                        title: 'Orders & delivery',
+                        subtitle: 'Check your order status',
+                        onTap: () => context.push(RouteNames.orders),
+                      ),
+                      Builder(
+                        builder: (context) {
+                          final cart = context.read<CartCubit?>();
+                          Widget tile(int itemCount) => _ProfileMenuTile(
+                            icon: LucideIcons.shoppingBag,
+                            iconColor: const Color(0xFF0284C7),
+                            iconBgColor: const Color(0xFFF0F9FF),
+                            title: 'My cart',
+                            subtitle: itemCount == 0
+                                ? 'Your cart is empty'
+                                : '$itemCount ${itemCount == 1 ? 'item' : 'items'} ready to review',
+                            onTap: () => context.push(RouteNames.cart),
+                            showDivider: false,
+                          );
+                          if (cart == null) return tile(0);
+                          return BlocBuilder<CartCubit, CartState>(
+                            builder: (context, state) => tile(state.itemCount),
+                          );
+                        },
+                      ),
+                    ]),
+                  ],
                   const SizedBox(height: 22),
                   _buildSectionHeader(
                     title: 'PREFERENCES',

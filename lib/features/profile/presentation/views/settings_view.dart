@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_urls.dart';
 import '../../../../core/notifications/firebase_push_service.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/session/session_coordinator.dart';
@@ -516,7 +518,10 @@ class _SettingsViewState extends State<SettingsView> {
                       icon: LucideIcons.shieldCheck,
                       title: 'Privacy Policy',
                       subtitle: 'DPDP compliance and patient health record protection',
-                      onTap: () => context.push(RouteNames.privacyPolicy),
+                      onTap: () => launchUrl(
+                        Uri.parse(AppUrls.privacyPolicy),
+                        mode: LaunchMode.externalApplication,
+                      ),
                     ),
                     const Divider(height: 20),
                     _buildNavRow(
