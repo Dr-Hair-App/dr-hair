@@ -209,25 +209,13 @@ void main() {
         findsOneWidget,
       );
 
-      // Front Hairline (Hair detected)
+      // Front Hairline (Hair detected - minimal verified badge)
       expect(find.byIcon(LucideIcons.check), findsWidgets);
-      expect(
-        find.textContaining('Hair & scalp detected successfully'),
-        findsOneWidget,
-      );
+      expect(find.text('Verified'), findsOneWidget);
 
-      // Crown / Top (Non-hair image)
+      // Crown / Top (Non-hair image - minimal not scalp badge)
       expect(find.text('Not Scalp'), findsOneWidget);
-      expect(
-        find.text(
-          'No hair or scalp detected. Please upload a clear photo of your hair or scalp.',
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Retake Scalp Photo'),
-        findsOneWidget,
-      );
+      expect(find.text('Retake'), findsWidgets);
 
       cubit.close();
     },

@@ -452,8 +452,10 @@ class _HairTestContent extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(20),
@@ -713,13 +715,9 @@ class _HairTestContent extends StatelessWidget {
       glowColor = const Color(0xFFD97706).withValues(alpha: 0.22);
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
             onTap: () => _showPhotoSourceBottomSheet(context, label),
             borderRadius: BorderRadius.circular(20),
             child: AnimatedContainer(
@@ -796,8 +794,9 @@ class _HairTestContent extends StatelessWidget {
                                   color: Colors.black.withValues(alpha: 0.75),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                    color: AppColors.primary
-                                        .withValues(alpha: 0.6),
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.6,
+                                    ),
                                   ),
                                 ),
                                 child: const Row(
@@ -867,80 +866,37 @@ class _HairTestContent extends StatelessWidget {
                         ),
                       ),
 
-                      // Bottom Glass Bar: Info & Retake button
+                      // Minimal floating retake button on bottom-right
                       Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
+                        bottom: 8,
+                        right: 8,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 8,
+                            horizontal: 8,
+                            vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Colors.black.withValues(alpha: 0.88),
-                              ],
+                            color: Colors.black.withValues(alpha: 0.65),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.25),
                             ),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Flexible(
-                                child: Text(
-                                  analysis?.isHair == true
-                                      ? 'Scalp Verified'
-                                      : analysis?.isNotHair == true
-                                          ? 'Photo Flagged'
-                                          : 'Analyzing...',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: analysis?.isHair == true
-                                        ? const Color(0xFF86EFAC)
-                                        : analysis?.isNotHair == true
-                                            ? const Color(0xFFFCA5A5)
-                                            : Colors.white,
-                                  ),
-                                ),
+                              Icon(
+                                LucideIcons.camera,
+                                size: 11,
+                                color: Colors.white,
                               ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.22),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      LucideIcons.camera,
-                                      size: 10,
-                                      color: Colors.white,
-                                    ),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Retake',
-                                      style: TextStyle(
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
+                              SizedBox(width: 4),
+                              Text(
+                                'Retake',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
                                 ),
                               ),
                             ],
@@ -970,8 +926,9 @@ class _HairTestContent extends StatelessWidget {
                                 vertical: 3,
                               ),
                               decoration: BoxDecoration(
-                                color:
-                                    AppColors.primary.withValues(alpha: 0.08),
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.08,
+                                ),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Row(
@@ -1006,8 +963,9 @@ class _HairTestContent extends StatelessWidget {
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.primary
-                                        .withValues(alpha: 0.08),
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.08,
+                                    ),
                                     blurRadius: 8,
                                     offset: const Offset(0, 2),
                                   ),
@@ -1060,12 +1018,8 @@ class _HairTestContent extends StatelessWidget {
               ),
             ),
           ),
-        ),
-        if (hasPhoto && analysis != null)
-          _buildDetectionMessageCard(context, label, analysis),
-      ],
-    );
-  }
+        );
+      }
 
   Widget _buildDetectionBadge(HairPhotoAnalysis? analysis) {
     if (analysis == null || analysis.isAnalyzing) {
@@ -1101,28 +1055,27 @@ class _HairTestContent extends StatelessWidget {
     }
 
     if (analysis.isHair) {
-      final int matchPct = (analysis.confidence * 100).toInt();
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         decoration: BoxDecoration(
           color: const Color(0xFF16A34A),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF16A34A).withValues(alpha: 0.45),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+              color: const Color(0xFF16A34A).withValues(alpha: 0.35),
+              blurRadius: 4,
+              offset: const Offset(0, 1.5),
             ),
           ],
         ),
-        child: Row(
+        child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(LucideIcons.check, size: 11, color: Colors.white),
-            const SizedBox(width: 3),
+            Icon(LucideIcons.check, size: 11, color: Colors.white),
+            SizedBox(width: 3),
             Text(
-              '$matchPct% Match',
-              style: const TextStyle(
+              'Verified',
+              style: TextStyle(
                 fontSize: 9.5,
                 fontWeight: FontWeight.w800,
                 color: Colors.white,
@@ -1183,227 +1136,6 @@ class _HairTestContent extends StatelessWidget {
               fontSize: 9.5,
               fontWeight: FontWeight.w800,
               color: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetectionMessageCard(
-    BuildContext context,
-    String label,
-    HairPhotoAnalysis analysis,
-  ) {
-    if (analysis.isAnalyzing) {
-      return Container(
-        margin: const EdgeInsets.only(top: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.primary5,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.primary100),
-        ),
-        child: const Row(
-          children: [
-            SizedBox.square(
-              dimension: 13,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.8,
-                color: AppColors.primary,
-              ),
-            ),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Dr. Hair Assistant is analyzing follicular pattern...',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primaryDark,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (analysis.isHair) {
-      return Container(
-        margin: const EdgeInsets.only(top: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0FDF4),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFBBF7D0)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  LucideIcons.sparkles,
-                  color: Color(0xFF16A34A),
-                  size: 13,
-                ),
-                const SizedBox(width: 5),
-                const Expanded(
-                  child: Text(
-                    'Dr. Hair Assistant Verified',
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF15803D),
-                    ),
-                  ),
-                ),
-                Text(
-                  '${(analysis.confidence * 100).toInt()}% Match',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF16A34A),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 3),
-            Text(
-              analysis.message,
-              style: const TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF166534),
-                height: 1.35,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (analysis.isNotHair) {
-      return Container(
-        margin: const EdgeInsets.only(top: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFEF2F2),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFFECACA)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(
-                  LucideIcons.alertTriangle,
-                  color: Color(0xFFDC2626),
-                  size: 14,
-                ),
-                SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Dr. Hair Assistant • Not Scalp',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF991B1B),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              analysis.message,
-              style: const TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFFB91C1C),
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 7),
-            InkWell(
-              onTap: () => _showPhotoSourceBottomSheet(context, label),
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDC2626),
-                  borderRadius: BorderRadius.circular(6),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFDC2626).withValues(alpha: 0.3),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1.5),
-                    ),
-                  ],
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(LucideIcons.refreshCw, size: 11, color: Colors.white),
-                    SizedBox(width: 4),
-                    Text(
-                      'Retake Scalp Photo',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Low Clarity
-    return Container(
-      margin: const EdgeInsets.only(top: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFDE68A)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(
-                LucideIcons.alertCircle,
-                color: Color(0xFFD97706),
-                size: 13,
-              ),
-              SizedBox(width: 5),
-              Text(
-                'Dr. Hair Assistant • Lighting Tip',
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF92400E),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 3),
-          Text(
-            analysis.message,
-            style: const TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFFB45309),
-              height: 1.35,
             ),
           ),
         ],
