@@ -251,3 +251,4 @@ class AiAssessmentModel {
         'generated_at': generatedAt,
       };
 }
+

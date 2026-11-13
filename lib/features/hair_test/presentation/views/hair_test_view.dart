@@ -17,6 +17,7 @@ import '../../domain/models/hair_photo_analysis.dart';
 import '../viewmodels/hair_test_cubit.dart';
 import '../viewmodels/hair_test_state.dart';
 import 'assessment_report_view.dart';
+import '../widgets/ai_analysis_loading_overlay.dart';
 
 export 'assessment_report_view.dart';
 
@@ -65,6 +66,10 @@ class _HairTestContent extends StatelessWidget {
         }
       },
       builder: (context, state) {
+        if (state.isSubmitting) {
+          return const AiAnalysisLoadingOverlay();
+        }
+
         // Show report only once after the assessment is submitted in the current session
         final bool showAssessmentReport = state.isSubmitted;
         if (showAssessmentReport) {

@@ -46,6 +46,65 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
     });
   }
 
+  Future<void> _shareReportViaWhatsApp(HairTestState state) async {
+    final ai = state.aiAssessment;
+    final score = ai?.scalpHealthScore ?? 70;
+    final stage = ai?.stageClassification ?? state.stageTitle;
+    final name = state.name.trim().isNotEmpty ? state.name.trim() : 'Patient';
+
+    final buffer = StringBuffer();
+    buffer.writeln('🌿 *Dr. Hair - AI Clinical Scalp & Hair Report* 🌿\n');
+    buffer.writeln('👤 *Patient:* $name (${state.age} yrs)');
+    buffer.writeln('📊 *Scalp Health Score:* $score / 100');
+    buffer.writeln('🔍 *Condition / Stage:* $stage\n');
+
+    if (ai != null && ai.summary.isNotEmpty) {
+      buffer.writeln('💡 *AI Clinical Summary:*\n${ai.summary}\n');
+    }
+
+    if (ai != null && ai.dietPlan.foodsToEat.isNotEmpty) {
+      buffer.writeln('🥗 *Recommended Diet Boosters:*');
+      for (final food in ai.dietPlan.foodsToEat.take(3)) {
+        buffer.writeln('• $food');
+      }
+      buffer.writeln();
+    }
+
+    if (ai != null && ai.recommendedRegimen.dailySteps.isNotEmpty) {
+      buffer.writeln('⚡ *Daily Recovery Regimen:*');
+      for (final step in ai.recommendedRegimen.dailySteps) {
+        buffer.writeln('• *${step.step}:* ${step.instruction}');
+      }
+      buffer.writeln();
+    }
+
+    buffer.writeln('🏥 *Clinical Trichology:* Dr. Hair Clinic (Dr. Jai Bansal)');
+    buffer.writeln('📱 *Download Dr. Hair App for your complete recovery plan!*');
+
+    final message = buffer.toString();
+    final encoded = Uri.encodeComponent(message);
+    final waUri = Uri.parse('whatsapp://send?text=$encoded');
+    final webUri = Uri.parse('https://wa.me/?text=$encoded');
+
+    try {
+      if (await canLaunchUrl(waUri)) {
+        await launchUrl(waUri, mode: LaunchMode.externalApplication);
+      } else if (await canLaunchUrl(webUri)) {
+        await launchUrl(webUri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('WhatsApp is not installed on this device.'),
+              backgroundColor: AppColors.danger,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<HairTestCubit, HairTestState>(
@@ -123,6 +182,15 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               ],
             ),
             actions: [
+              IconButton(
+                icon: const Icon(
+                  LucideIcons.share2,
+                  color: AppColors.primaryDark,
+                  size: 20,
+                ),
+                tooltip: 'Share Report',
+                onPressed: () => _shareReportViaWhatsApp(state),
+              ),
               TextButton(
                 onPressed: () {
                   context.read<HairTestCubit>().startRetest();
