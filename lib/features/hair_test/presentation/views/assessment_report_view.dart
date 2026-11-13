@@ -272,7 +272,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'AI Follicle & Diet Analysis',
+                                    'Dr. Hair Assistant Analysis',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
@@ -281,7 +281,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                   ),
                                   const SizedBox(height: 2),
                                   const Text(
-                                    'Generate personalized root causes, diet plan & lifestyle guidelines.',
+                                    'Powered by Dr. Hair Assistant • Root causes, diet plan & lifestyle guidelines.',
                                     style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
                                   ),
                                 ],

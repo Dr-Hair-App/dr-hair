@@ -204,7 +204,7 @@ void main() {
       // Warning banner for flagged non-hair photo
       expect(
         find.text(
-          'One or more uploaded photos do not appear to be hair or scalp photos. Please retake flagged photos.',
+          'Dr. Hair Assistant flagged non-scalp photos. Please retake flagged photos for accurate clinical staging.',
         ),
         findsOneWidget,
       );
@@ -217,7 +217,7 @@ void main() {
       );
 
       // Crown / Top (Non-hair image)
-      expect(find.text('No Hair Detected'), findsOneWidget);
+      expect(find.text('Not Scalp'), findsOneWidget);
       expect(
         find.text(
           'No hair or scalp detected. Please upload a clear photo of your hair or scalp.',
@@ -225,7 +225,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text('Retake Photo'),
+        find.text('Retake Scalp Photo'),
         findsOneWidget,
       );
 

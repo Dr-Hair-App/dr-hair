@@ -208,7 +208,7 @@ class AiAssessmentModel {
     this.dietPlan = const AiDietPlan(),
     this.lifestyleGuidance = const AiLifestyleGuidance(),
     this.recommendedRegimen = const AiRecommendedRegimen(),
-    this.generatedBy = 'gemini-ai',
+    this.generatedBy = 'Dr. Hair Assistant',
     this.generatedAt,
   });
 
@@ -234,7 +234,7 @@ class AiAssessmentModel {
       recommendedRegimen: json['recommended_regimen'] is Map
           ? AiRecommendedRegimen.fromJson(Map<String, dynamic>.from(json['recommended_regimen']))
           : const AiRecommendedRegimen(),
-      generatedBy: json['generated_by']?.toString() ?? 'gemini-ai',
+      generatedBy: json['generated_by']?.toString() ?? 'Dr. Hair Assistant',
       generatedAt: json['generated_at']?.toString(),
     );
   }

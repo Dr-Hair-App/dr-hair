@@ -4,7 +4,10 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
+import 'package:dio/dio.dart';
 
+import '../../../../core/constants/api_endpoints.dart';
+import '../../../../core/network/dio_client.dart';
 import '../domain/models/hair_photo_analysis.dart';
 
 /// Client-side image analyzer that verifies if an uploaded image contains
@@ -69,6 +72,62 @@ class HairImageDetector {
         message: 'Hair & scalp image ready for assessment.',
         details: 'Photo registered successfully.',
       );
+    }
+
+    // 1. Dr. Hair Assistant Vision AI via Backend Endpoint
+    try {
+      final dio = DioClient(
+        baseUrl: ApiEndpoints.backendBaseUrl,
+        enableDebugLogging: false,
+      ).dio;
+
+      final formData = FormData.fromMap({
+        'label': label,
+        'image': await MultipartFile.fromFile(
+          path,
+          filename: path.split('/').last,
+        ),
+      });
+
+      final response = await dio.post<Map<String, dynamic>>(
+        '/HairTest/detect_scalp_image',
+        data: formData,
+        options: Options(
+          sendTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 12),
+        ),
+      );
+
+      final data = response.data?['data'];
+      if (data is Map) {
+        final statusStr = data['status']?.toString();
+        HairDetectionStatus status;
+        if (statusStr == 'notHair') {
+          status = HairDetectionStatus.notHair;
+        } else if (statusStr == 'lowClarity') {
+          status = HairDetectionStatus.lowClarity;
+        } else {
+          status = HairDetectionStatus.hairDetected;
+        }
+
+        final confidence = (data['confidence'] as num?)?.toDouble() ??
+            (status == HairDetectionStatus.hairDetected ? 0.95 : 0.15);
+        final message = data['message']?.toString() ??
+            'Dr. Hair Assistant verified hair & scalp features.';
+        final details = data['details']?.toString() ??
+            'Follicular pattern and scalp density verified.';
+
+        return HairPhotoAnalysis(
+          label: label,
+          photoPath: path,
+          status: status,
+          confidence: confidence,
+          message: message,
+          details: details,
+        );
+      }
+    } catch (_) {
+      // If network is offline, continue to fast client-side pixel heuristic
     }
 
     try {

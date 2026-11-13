@@ -102,7 +102,7 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                     Icon(LucideIcons.sparkles, color: Colors.white, size: 13),
                     SizedBox(width: 5),
                     Text(
-                      'AI Clinical Trichology',
+                      'Dr. Hair Assistant',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 11,

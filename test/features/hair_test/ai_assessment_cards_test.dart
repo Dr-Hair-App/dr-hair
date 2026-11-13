@@ -66,7 +66,7 @@ void main() {
     expect(find.text('78'), findsOneWidget);
     expect(find.text('/100'), findsOneWidget);
     expect(find.text('Norwood Stage 2 - Early Thinning'), findsOneWidget);
-    expect(find.text('AI Clinical Trichology'), findsOneWidget);
+    expect(find.text('Dr. Hair Assistant'), findsOneWidget);
 
     // Default tab is Root Causes
     expect(find.text('DHT Sensitivity'), findsOneWidget);

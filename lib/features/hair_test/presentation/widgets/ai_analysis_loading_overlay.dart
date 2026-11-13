@@ -94,7 +94,7 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
                       Icon(LucideIcons.sparkles, color: AppColors.primary, size: 14),
                       SizedBox(width: 6),
                       Text(
-                        'Dr. Hair AI Trichologist • Gemini Flash',
+                        'Dr. Hair Assistant • Gemini Flash',
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
