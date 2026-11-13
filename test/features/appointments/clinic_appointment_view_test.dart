@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dr_hair/core/storage/app_local_cache.dart';
@@ -29,6 +30,35 @@ class _MockAppointmentApi extends PatientAppointmentApi {
       'id': appointmentId,
       'starts_at': startsAt.toUtc().toIso8601String(),
     };
+  }
+
+  @override
+  Future<Map<String, dynamic>> update({
+    required String token,
+    required String appointmentId,
+    required Map<String, dynamic> data,
+  }) async => {
+    'id': appointmentId,
+    ...data,
+  };
+}
+
+class _UnavailablePaymentApi extends PatientAppointmentApi {
+  @override
+  Future<Map<String, dynamic>> createPaymentIntent({
+    required String token,
+    required DateTime startsAt,
+    required String reason,
+  }) async {
+    final requestOptions = RequestOptions(path: '/appointments/create-payment-intent');
+    throw DioException(
+      requestOptions: requestOptions,
+      response: Response<Map<String, dynamic>>(
+        requestOptions: requestOptions,
+        statusCode: 503,
+        data: {'message': 'Razorpay online payments are not configured.'},
+      ),
+    );
   }
 }
 
@@ -63,7 +93,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final cache = AppLocalCache.inMemory();
-    final appointmentCubit = ClinicAppointmentCubit(cache: cache);
+    final appointmentCubit = ClinicAppointmentCubit(cache: cache, api: _MockAppointmentApi());
     final user = const UserModel(
       id: '991',
       patientId: 'PAT-991',
@@ -93,14 +123,9 @@ void main() {
     expect(find.text('In-Clinic Appointment'), findsOneWidget);
     expect(find.text('Dr. Jai Bansal'), findsOneWidget);
 
-    // Verify Consultation Fee card
-    expect(find.textContaining('Consultation & Trichoscopy Fee: ₹500'), findsOneWidget);
-    expect(find.textContaining('UPI / Card / Pay at Clinic'), findsOneWidget);
-
-    // Verify Proceed to Book & Pay button
-    final bookButton = find.text('Proceed to Book & Pay (₹500)');
-    await tester.ensureVisible(bookButton);
-    expect(bookButton, findsOneWidget);
+    // Verify the compact sticky fee summary and action.
+    expect(find.text('Consultation · ₹500'), findsOneWidget);
+    expect(find.text('Continue · ₹500'), findsOneWidget);
 
     // Verify empty state for visits
     expect(find.text('No physical clinic visits scheduled yet.'), findsOneWidget);
@@ -176,6 +201,34 @@ void main() {
     expect(result?.paymentMethod, 'UPI');
     expect(result?.paymentStatus, 'Paid');
     expect(result?.transactionId.startsWith('TXN-CLINIC-'), true);
+  });
+
+  testWidgets('shows payment-intent failure without opening checkout without a server order', (tester) async {
+    AppointmentPaymentResult? result;
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(builder: (context) => Scaffold(
+        body: Center(child: ElevatedButton(
+          onPressed: () async {
+            result = await AppointmentPaymentSheet.show(
+              context,
+              startsAt: DateTime.now().add(const Duration(days: 2)),
+              patientToken: 'patient-session-token',
+              appointmentApi: _UnavailablePaymentApi(),
+            );
+          },
+          child: const Text('Book appointment'),
+        )),
+      )),
+    ));
+    await tester.tap(find.text('Book appointment'));
+    await tester.pumpAndSettle();
+    final payButton = find.text('Pay ₹500 & Confirm Visit');
+    await tester.ensureVisible(payButton);
+    await tester.tap(payButton);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Secure payment could not be started. Razorpay online payments are not configured.'), findsOneWidget);
+    expect(result, isNull);
+    expect(find.text('Consultation Checkout'), findsOneWidget);
   });
 
   testWidgets('tapping Reschedule opens date picker bottom sheet and updates slot directly on screen', (tester) async {
@@ -274,7 +327,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final cache = AppLocalCache.inMemory();
-    final appointmentCubit = ClinicAppointmentCubit(cache: cache);
+    final appointmentCubit = ClinicAppointmentCubit(cache: cache, api: _MockAppointmentApi());
     final user = const UserModel(
       id: '992',
       patientId: 'PAT-992',
@@ -308,14 +361,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Verify first consultation free badge and strikethrough fee
-    expect(find.text('Special Offer: 1st Consultation FREE'), findsOneWidget);
-    expect(find.text('₹500'), findsOneWidget);
-
-    // Verify button text reflects 100% free first consultation
-    final freeBookButton = find.text('Book 1st Consultation (100% FREE)');
-    await tester.ensureVisible(freeBookButton);
-    expect(freeBookButton, findsOneWidget);
+    expect(find.text('First visit · Free'), findsOneWidget);
+    expect(find.text('Book free consultation'), findsOneWidget);
   });
 
   testWidgets('renders pay at clinic UI when admin turns off payment_required', (tester) async {
@@ -325,7 +372,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final cache = AppLocalCache.inMemory();
-    final appointmentCubit = ClinicAppointmentCubit(cache: cache);
+    final appointmentCubit = ClinicAppointmentCubit(cache: cache, api: _MockAppointmentApi());
     final user = const UserModel(
       id: '993',
       patientId: 'PAT-993',
@@ -359,13 +406,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Verify Pay at Clinic text
-    expect(find.text('Consultation Fee: ₹450 (Pay at Clinic)'), findsOneWidget);
-
-    // Verify button text
-    final bookButton = find.text('Proceed to Book (Pay at Clinic)');
-    await tester.ensureVisible(bookButton);
-    expect(bookButton, findsOneWidget);
+    expect(find.text('Consultation · ₹450'), findsOneWidget);
+    expect(find.text('Continue · Pay at clinic'), findsOneWidget);
+    expect(find.text('No Online Payment Required'), findsOneWidget);
   });
 
   testWidgets('AppointmentPaymentSheet displays free consultation mode when fee is 0', (tester) async {

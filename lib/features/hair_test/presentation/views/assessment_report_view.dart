@@ -11,11 +11,14 @@ import '../../../../core/routes/route_names.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../../../core/widgets/photo_source_bottom_sheet.dart';
+import '../../../care/presentation/viewmodels/care_cubit.dart';
 import '../../../shop/data/models/product_model.dart';
 import '../../../shop/presentation/viewmodels/cart_cubit.dart';
 import '../../../shop/presentation/viewmodels/products_cubit.dart';
+import '../../domain/models/ai_assessment_model.dart';
 import '../viewmodels/hair_test_cubit.dart';
 import '../viewmodels/hair_test_state.dart';
+import '../widgets/ai_analysis_loading_overlay.dart';
 import '../widgets/ai_assessment_cards.dart';
 
 /// The Clinical Assessment Report View displaying the patient's hair test diagnosis,
@@ -31,87 +34,93 @@ class AssessmentReportView extends StatefulWidget {
 }
 
 class _AssessmentReportViewState extends State<AssessmentReportView> {
-  bool _isRequestingAi = false;
+  late bool _isRequestingAi;
+  bool _isAddingRoutine = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _isRequestingAi =
+        widget.state.aiAssessment == null &&
+        widget.state.referenceNo?.isNotEmpty == true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
         final cubit = context.read<HairTestCubit?>();
-        if (cubit != null && cubit.state.aiAssessment == null && cubit.state.referenceNo != null) {
-          cubit.fetchAiAssessment();
+        if (cubit != null &&
+            cubit.state.aiAssessment == null &&
+            cubit.state.referenceNo != null) {
+          setState(() => _isRequestingAi = true);
+          await cubit.fetchAiAssessment();
+          if (mounted) setState(() => _isRequestingAi = false);
+        } else if (_isRequestingAi) {
+          setState(() => _isRequestingAi = false);
         }
       }
     });
   }
 
-  Future<void> _shareReportViaWhatsApp(HairTestState state) async {
-    final ai = state.aiAssessment;
-    final score = ai?.scalpHealthScore ?? 70;
-    final stage = ai?.stageClassification ?? state.stageTitle;
-    final name = state.name.trim().isNotEmpty ? state.name.trim() : 'Patient';
-
-    final buffer = StringBuffer();
-    buffer.writeln('🌿 *Dr. Hair - AI Clinical Scalp & Hair Report* 🌿\n');
-    buffer.writeln('👤 *Patient:* $name (${state.age} yrs)');
-    buffer.writeln('📊 *Scalp Health Score:* $score / 100');
-    buffer.writeln('🔍 *Condition / Stage:* $stage\n');
-
-    if (ai != null && ai.summary.isNotEmpty) {
-      buffer.writeln('💡 *AI Clinical Summary:*\n${ai.summary}\n');
-    }
-
-    if (ai != null && ai.dietPlan.foodsToEat.isNotEmpty) {
-      buffer.writeln('🥗 *Recommended Diet Boosters:*');
-      for (final food in ai.dietPlan.foodsToEat.take(3)) {
-        buffer.writeln('• $food');
-      }
-      buffer.writeln();
-    }
-
-    if (ai != null && ai.recommendedRegimen.dailySteps.isNotEmpty) {
-      buffer.writeln('⚡ *Daily Recovery Regimen:*');
-      for (final step in ai.recommendedRegimen.dailySteps) {
-        buffer.writeln('• *${step.step}:* ${step.instruction}');
-      }
-      buffer.writeln();
-    }
-
-    buffer.writeln('🏥 *Clinical Trichology:* Dr. Hair Clinic (Dr. Jai Bansal)');
-    buffer.writeln('📱 *Download Dr. Hair App for your complete recovery plan!*');
-
-    final message = buffer.toString();
-    final encoded = Uri.encodeComponent(message);
-    final waUri = Uri.parse('whatsapp://send?text=$encoded');
-    final webUri = Uri.parse('https://wa.me/?text=$encoded');
-
+  Future<void> _retryAiAssessment() async {
+    if (_isRequestingAi) return;
+    setState(() => _isRequestingAi = true);
     try {
-      if (await canLaunchUrl(waUri)) {
-        await launchUrl(waUri, mode: LaunchMode.externalApplication);
-      } else if (await canLaunchUrl(webUri)) {
-        await launchUrl(webUri, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('WhatsApp is not installed on this device.'),
-              backgroundColor: AppColors.danger,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
+      await context.read<HairTestCubit?>()?.fetchAiAssessment(
+        forceRefresh: true,
+      );
+    } finally {
+      if (mounted) setState(() => _isRequestingAi = false);
+    }
+  }
+
+  Future<void> _contactDoctorOnWhatsApp() async {
+    const phoneNumber = '918058056789';
+    const message =
+        'Hello, I completed the Dr. Hair assessment and would like guidance on my next steps.';
+    final uri = Uri.parse(
+      'https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}',
+    );
+    try {
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+          mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open WhatsApp. Please try again.'),
+          ),
+        );
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open WhatsApp. Please try again.'),
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    try {
+      if (context.read<ProductsCubit?>() != null) {
+        return _buildReportContent();
+      }
+    } catch (_) {}
+
+    return BlocProvider(
+      create: (_) => ProductsCubit()..loadProducts(limit: 100),
+      child: _buildReportContent(),
+    );
+  }
+
+  Widget _buildReportContent() {
     return BlocBuilder<HairTestCubit, HairTestState>(
       builder: (context, dynamicState) {
         final state = dynamicState.isCompleted || dynamicState.isSubmitted
             ? dynamicState
             : widget.state;
+        if (_isRequestingAi && state.aiAssessment == null) {
+          return const AiAnalysisLoadingOverlay();
+        }
         final selectedPattern = _selectedPatternIllustration(state);
         final String trimmedName = state.name.trim();
         final String displayName = trimmedName.isNotEmpty
@@ -126,17 +135,28 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
             stageStr.contains('patch') ||
             stageStr.contains('extensive');
 
-        final liveProducts = context.watch<ProductsCubit?>()?.state.products;
-        final recommendedProducts = _getRecommendedProducts(
-          state,
-          liveProducts,
-        );
+        final productState = context.watch<ProductsCubit>().state;
+        final liveProducts = productState.products;
+        final aiProductCategories = state.aiAssessment?.isAvailable == true
+            ? state.aiAssessment!.recommendedRegimen.targetProducts
+                  .map((product) => product.category)
+                  .toList()
+            : const <String>[];
+        final recommendedProducts = aiProductCategories.isEmpty
+            ? const <ProductItem>[]
+            : _getRecommendedProducts(state, liveProducts, aiProductCategories);
 
         final isReviewed =
             state.assessmentStatus == 'reviewed' ||
             state.clinicalReports.isNotEmpty ||
             state.doctorCarePlan != null;
         final isUnderReview = state.assessmentStatus == 'under_review';
+        final aiUnavailable =
+            state.aiAssessment == null || !state.aiAssessment!.isAvailable;
+        final aiRecommendsDoctor =
+            !isReviewed &&
+            (state.aiAssessment?.nextStepType == 'doctor_appointment' ||
+                (aiUnavailable && isSevereOrPatchy));
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -159,38 +179,15 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                 }
               },
             ),
-            title: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Assessment complete',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  ),
-                ),
-                Text(
-                  'Assessment Report',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primaryDark,
-                  ),
-                ),
-              ],
+            title: Text(
+              'Assessment Report',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primaryDark,
+              ),
             ),
             actions: [
-              IconButton(
-                icon: const Icon(
-                  LucideIcons.share2,
-                  color: AppColors.primaryDark,
-                  size: 20,
-                ),
-                tooltip: 'Share Report',
-                onPressed: () => _shareReportViaWhatsApp(state),
-              ),
               TextButton(
                 onPressed: () {
                   context.read<HairTestCubit>().startRetest();
@@ -244,9 +241,11 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                       const SizedBox(height: 20),
                       AiAssessmentCards(
                         aiAssessment: state.aiAssessment!,
-                        onRefresh: () => context.read<HairTestCubit?>()?.fetchAiAssessment(forceRefresh: true),
+                        onRefresh: _retryAiAssessment,
+                        isRefreshing: _isRequestingAi,
                       ),
-                    ] else if (state.referenceNo != null && state.referenceNo!.isNotEmpty) ...[
+                    ] else if (state.referenceNo != null &&
+                        state.referenceNo!.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Container(
                         width: double.infinity,
@@ -264,7 +263,11 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                 color: AppColors.primary.withValues(alpha: 0.1),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(LucideIcons.sparkles, color: AppColors.primary, size: 20),
+                              child: const Icon(
+                                LucideIcons.sparkles,
+                                color: AppColors.primary,
+                                size: 20,
+                              ),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
@@ -281,8 +284,11 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                   ),
                                   const SizedBox(height: 2),
                                   const Text(
-                                    'Powered by Dr. Hair Assistant • Root causes, diet plan & lifestyle guidelines.',
-                                    style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                                    'AI screening summary, possible factors, and daily care ideas.',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: Color(0xFF64748B),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -292,22 +298,32 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                 ? const SizedBox(
                                     width: 24,
                                     height: 24,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.primary,
+                                    ),
                                   )
                                 : ElevatedButton(
-                                    onPressed: () async {
-                                      setState(() => _isRequestingAi = true);
-                                      await context.read<HairTestCubit?>()?.fetchAiAssessment(forceRefresh: true);
-                                      if (mounted) setState(() => _isRequestingAi = false);
-                                    },
+                                    onPressed: _retryAiAssessment,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: AppColors.primary,
                                       foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
                                       elevation: 0,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
                                     ),
-                                    child: const Text('Analyze', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                    child: const Text(
+                                      'Analyze',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                                   ),
                           ],
                         ),
@@ -332,28 +348,17 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                       ),
                     ],
 
-                    // 5. In-Clinic Doctor Consultation (Hero placement if Stage 4/5 or patchy)
-                    if (isSevereOrPatchy) ...[
-                      const SizedBox(height: 20),
-                      _buildDoctorAppointmentCard(context, isHero: true),
-                    ],
-
                     const SizedBox(height: 20),
-
-                    // 6. Clinical Scalp Photos Section
                     _buildScalpPhotosSection(context, state),
 
-                    // 7. Recommended Clinical Products Section (Stage 1/2/3 protocols)
-                    if (!isSevereOrPatchy) ...[
+                    // Keep clinician guidance and daily care ahead of optional products.
+                    if (aiRecommendsDoctor) ...[
                       const SizedBox(height: 20),
-                      _buildRecommendedProductsSection(
+                      _buildDoctorAppointmentCard(
                         context,
-                        recommendedProducts,
-                        state,
-                        isReviewed,
+                        isHero: true,
+                        reason: state.aiAssessment?.nextStepReason,
                       ),
-                      const SizedBox(height: 20),
-                      _buildDoctorAppointmentCard(context, isHero: false),
                     ],
 
                     const SizedBox(height: 20),
@@ -369,7 +374,19 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                     const SizedBox(height: 24),
 
                     // 10. Next steps & routine setup
-                    _buildPostAssessmentNextSteps(context),
+                    _buildPostAssessmentNextSteps(context, state),
+
+                    // Products are optional support, shown after the care plan.
+                    if (!aiRecommendsDoctor &&
+                        state.aiAssessment?.isAvailable == true) ...[
+                      const SizedBox(height: 20),
+                      _buildRecommendedProductsSection(
+                        context,
+                        recommendedProducts,
+                        isCheckingAvailability: productState.isLoading,
+                        availabilityError: productState.errorMessage != null,
+                      ),
+                    ],
 
                     const SizedBox(height: 20),
 
@@ -411,71 +428,75 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
             ),
             child: SafeArea(
               top: false,
-              child: isSevereOrPatchy
+              child: aiRecommendsDoctor
                   ? AppButton(
                       height: 48,
-                      text: 'Book Consultation with Dr. Jai Bansal (₹500)',
+                      text: 'Contact doctor on WhatsApp',
                       variant: AppButtonVariant.filled,
-                      backgroundColor: const Color(0xFF1D4ED8),
+                      backgroundColor: AppColors.whatsapp,
                       foregroundColor: Colors.white,
                       icon: const Icon(
-                        LucideIcons.calendarCheck2,
+                        LucideIcons.messageCircle,
                         size: 16,
                         color: Colors.white,
                       ),
-                      onPressed: () =>
-                          context.push(RouteNames.clinicAppointment),
+                      onPressed: _contactDoctorOnWhatsApp,
                     )
+                  : state.aiAssessment?.isAvailable == true
+                  ? productState.isLoading
+                        ? const AppButton(
+                            height: 48,
+                            text: 'Checking product availability…',
+                            variant: AppButtonVariant.outlined,
+                            onPressed: null,
+                          )
+                        : recommendedProducts.isNotEmpty
+                        ? AppButton(
+                            height: 48,
+                            text: 'Open daily care routine',
+                            variant: AppButtonVariant.filled,
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            icon: const Icon(
+                              LucideIcons.listChecks,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                            onPressed: () => _saveAssessmentRoutine(
+                              context,
+                              state.aiAssessment!.recommendedRegimen.dailySteps
+                                  .where(
+                                    (step) => !RegExp(
+                                      r'\b(tablet|supplement|medicine|medication|prescription|dosage|mg|ml|minoxidil|capsule)\b',
+                                      caseSensitive: false,
+                                    ).hasMatch(step.instruction),
+                                  )
+                                  .toList(),
+                            ),
+                          )
+                        : AppButton(
+                            height: 48,
+                            text: 'Contact doctor on WhatsApp',
+                            variant: AppButtonVariant.filled,
+                            backgroundColor: AppColors.whatsapp,
+                            foregroundColor: Colors.white,
+                            icon: const Icon(
+                              LucideIcons.messageCircle,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                            onPressed: _contactDoctorOnWhatsApp,
+                          )
                   : AppButton(
                       height: 48,
-                      text: isReviewed
-                          ? 'Order Prescribed Regimen Kit'
-                          : 'Order Recommended Stage Kit',
-                      variant: AppButtonVariant.filled,
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      icon: const Icon(
-                        LucideIcons.shoppingBag,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                      onPressed: () {
-                        final cart = context.read<CartCubit?>();
-                        if (cart != null && recommendedProducts.isNotEmpty) {
-                          for (final prod in recommendedProducts) {
-                            final plan = prod.supplyPlans.isNotEmpty
-                                ? prod.supplyPlans.first
-                                : ProductSupplyPlan(
-                                    title: 'Standard',
-                                    subtitle: prod.subtitle,
-                                    price: 999,
-                                    mrp: 1299,
-                                  );
-                            cart.addProduct(
-                              product: prod,
-                              plan: plan,
-                              quantity: 1,
-                            );
-                          }
-                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text(
-                                'Complete kit added to cart!',
-                              ),
-                              backgroundColor: AppColors.success,
-                              behavior: SnackBarBehavior.floating,
-                              action: SnackBarAction(
-                                label: 'View Cart',
-                                textColor: Colors.white,
-                                onPressed: () => context.push(RouteNames.cart),
-                              ),
-                            ),
-                          );
-                        } else {
-                          context.push(RouteNames.products);
-                        }
-                      },
+                      text: _isRequestingAi
+                          ? 'Preparing AI assessment…'
+                          : 'Contact doctor on WhatsApp',
+                      variant: AppButtonVariant.outlined,
+                      icon: const Icon(LucideIcons.messageCircle, size: 16),
+                      onPressed: _isRequestingAi
+                          ? null
+                          : _contactDoctorOnWhatsApp,
                     ),
             ),
           ),
@@ -1187,7 +1208,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Photos attached to this assessment for doctor review',
+                      'AI checks that photos show a scalp; it does not diagnose from images.',
                       style: TextStyle(
                         fontSize: 11,
                         color: AppColors.secondaryDark,
@@ -1423,26 +1444,13 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
 
   Widget _buildRecommendedProductsSection(
     BuildContext context,
-    List<ProductItem> products,
-    HairTestState state,
-    bool isReviewed,
-  ) {
-    final stageStr = (state.stage ?? state.primaryConcern ?? '').toLowerCase();
-    String stageTitle = 'Recommended Clinical Products';
-    String stageSubtitle =
-        'Tailored formulations based on your root cause & scalp status';
-    if (stageStr.contains('stage 1')) {
-      stageTitle = 'Stage 1 Care Protocol (Preventative & Roots)';
-      stageSubtitle =
-          'Formulations to nourish follicles and maintain scalp balance';
-    } else if (stageStr.contains('stage 2')) {
-      stageTitle = 'Stage 2 Care Protocol (Targeted Regrowth & DHT Defense)';
-      stageSubtitle =
-          'Formulations to revive receding temples and crown follicles';
-    } else if (stageStr.contains('stage 3')) {
-      stageTitle = 'Stage 3 Care Protocol (Intensive Regrowth Kit)';
-      stageSubtitle = 'High-potency clinical kit targeting visible scalp areas';
-    }
+    List<ProductItem> products, {
+    required bool isCheckingAvailability,
+    required bool availabilityError,
+  }) {
+    const stageTitle = 'Optional products';
+    const stageSubtitle =
+        'Only consider these alongside your care plan, if they suit you.';
 
     return Container(
       width: double.infinity,
@@ -1482,7 +1490,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Recommended Clinical Products',
+                      'Optional suggestions',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
@@ -1513,83 +1521,59 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
             ],
           ),
           const SizedBox(height: 16),
-          if (products.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () {
-                    final cart = context.read<CartCubit?>();
-                    if (cart != null) {
-                      for (final prod in products) {
-                        final plan = prod.supplyPlans.isNotEmpty
-                            ? prod.supplyPlans.first
-                            : ProductSupplyPlan(
-                                title: 'Standard',
-                                subtitle: prod.subtitle,
-                                price: 999,
-                                mrp: 1299,
-                              );
-                        cart.addProduct(product: prod, plan: plan, quantity: 1);
-                      }
-                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('Complete kit added to cart!'),
-                          backgroundColor: AppColors.success,
-                          behavior: SnackBarBehavior.floating,
-                          action: SnackBarAction(
-                            label: 'View Cart',
-                            textColor: Colors.white,
-                            onPressed: () => context.push(RouteNames.cart),
-                          ),
-                        ),
-                      );
-                    } else {
-                      context.push(RouteNames.products);
-                    }
-                  },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 11),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  icon: const Icon(LucideIcons.shoppingBag, size: 15),
-                  label: const Text(
-                    'Add Complete Kit to Cart',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+          if (isCheckingAvailability)
+            const Row(
+              children: [
+                SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 10),
+                Text(
+                  'Checking current stock…',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.secondaryDark,
                   ),
                 ),
+              ],
+            )
+          else if (availabilityError)
+            const Text(
+              'We couldn’t confirm current stock, so no products are being suggested. You can contact the clinic for guidance.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: AppColors.secondaryDark,
+              ),
+            )
+          else if (products.isEmpty)
+            const Text(
+              'No matching in-stock products are available right now. Contact the clinic for guidance.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: AppColors.secondaryDark,
               ),
             ),
+          if (products.isNotEmpty) ...[
+            const SizedBox(height: 4),
             for (final product in products) ...[
               _buildProductCard(context, product),
               const SizedBox(height: 12),
             ],
-          ] else ...[
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'No specific retail formulations needed. Consult our clinic for prescription-grade care.',
-                style: TextStyle(fontSize: 12, color: AppColors.secondaryDark),
-              ),
-            ),
           ],
           const SizedBox(height: 4),
           Center(
             child: TextButton.icon(
               onPressed: () => context.push(RouteNames.products),
               icon: const Icon(
-                LucideIcons.sparkles,
+                LucideIcons.shoppingBag,
                 size: 14,
                 color: AppColors.primary,
               ),
               label: const Text(
-                'Explore recommended products',
+                'Browse the catalog',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -1691,6 +1675,17 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
           const SizedBox(width: 8),
           ElevatedButton(
             onPressed: () {
+              if (!product.inStock) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'This item is no longer in stock. Contact the clinic for guidance.',
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
               final cart = context.read<CartCubit?>();
               if (cart != null) {
                 cart.addProduct(product: product, plan: plan, quantity: 1);
@@ -1741,6 +1736,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
   Widget _buildDoctorAppointmentCard(
     BuildContext context, {
     bool isHero = false,
+    String? reason,
   }) {
     return Container(
       width: double.infinity,
@@ -1779,7 +1775,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                   Icon(LucideIcons.alertCircle, size: 12, color: Colors.white),
                   SizedBox(width: 5),
                   Text(
-                    'Doctor Recommendation · In-Person Review Required',
+                    'Clinician review suggested',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -1836,7 +1832,9 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
           const SizedBox(height: 12),
           Text(
             isHero
-                ? 'For advanced thinning (Stage 4/5) or patchy shedding, retail formulations alone are not sufficient. An in-person digital trichoscopy and doctor examination is strongly recommended to preserve existing follicles.'
+                ? (reason?.trim().isNotEmpty == true
+                      ? reason!.trim()
+                      : 'Your assessment suggests an in-person clinician review would be helpful. A clinician can assess the pattern and discuss suitable next steps with you.')
                 : 'Get a comprehensive digital trichoscopy examination, clinical blood biomarker review, and doctor-prescribed customized treatment regimen at Dr. Hair OPD Clinic.',
             style: const TextStyle(
               fontSize: 12,
@@ -2068,10 +2066,58 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
     );
   }
 
-  Widget _buildPostAssessmentNextSteps(BuildContext context) {
+  Future<void> _saveAssessmentRoutine(
+    BuildContext context,
+    List<AiRegimenStep> routineSteps,
+  ) async {
+    if (routineSteps.isEmpty) {
+      context.push(RouteNames.routine);
+      return;
+    }
+    final careCubit = context.read<CareCubit?>();
+    if (careCubit == null) {
+      context.push(RouteNames.routine);
+      return;
+    }
+
+    setState(() => _isAddingRoutine = true);
+    try {
+      for (final step in routineSteps.take(3)) {
+        final title = 'Assessment plan · ${step.step}';
+        if (careCubit.state.routineTasks.any((task) => task.title == title)) {
+          continue;
+        }
+        await careCubit.addCustomRoutineTask(
+          title: title,
+          subtitle: step.instruction,
+          category: 'Daily care',
+          timeOfDay: step.step,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isAddingRoutine = false);
+    }
+    if (!context.mounted) return;
+    context.push(RouteNames.routine);
+  }
+
+  Widget _buildPostAssessmentNextSteps(
+    BuildContext context,
+    HairTestState assessmentState,
+  ) {
     final hairState = context.watch<HairTestCubit>().state;
     final hasCompletedAssessment =
         hairState.isCompleted && !hairState.isRetesting;
+    final routineSteps = assessmentState.aiAssessment?.isAvailable == true
+        ? assessmentState.aiAssessment!.recommendedRegimen.dailySteps
+              .where(
+                (step) => !RegExp(
+                  r'\b(tablet|supplement|medicine|medication|prescription|dosage|mg|ml|minoxidil|capsule)\b',
+                  caseSensitive: false,
+                ).hasMatch(step.instruction),
+              )
+              .toList()
+        : <AiRegimenStep>[];
 
     if (!hasCompletedAssessment) {
       return Container(
@@ -2095,7 +2141,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Complete the hair screening to get customized product recommendations and a routine that fits your lifestyle.',
+              'Complete the hair screening to get practical care steps and guidance on whether a clinician should review your condition.',
               style: TextStyle(
                 fontSize: 12,
                 height: 1.4,
@@ -2138,36 +2184,48 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Build a simple care habit and track changes over time.',
-            style: TextStyle(
+          Text(
+            routineSteps.isNotEmpty
+                ? 'Start with these simple, non-prescription care steps. Products are optional; a clinician can guide treatment when needed.'
+                : 'Track your daily care habits and note changes over time.',
+            style: const TextStyle(
               fontSize: 12,
               height: 1.4,
               color: AppColors.secondaryDark,
             ),
           ),
+          if (routineSteps.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            for (final step in routineSteps.take(3))
+              _nextStepRow(step.step, step.instruction),
+          ],
           const SizedBox(height: 16),
-          _nextStepRow('1', 'Review your daily routine'),
-          _nextStepRow('2', 'Set a reminder that works for you'),
-          _nextStepRow('3', 'Add a baseline progress photo'),
-          const SizedBox(height: 12),
           AppButton(
-            text: 'Set up my routine',
+            height: 45,
+            text: routineSteps.isNotEmpty
+                ? (_isAddingRoutine
+                      ? 'Adding routine…'
+                      : 'Add care plan to my routine')
+                : 'Open my routine tracker',
             variant: AppButtonVariant.filled,
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
-            onPressed: () => context.push(RouteNames.routine),
+            onPressed: _isAddingRoutine
+                ? null
+                : () => _saveAssessmentRoutine(context, routineSteps),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
+                flex: 3,
                 child: TextButton(
                   onPressed: () => context.push(RouteNames.reminders),
                   child: const Text('Set a reminder'),
                 ),
               ),
               Expanded(
+                flex: 4,
                 child: TextButton(
                   onPressed: () =>
                       context.push(RouteNames.progress, extra: true),
@@ -2187,7 +2245,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
       child: Row(
         children: [
           Container(
-            width: 24,
+            width: 45,
             height: 24,
             alignment: Alignment.center,
             decoration: const BoxDecoration(
@@ -2198,7 +2256,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               number,
               style: const TextStyle(
                 color: AppColors.primary,
-                fontSize: 12,
+                fontSize: 10,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -2352,10 +2410,11 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
 List<ProductItem> _getRecommendedProducts(
   HairTestState state, [
   List<ProductItem>? liveProducts,
+  List<String>? aiCategories,
 ]) {
-  final catalog = (liveProducts != null && liveProducts.isNotEmpty)
-      ? liveProducts
-      : ProductItem.demoCatalog;
+  final catalog = (liveProducts ?? const <ProductItem>[])
+      .where((product) => product.id.isNotEmpty && product.inStock)
+      .toList();
 
   final list = <ProductItem>[];
   final stageStr = (state.stage ?? state.primaryConcern ?? '').toLowerCase();
@@ -2369,6 +2428,36 @@ List<ProductItem> _getRecommendedProducts(
     } catch (_) {
       return null;
     }
+  }
+
+  if (aiCategories != null && aiCategories.isNotEmpty) {
+    for (final category in aiCategories.take(3)) {
+      final normalized = category.toLowerCase().trim();
+      if (normalized.isEmpty) continue;
+      final match = findInCatalog((product) {
+        final productCategory = product.category.toLowerCase().trim();
+        final productName = product.name.toLowerCase().trim();
+        if (productCategory.isNotEmpty &&
+            (productCategory.contains(normalized) ||
+                normalized.contains(productCategory))) {
+          return true;
+        }
+        if (normalized.contains('serum')) return productName.contains('serum');
+        if (normalized.contains('hair care')) {
+          return productCategory.contains('hair') ||
+              productName.contains('shampoo') ||
+              productName.contains('cleanser') ||
+              productName.contains('hair care');
+        }
+        if (normalized.contains('supplement')) {
+          return productCategory.contains('supplement') ||
+              productName.contains('supplement');
+        }
+        return productName.contains(normalized);
+      });
+      if (match != null && !list.contains(match)) list.add(match);
+    }
+    return list;
   }
 
   // 1. Stage-specific Core Formulations

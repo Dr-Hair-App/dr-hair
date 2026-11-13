@@ -1,4 +1,5 @@
 import 'package:dr_hair/core/storage/app_local_cache.dart';
+import 'package:dr_hair/features/hair_test/domain/models/hair_photo_analysis.dart';
 import 'package:dr_hair/features/hair_test/presentation/viewmodels/hair_test_cubit.dart';
 import 'package:dr_hair/features/hair_test/presentation/views/hair_test_view.dart';
 import 'package:material_ui/material_ui.dart';
@@ -7,6 +8,24 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  testWidgets('shows branded custom-painted waiting screen during AI work', (
+    tester,
+  ) async {
+    final cubit = HairTestCubit();
+    cubit.emit(cubit.state.copyWith(isSubmitting: true));
+
+    await tester.pumpWidget(MaterialApp(home: HairTestView(cubit: cubit)));
+
+    expect(find.text('Dr. Hair Assistant'), findsOneWidget);
+    expect(find.text('Putting your care pathway together'), findsOneWidget);
+    expect(find.byType(CustomPaint), findsWidgets);
+    expect(find.textContaining('Gemini'), findsNothing);
+    expect(find.text('Assessment Report'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await cubit.close();
+  });
+
   testWidgets(
     'HairTestView navigation buttons smoothly animate and allow step transitions',
     (tester) async {
@@ -85,9 +104,8 @@ void main() {
 
       // Report is displayed once submitted
       expect(find.text('Assessment Report'), findsOneWidget);
-      expect(find.text('Assessment complete'), findsOneWidget);
-      expect(find.text('Explore recommended products'), findsOneWidget);
-      expect(find.text('Done'), findsOneWidget);
+      expect(find.text('Report Sent to Expert Clinic Team'), findsOneWidget);
+      expect(find.text('Assigned to Dr. Jai Bansal'), findsOneWidget);
 
       // Bottom price bar elements must NOT exist
       expect(find.text('₹1445'), findsNothing);
@@ -101,7 +119,7 @@ void main() {
   );
 
   testWidgets(
-    'Assessment Report displays Clinical Scalp Photos, Recommended Products, and Clinic Consultation CTA',
+    'Assessment Report displays Clinical Scalp Photos and doctor review timeline',
     (tester) async {
       final cubit = HairTestCubit();
       cubit.selectGender('Male');
@@ -114,12 +132,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Clinical Scalp Photos'), findsOneWidget);
-      expect(find.text('Recommended Clinical Products'), findsOneWidget);
-      expect(
-        find.text('Prefer an In-Person Clinical Assessment?'),
-        findsOneWidget,
-      );
-      expect(find.text('Book Consultation (₹500)'), findsOneWidget);
+      expect(find.text('Intake Sent'), findsOneWidget);
+      expect(find.text('Doctor Review'), findsOneWidget);
+      expect(find.text('Regimen Prescribed'), findsOneWidget);
 
       cubit.close();
     },
@@ -183,10 +198,32 @@ void main() {
       cubit.setCurrentMedicationsStatus('No');
 
       // 1. Set a valid hair photo for Front Hairline
-      await cubit.setPhoto('Front Hairline', '/tmp/front_scalp.jpg');
+      await cubit.setPhoto(
+        'Front Hairline',
+        '/tmp/front_scalp.jpg',
+        HairPhotoAnalysis(
+          label: 'Front Hairline',
+          photoPath: '/tmp/front_scalp.jpg',
+          status: HairDetectionStatus.hairDetected,
+          confidence: 0.95,
+          message: 'Scalp confirmed',
+          details: 'A clear scalp photo was detected.',
+        ),
+      );
 
       // 2. Set a non-hair photo for Crown / Top
-      await cubit.setPhoto('Crown / Top', '/tmp/non_hair_car.jpg');
+      await cubit.setPhoto(
+        'Crown / Top',
+        '/tmp/non_hair_car.jpg',
+        HairPhotoAnalysis(
+          label: 'Crown / Top',
+          photoPath: '/tmp/non_hair_car.jpg',
+          status: HairDetectionStatus.notHair,
+          confidence: 0.9,
+          message: 'Try another photo',
+          details: 'The image does not show a scalp.',
+        ),
+      );
 
       // Advance to step 7
       while (cubit.state.currentStep < 7) {
@@ -199,23 +236,23 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // Step header
-      expect(find.text('Upload Scalp Photos'), findsOneWidget);
+      expect(find.text('Scalp photos'), findsOneWidget);
 
       // Warning banner for flagged non-hair photo
       expect(
         find.text(
-          'Dr. Hair Assistant flagged non-scalp photos. Please retake flagged photos for accurate clinical staging.',
+          'One or more photos do not clearly show the scalp. Retake them for a better assessment.',
         ),
         findsOneWidget,
       );
 
       // Front Hairline (Hair detected - minimal verified badge)
       expect(find.byIcon(LucideIcons.check), findsWidgets);
-      expect(find.text('Verified'), findsOneWidget);
+      expect(find.text('Scalp confirmed'), findsOneWidget);
 
       // Crown / Top (Non-hair image - minimal not scalp badge)
-      expect(find.text('Not Scalp'), findsOneWidget);
-      expect(find.text('Retake'), findsWidgets);
+      expect(find.text('Try another photo'), findsOneWidget);
+      expect(find.text('Change'), findsWidgets);
 
       cubit.close();
     },
@@ -237,10 +274,7 @@ void main() {
       await tester.tap(skipFinder);
       await tester.pumpAndSettle();
 
-      expect(
-        AppLocalCache.instance.getBool('has_skipped_hair_test'),
-        isTrue,
-      );
+      expect(AppLocalCache.instance.getBool('has_skipped_hair_test'), isTrue);
 
       cubit.close();
     },

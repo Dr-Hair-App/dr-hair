@@ -18,10 +18,10 @@ class AiRootCause {
   }
 
   Map<String, dynamic> toJson() => {
-        'factor': factor,
-        'severity': severity,
-        'explanation': explanation,
-      };
+    'factor': factor,
+    'severity': severity,
+    'explanation': explanation,
+  };
 }
 
 class AiDietPlan {
@@ -57,12 +57,12 @@ class AiDietPlan {
   }
 
   Map<String, dynamic> toJson() => {
-        'summary': summary,
-        'foods_to_eat': foodsToEat,
-        'foods_to_avoid': foodsToAvoid,
-        'hydration_target': hydrationTarget,
-        'key_nutrients': keyNutrients,
-      };
+    'summary': summary,
+    'foods_to_eat': foodsToEat,
+    'foods_to_avoid': foodsToAvoid,
+    'hydration_target': hydrationTarget,
+    'key_nutrients': keyNutrients,
+  };
 }
 
 class AiLifestyleGuidance {
@@ -95,21 +95,18 @@ class AiLifestyleGuidance {
   }
 
   Map<String, dynamic> toJson() => {
-        'summary': summary,
-        'scalp_care_tips': scalpCareTips,
-        'oiling_rules': oilingRules,
-        'sleep_and_stress': sleepAndStress,
-      };
+    'summary': summary,
+    'scalp_care_tips': scalpCareTips,
+    'oiling_rules': oilingRules,
+    'sleep_and_stress': sleepAndStress,
+  };
 }
 
 class AiRegimenStep {
   final String step;
   final String instruction;
 
-  const AiRegimenStep({
-    required this.step,
-    required this.instruction,
-  });
+  const AiRegimenStep({required this.step, required this.instruction});
 
   factory AiRegimenStep.fromJson(Map<String, dynamic> json) {
     return AiRegimenStep(
@@ -118,10 +115,7 @@ class AiRegimenStep {
     );
   }
 
-  Map<String, dynamic> toJson() => {
-        'step': step,
-        'instruction': instruction,
-      };
+  Map<String, dynamic> toJson() => {'step': step, 'instruction': instruction};
 }
 
 class AiTargetProduct {
@@ -144,10 +138,10 @@ class AiTargetProduct {
   }
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'category': category,
-        'reason': reason,
-      };
+    'name': name,
+    'category': category,
+    'reason': reason,
+  };
 }
 
 class AiRecommendedRegimen {
@@ -169,24 +163,28 @@ class AiRecommendedRegimen {
       summary: json['summary']?.toString() ?? '',
       dailySteps: rawSteps is List
           ? rawSteps
-              .whereType<Map>()
-              .map((m) => AiRegimenStep.fromJson(Map<String, dynamic>.from(m)))
-              .toList()
+                .whereType<Map>()
+                .map(
+                  (m) => AiRegimenStep.fromJson(Map<String, dynamic>.from(m)),
+                )
+                .toList()
           : const [],
       targetProducts: rawProducts is List
           ? rawProducts
-              .whereType<Map>()
-              .map((m) => AiTargetProduct.fromJson(Map<String, dynamic>.from(m)))
-              .toList()
+                .whereType<Map>()
+                .map(
+                  (m) => AiTargetProduct.fromJson(Map<String, dynamic>.from(m)),
+                )
+                .toList()
           : const [],
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'summary': summary,
-        'daily_steps': dailySteps.map((s) => s.toJson()).toList(),
-        'target_products': targetProducts.map((p) => p.toJson()).toList(),
-      };
+    'summary': summary,
+    'daily_steps': dailySteps.map((s) => s.toJson()).toList(),
+    'target_products': targetProducts.map((p) => p.toJson()).toList(),
+  };
 }
 
 class AiAssessmentModel {
@@ -197,6 +195,9 @@ class AiAssessmentModel {
   final AiDietPlan dietPlan;
   final AiLifestyleGuidance lifestyleGuidance;
   final AiRecommendedRegimen recommendedRegimen;
+  final String nextStepType;
+  final String nextStepReason;
+  final bool isAvailable;
   final String generatedBy;
   final String? generatedAt;
 
@@ -208,47 +209,93 @@ class AiAssessmentModel {
     this.dietPlan = const AiDietPlan(),
     this.lifestyleGuidance = const AiLifestyleGuidance(),
     this.recommendedRegimen = const AiRecommendedRegimen(),
+    this.nextStepType = '',
+    this.nextStepReason = '',
+    this.isAvailable = true,
     this.generatedBy = 'Dr. Hair Assistant',
     this.generatedAt,
   });
 
   factory AiAssessmentModel.fromJson(Map<String, dynamic> json) {
     final rawCauses = json['root_causes'];
+    final nextStep = json['next_step_recommendation'];
+    final generator = json['generated_by']?.toString() ?? '';
+    final isAvailable =
+        json['ai_status']?.toString() != 'unavailable' &&
+        generator != 'unavailable' &&
+        generator != 'clinical-rules-engine';
+    final legacyStage = json['stage_classification']?.toString() ?? '';
+    final nextStepType = nextStep is Map
+        ? (nextStep['type']?.toString() == 'doctor_appointment'
+              ? 'doctor_appointment'
+              : nextStep['type']?.toString() == 'unavailable'
+              ? 'unavailable'
+              : 'products')
+        : RegExp(
+            r'stage\s*[- ]?\s*[45]|patchy',
+            caseSensitive: false,
+          ).hasMatch(legacyStage)
+        ? 'doctor_appointment'
+        : '';
+    final regimen = json['recommended_regimen'] is Map
+        ? AiRecommendedRegimen.fromJson(
+            Map<String, dynamic>.from(json['recommended_regimen']),
+          )
+        : const AiRecommendedRegimen();
 
     return AiAssessmentModel(
-      scalpHealthScore: int.tryParse(json['scalp_health_score']?.toString() ?? '') ?? 70,
-      stageClassification: json['stage_classification']?.toString() ?? 'Stage 2 - Early Thinning',
+      scalpHealthScore: isAvailable
+          ? int.tryParse(json['scalp_health_score']?.toString() ?? '') ?? 70
+          : 0,
+      stageClassification: isAvailable
+          ? json['stage_classification']?.toString() ??
+                'Stage 2 - Early Thinning'
+          : '',
       summary: json['summary']?.toString() ?? '',
       rootCauses: rawCauses is List
           ? rawCauses
-              .whereType<Map>()
-              .map((m) => AiRootCause.fromJson(Map<String, dynamic>.from(m)))
-              .toList()
+                .whereType<Map>()
+                .map((m) => AiRootCause.fromJson(Map<String, dynamic>.from(m)))
+                .toList()
           : const [],
       dietPlan: json['diet_plan'] is Map
           ? AiDietPlan.fromJson(Map<String, dynamic>.from(json['diet_plan']))
           : const AiDietPlan(),
       lifestyleGuidance: json['lifestyle_guidance'] is Map
-          ? AiLifestyleGuidance.fromJson(Map<String, dynamic>.from(json['lifestyle_guidance']))
+          ? AiLifestyleGuidance.fromJson(
+              Map<String, dynamic>.from(json['lifestyle_guidance']),
+            )
           : const AiLifestyleGuidance(),
-      recommendedRegimen: json['recommended_regimen'] is Map
-          ? AiRecommendedRegimen.fromJson(Map<String, dynamic>.from(json['recommended_regimen']))
-          : const AiRecommendedRegimen(),
-      generatedBy: json['generated_by']?.toString() ?? 'Dr. Hair Assistant',
+      recommendedRegimen: nextStepType == 'doctor_appointment'
+          ? AiRecommendedRegimen(
+              summary: regimen.summary,
+              dailySteps: regimen.dailySteps,
+            )
+          : regimen,
+      nextStepType: nextStepType,
+      nextStepReason: nextStep is Map
+          ? nextStep['reason']?.toString() ?? ''
+          : '',
+      isAvailable: isAvailable,
+      generatedBy: generator.isNotEmpty ? generator : 'Dr. Hair Assistant',
       generatedAt: json['generated_at']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'scalp_health_score': scalpHealthScore,
-        'stage_classification': stageClassification,
-        'summary': summary,
-        'root_causes': rootCauses.map((c) => c.toJson()).toList(),
-        'diet_plan': dietPlan.toJson(),
-        'lifestyle_guidance': lifestyleGuidance.toJson(),
-        'recommended_regimen': recommendedRegimen.toJson(),
-        'generated_by': generatedBy,
-        'generated_at': generatedAt,
-      };
+    'scalp_health_score': scalpHealthScore,
+    'stage_classification': stageClassification,
+    'summary': summary,
+    'root_causes': rootCauses.map((c) => c.toJson()).toList(),
+    'diet_plan': dietPlan.toJson(),
+    'lifestyle_guidance': lifestyleGuidance.toJson(),
+    'recommended_regimen': recommendedRegimen.toJson(),
+    'next_step_recommendation': {
+      'type': nextStepType,
+      'reason': nextStepReason,
+    },
+    'ai_status': isAvailable ? 'available' : 'unavailable',
+    'generated_by': generatedBy,
+    'generated_at': generatedAt,
+  };
 }
-

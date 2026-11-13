@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:dr_hair/core/storage/app_local_cache.dart';
+import 'package:dr_hair/features/hair_test/data/hair_image_detector.dart';
 import 'package:dr_hair/features/hair_test/domain/models/hair_photo_analysis.dart';
 import 'package:dr_hair/features/hair_test/presentation/viewmodels/hair_test_cubit.dart';
 import 'package:dr_hair/features/treatment/data/patient_clinical_api.dart';
@@ -26,6 +30,83 @@ class _FakeImagePicker extends Fake implements ImagePicker {
 
 void main() {
   group('HairTestCubit', () {
+    test('keeps assessment pending until the AI response is ready', () async {
+      final aiRequestStarted = Completer<void>();
+      final aiResponse = Completer<Map<String, dynamic>>();
+      final dio = Dio(BaseOptions(baseUrl: 'https://test.drhair.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) async {
+            if (options.path == '/api/v1/hair-tests/submit_form') {
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: {'reference_no': 'HT-TEST-001'},
+                ),
+              );
+              return;
+            }
+            if (options.path == '/HairTest/ai_assessment') {
+              if (!aiRequestStarted.isCompleted) aiRequestStarted.complete();
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: await aiResponse.future,
+                ),
+              );
+              return;
+            }
+            handler.reject(DioException(requestOptions: options));
+          },
+        ),
+      );
+      final cubit = HairTestCubit(dio: dio, cache: AppLocalCache.inMemory());
+      cubit
+        ..selectPrimaryConcern('Early thinning')
+        ..selectDuration('Less than 6 months')
+        ..selectDandruff('Occasional flakes')
+        ..selectStressLevel('Moderate')
+        ..selectGutHealth('Normal')
+        ..selectFamilyHistory('No known family history')
+        ..setAllergyStatus('No known allergies')
+        ..setCurrentMedicationsStatus('No');
+
+      final submission = cubit.submitTest(
+        sessionToken: 'test-session-token',
+        patientName: 'Test Patient',
+        patientAge: 30,
+      );
+      await aiRequestStarted.future;
+
+      expect(cubit.state.isSubmitting, isTrue);
+      expect(cubit.state.isSubmitted, isFalse);
+      expect(cubit.state.aiAssessment, isNull);
+
+      aiResponse.complete({
+        'data': {
+          'ai_assessment': {
+            'ai_status': 'available',
+            'scalp_health_score': 72,
+            'stage_classification': 'Reported pattern',
+            'summary': 'Screening summary based on reported answers.',
+            'recommended_regimen': {'daily_steps': []},
+            'next_step_recommendation': {
+              'type': 'products',
+              'reason': 'Daily care guidance is a reasonable next step.',
+            },
+          },
+        },
+      });
+      await submission;
+
+      expect(cubit.state.isSubmitting, isFalse);
+      expect(cubit.state.isSubmitted, isTrue);
+      expect(cubit.state.aiAssessment?.isAvailable, isTrue);
+      await cubit.close();
+    });
+
     test('initial state requires the user to provide answers', () {
       final cubit = HairTestCubit();
       expect(cubit.state.currentStep, 0);
@@ -130,129 +211,158 @@ void main() {
       cubit.close();
     });
 
-    test('pickPhoto analyzes photo and detects hair vs non-hair images', () async {
-      // 1. Genuine hair photo
-      final hairPicker = _FakeImagePicker(
-        fileToReturn: XFile('/tmp/scalp_crown.jpg'),
-      );
-      final hairCubit = HairTestCubit(imagePicker: hairPicker);
+    test(
+      'pickPhoto analyzes photo and detects hair vs non-hair images',
+      () async {
+        HairImageDetector.analyzerOverride = (path, {label = 'Scalp'}) async {
+          if (path.contains('scalp')) {
+            return HairPhotoAnalysis(
+              label: label,
+              photoPath: path,
+              status: HairDetectionStatus.hairDetected,
+              confidence: 0.95,
+              message: 'Hair & scalp detected',
+              details: 'Test image contains scalp and hair.',
+            );
+          }
+          return HairPhotoAnalysis(
+            label: label,
+            photoPath: path,
+            status: HairDetectionStatus.notHair,
+            confidence: 0.1,
+            message: 'Not scalp',
+            details: 'Test image does not contain a scalp.',
+          );
+        };
+        addTearDown(() => HairImageDetector.analyzerOverride = null);
 
-      await hairCubit.pickPhoto(
-        label: 'Crown / Top',
-        source: ImageSource.camera,
-      );
+        // 1. Genuine hair photo
+        final hairPicker = _FakeImagePicker(
+          fileToReturn: XFile('/tmp/scalp_crown.jpg'),
+        );
+        final hairCubit = HairTestCubit(imagePicker: hairPicker);
 
-      final analysis = hairCubit.state.getAnalysis('Crown / Top');
-      expect(analysis, isNotNull);
-      expect(analysis!.isHair, isTrue);
-      expect(analysis.status, HairDetectionStatus.hairDetected);
-      expect(analysis.message, contains('Hair & scalp detected'));
-      expect(hairCubit.state.hasNonHairPhoto, isFalse);
-      hairCubit.close();
+        await hairCubit.pickPhoto(
+          label: 'Crown / Top',
+          source: ImageSource.camera,
+        );
 
-      // 2. Non-hair photo (e.g. car, random object)
-      final nonHairPicker = _FakeImagePicker(
-        fileToReturn: XFile('/tmp/car_non_hair.jpg'),
-      );
-      final nonHairCubit = HairTestCubit(imagePicker: nonHairPicker);
+        final analysis = hairCubit.state.getAnalysis('Crown / Top');
+        expect(analysis, isNotNull);
+        expect(analysis!.isHair, isTrue);
+        expect(analysis.status, HairDetectionStatus.hairDetected);
+        expect(analysis.message, contains('Hair & scalp detected'));
+        expect(hairCubit.state.hasNonHairPhoto, isFalse);
+        hairCubit.close();
 
-      await nonHairCubit.pickPhoto(
-        label: 'Front Hairline',
-        source: ImageSource.gallery,
-      );
+        // 2. Non-hair photo (e.g. car, random object)
+        final nonHairPicker = _FakeImagePicker(
+          fileToReturn: XFile('/tmp/car_non_hair.jpg'),
+        );
+        final nonHairCubit = HairTestCubit(imagePicker: nonHairPicker);
 
-      final nonHairAnalysis = nonHairCubit.state.getAnalysis('Front Hairline');
-      expect(nonHairAnalysis, isNotNull);
-      expect(nonHairAnalysis!.isNotHair, isTrue);
-      expect(nonHairAnalysis.status, HairDetectionStatus.notHair);
-      expect(nonHairAnalysis.message, contains('No hair or scalp detected'));
-      expect(nonHairCubit.state.hasNonHairPhoto, isTrue);
-      nonHairCubit.close();
+        await nonHairCubit.pickPhoto(
+          label: 'Front Hairline',
+          source: ImageSource.gallery,
+        );
 
-      // 3. Paper / document photo rejection
-      final paperPicker = _FakeImagePicker(
-        fileToReturn: XFile('/tmp/white_paper_document.jpg'),
-      );
-      final paperCubit = HairTestCubit(imagePicker: paperPicker);
+        final nonHairAnalysis = nonHairCubit.state.getAnalysis(
+          'Front Hairline',
+        );
+        expect(nonHairAnalysis, isNotNull);
+        expect(nonHairAnalysis!.isNotHair, isTrue);
+        expect(nonHairAnalysis.status, HairDetectionStatus.notHair);
+        expect(nonHairAnalysis.message, contains('No hair or scalp detected'));
+        expect(nonHairCubit.state.hasNonHairPhoto, isTrue);
+        nonHairCubit.close();
 
-      await paperCubit.pickPhoto(
-        label: 'Side Profile / Temples',
-        source: ImageSource.gallery,
-      );
+        // 3. Paper / document photo rejection
+        final paperPicker = _FakeImagePicker(
+          fileToReturn: XFile('/tmp/white_paper_document.jpg'),
+        );
+        final paperCubit = HairTestCubit(imagePicker: paperPicker);
 
-      final paperAnalysis = paperCubit.state.getAnalysis('Side Profile / Temples');
-      expect(paperAnalysis, isNotNull);
-      expect(paperAnalysis!.isNotHair, isTrue);
-      expect(paperAnalysis.status, HairDetectionStatus.notHair);
-      expect(paperAnalysis.message, contains('No hair or scalp detected'));
-      expect(paperCubit.state.hasNonHairPhoto, isTrue);
-      paperCubit.close();
+        await paperCubit.pickPhoto(
+          label: 'Side Profile / Temples',
+          source: ImageSource.gallery,
+        );
 
-      // 4. Road / asphalt surface photo rejection
-      final roadPicker = _FakeImagePicker(
-        fileToReturn: XFile('/tmp/road_asphalt_pavement.jpg'),
-      );
-      final roadCubit = HairTestCubit(imagePicker: roadPicker);
+        final paperAnalysis = paperCubit.state.getAnalysis(
+          'Side Profile / Temples',
+        );
+        expect(paperAnalysis, isNotNull);
+        expect(paperAnalysis!.isNotHair, isTrue);
+        expect(paperAnalysis.status, HairDetectionStatus.notHair);
+        expect(paperAnalysis.message, contains('No hair or scalp detected'));
+        expect(paperCubit.state.hasNonHairPhoto, isTrue);
+        paperCubit.close();
 
-      await roadCubit.pickPhoto(
-        label: 'Back of Head',
-        source: ImageSource.gallery,
-      );
+        // 4. Road / asphalt surface photo rejection
+        final roadPicker = _FakeImagePicker(
+          fileToReturn: XFile('/tmp/road_asphalt_pavement.jpg'),
+        );
+        final roadCubit = HairTestCubit(imagePicker: roadPicker);
 
-      final roadAnalysis = roadCubit.state.getAnalysis('Back of Head');
-      expect(roadAnalysis, isNotNull);
-      expect(roadAnalysis!.isNotHair, isTrue);
-      expect(roadAnalysis.status, HairDetectionStatus.notHair);
-      expect(roadAnalysis.message, contains('No hair or scalp detected'));
-      expect(roadCubit.state.hasNonHairPhoto, isTrue);
-      roadCubit.close();
+        await roadCubit.pickPhoto(
+          label: 'Back of Head',
+          source: ImageSource.gallery,
+        );
 
-      // 5. Multiple people / group photo rejection
-      final groupPicker = _FakeImagePicker(
-        fileToReturn: XFile('/tmp/multiple_people_group_shot.jpg'),
-      );
-      final groupCubit = HairTestCubit(imagePicker: groupPicker);
+        final roadAnalysis = roadCubit.state.getAnalysis('Back of Head');
+        expect(roadAnalysis, isNotNull);
+        expect(roadAnalysis!.isNotHair, isTrue);
+        expect(roadAnalysis.status, HairDetectionStatus.notHair);
+        expect(roadAnalysis.message, contains('No hair or scalp detected'));
+        expect(roadCubit.state.hasNonHairPhoto, isTrue);
+        roadCubit.close();
 
-      await groupCubit.pickPhoto(
-        label: 'Crown / Top',
-        source: ImageSource.gallery,
-      );
+        // 5. Multiple people / group photo rejection
+        final groupPicker = _FakeImagePicker(
+          fileToReturn: XFile('/tmp/multiple_people_group_shot.jpg'),
+        );
+        final groupCubit = HairTestCubit(imagePicker: groupPicker);
 
-      final groupAnalysis = groupCubit.state.getAnalysis('Crown / Top');
-      expect(groupAnalysis, isNotNull);
-      expect(groupAnalysis!.isNotHair, isTrue);
-      expect(groupAnalysis.status, HairDetectionStatus.notHair);
-      expect(groupAnalysis.message, contains('No hair or scalp detected'));
-      expect(groupCubit.state.hasNonHairPhoto, isTrue);
-      groupCubit.close();
-    });
+        await groupCubit.pickPhoto(
+          label: 'Crown / Top',
+          source: ImageSource.gallery,
+        );
 
-    test('markAssessmentSkipped sets cache flag and submit clears it', () async {
-      SharedPreferences.setMockInitialValues({});
-      await AppLocalCache.instance.clearAll();
+        final groupAnalysis = groupCubit.state.getAnalysis('Crown / Top');
+        expect(groupAnalysis, isNotNull);
+        expect(groupAnalysis!.isNotHair, isTrue);
+        expect(groupAnalysis.status, HairDetectionStatus.notHair);
+        expect(groupAnalysis.message, contains('No hair or scalp detected'));
+        expect(groupCubit.state.hasNonHairPhoto, isTrue);
+        groupCubit.close();
+      },
+    );
 
-      final cubit = HairTestCubit();
-      await cubit.markAssessmentSkipped();
-      expect(
-        AppLocalCache.instance.getBool('has_skipped_hair_test'),
-        isTrue,
-      );
+    test(
+      'markAssessmentSkipped sets cache flag and submit clears it',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        await AppLocalCache.instance.clearAll();
 
-      // Submitting assessment completes it and clears skipped flag
-      cubit.selectGender('Male');
-      cubit.selectPrimaryConcern('Stage 1 - Receding hairline at temples');
-      await cubit.skipPhotosAndSubmit();
+        final cubit = HairTestCubit();
+        await cubit.markAssessmentSkipped();
+        expect(AppLocalCache.instance.getBool('has_skipped_hair_test'), isTrue);
 
-      expect(
-        AppLocalCache.instance.getBool('has_completed_hair_test'),
-        isTrue,
-      );
-      expect(
-        AppLocalCache.instance.getBool('has_skipped_hair_test'),
-        isFalse,
-      );
-      cubit.close();
-    });
+        // Submitting assessment completes it and clears skipped flag
+        cubit.selectGender('Male');
+        cubit.selectPrimaryConcern('Stage 1 - Receding hairline at temples');
+        await cubit.skipPhotosAndSubmit();
+
+        expect(
+          AppLocalCache.instance.getBool('has_completed_hair_test'),
+          isTrue,
+        );
+        expect(
+          AppLocalCache.instance.getBool('has_skipped_hair_test'),
+          isFalse,
+        );
+        cubit.close();
+      },
+    );
 
     test('reset clears state to initial defaults', () {
       final cubit = HairTestCubit();

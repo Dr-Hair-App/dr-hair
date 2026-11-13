@@ -299,14 +299,15 @@ class _HairTestContent extends StatelessWidget {
                           : () async {
                               final auth = context.read<AuthCubit?>()?.state;
                               if (state.currentStep == state.totalSteps - 1 &&
-                                  state.hasNonHairPhoto) {
+                                  (state.hasPhotoNeedingReview ||
+                                      state.hasUnverifiedPhoto)) {
                                 final proceed = await showDialog<bool>(
                                   context: context,
                                   builder: (ctx) => AlertDialog(
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(18),
                                     ),
-                                    title: const Row(
+                                    title: Row(
                                       children: [
                                         Icon(
                                           LucideIcons.alertTriangle,
@@ -315,7 +316,9 @@ class _HairTestContent extends StatelessWidget {
                                         ),
                                         SizedBox(width: 8),
                                         Text(
-                                          'Dr. Hair Assistant Flagged Photos',
+                                          state.hasUnverifiedPhoto
+                                              ? 'Photo check incomplete'
+                                              : 'Photo needs another look',
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w800,
@@ -323,8 +326,10 @@ class _HairTestContent extends StatelessWidget {
                                         ),
                                       ],
                                     ),
-                                    content: const Text(
-                                      'Dr. Hair Assistant analyzed your uploaded photos and noticed one or more images do not show a clear view of your scalp or hair follicles. Retaking them ensures your doctor and AI treatment plan are 100% accurate.\n\nWould you like to proceed anyway?',
+                                    content: Text(
+                                      state.hasUnverifiedPhoto
+                                          ? 'We could not check one or more photos. You can retry now, or continue and let your clinician review them.'
+                                          : 'One or more photos do not show a clear scalp view. Retake them for a better assessment, or continue and let your clinician review them.',
                                       style: TextStyle(
                                         fontSize: 13,
                                         height: 1.4,
@@ -334,7 +339,11 @@ class _HairTestContent extends StatelessWidget {
                                       OutlinedButton(
                                         onPressed: () =>
                                             Navigator.of(ctx).pop(false),
-                                        child: const Text('Retake Photos'),
+                                        child: Text(
+                                          state.hasUnverifiedPhoto
+                                              ? 'Review photos'
+                                              : 'Retake photos',
+                                        ),
                                       ),
                                       FilledButton(
                                         style: FilledButton.styleFrom(
@@ -443,7 +452,7 @@ class _HairTestContent extends StatelessWidget {
               children: [
                 const Expanded(
                   child: Text(
-                    'Upload Scalp Photos',
+                    'Scalp photos',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
@@ -451,43 +460,11 @@ class _HairTestContent extends StatelessWidget {
                     ),
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.25),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        LucideIcons.sparkles,
-                        size: 12,
-                        color: AppColors.primary,
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        'Dr. Hair Assistant',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 6),
             const Text(
-              'Dr. Hair Assistant uses AI Vision to analyze follicle density, scalp tone, and thinning angles in real time.',
+              'Add clear, close-up photos. AI will check that each image shows your scalp.',
               style: TextStyle(
                 fontSize: 13,
                 color: AppColors.secondaryDark,
@@ -513,7 +490,7 @@ class _HairTestContent extends StatelessWidget {
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Dr. Hair Assistant flagged non-scalp photos. Please retake flagged photos for accurate clinical staging.',
+                        'One or more photos do not clearly show the scalp. Retake them for a better assessment.',
                         style: TextStyle(
                           fontSize: 12,
                           color: Color(0xFFB91C1C),
@@ -692,456 +669,213 @@ class _HairTestContent extends StatelessWidget {
     IconData icon,
     HairTestState state,
   ) {
-    final String? photoPath = state.getPhoto(label);
-    final bool hasPhoto = photoPath != null && photoPath.isNotEmpty;
-    final HairPhotoAnalysis? analysis = state.getAnalysis(label);
-
-    Color borderColor;
-    Color glowColor;
-    if (!hasPhoto) {
-      borderColor = AppColors.primary100;
-      glowColor = Colors.transparent;
-    } else if (analysis == null || analysis.isAnalyzing) {
-      borderColor = AppColors.primary;
-      glowColor = AppColors.primary.withValues(alpha: 0.25);
-    } else if (analysis.isHair) {
-      borderColor = const Color(0xFF16A34A);
-      glowColor = const Color(0xFF16A34A).withValues(alpha: 0.22);
-    } else if (analysis.isNotHair) {
-      borderColor = const Color(0xFFDC2626);
-      glowColor = const Color(0xFFDC2626).withValues(alpha: 0.22);
-    } else {
-      borderColor = const Color(0xFFD97706);
-      glowColor = const Color(0xFFD97706).withValues(alpha: 0.22);
-    }
+    final photoPath = state.getPhoto(label);
+    final hasPhoto = photoPath != null && photoPath.isNotEmpty;
+    final analysis = state.getAnalysis(label);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-            onTap: () => _showPhotoSourceBottomSheet(context, label),
-            borderRadius: BorderRadius.circular(20),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              width: double.infinity,
-              height: 164,
-              decoration: BoxDecoration(
-                color: hasPhoto ? Colors.black : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: borderColor,
-                  width: hasPhoto ? 1.6 : 1.2,
-                ),
-                boxShadow: [
-                  if (hasPhoto)
-                    BoxShadow(
-                      color: glowColor,
-                      blurRadius: 14,
-                      spreadRadius: 1,
-                      offset: const Offset(0, 4),
-                    )
-                  else
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                ],
+        onTap: () => _showPhotoSourceBottomSheet(context, label),
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          height: 156,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: hasPhoto ? AppColors.primary100 : AppColors.primary100,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.035),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (hasPhoto) ...[
-                      if (photoPath.startsWith('http://') ||
-                          photoPath.startsWith('https://'))
-                        CustomCachedImage(
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (hasPhoto)
+                  photoPath.startsWith('http://') ||
+                          photoPath.startsWith('https://')
+                      ? CustomCachedImage(
                           imageUrl: photoPath,
                           fit: BoxFit.cover,
                         )
-                      else
-                        Image.file(
+                      : Image.file(
                           File(photoPath),
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) => Center(
-                            child: Icon(icon, color: Colors.white70, size: 36),
-                          ),
-                        ),
-
-                      // Futuristic scanner overlay when analyzing
-                      if (analysis == null || analysis.isAnalyzing)
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black.withValues(alpha: 0.35),
-                                  AppColors.primary.withValues(alpha: 0.2),
-                                  Colors.black.withValues(alpha: 0.6),
-                                ],
-                              ),
-                            ),
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.75),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.6,
-                                    ),
-                                  ),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    SizedBox.square(
-                                      dimension: 12,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 1.8,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      'Dr. Hair Assistant Scanning...',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                            child: Icon(
+                              icon,
+                              size: 28,
+                              color: AppColors.primary,
                             ),
                           ),
-                        ),
-
-                      // Top Glass Bar: Angle Tag & AI Detection Badge
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        right: 8,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 3.5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.58),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(icon, size: 11, color: Colors.white),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    label,
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            _buildDetectionBadge(analysis),
-                          ],
+                        )
+                else
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, size: 25, color: AppColors.primary),
+                      const SizedBox(height: 9),
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryDark,
                         ),
                       ),
-
-                      // Minimal floating retake button on bottom-right
-                      Positioned(
-                        bottom: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.65),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.25),
-                            ),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                LucideIcons.camera,
-                                size: 11,
-                                color: Colors.white,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Retake',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ] else ...[
-                      // Empty state: Modern AI Scanner look
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              AppColors.primary.withValues(alpha: 0.03),
-                              AppColors.primary5,
-                            ],
-                          ),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(
-                                  alpha: 0.08,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    LucideIcons.sparkles,
-                                    size: 10,
-                                    color: AppColors.primary,
-                                  ),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'AI Scanner',
-                                    style: TextStyle(
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.all(11),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white,
-                                border: Border.all(
-                                  color: AppColors.primary100,
-                                  width: 1.2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.08,
-                                    ),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Icon(
-                                icon,
-                                color: AppColors.primary,
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              label,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primaryDark,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  LucideIcons.plus,
-                                  size: 11,
-                                  color: AppColors.secondaryDark,
-                                ),
-                                SizedBox(width: 3),
-                                Text(
-                                  'Tap to scan',
-                                  style: TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.secondaryDark,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Tap to add photo',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: AppColors.secondaryDark,
                         ),
                       ),
                     ],
-                  ],
-                ),
-              ),
+                  ),
+                if (hasPhoto) ...[
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: _photoOverlayPill(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(icon, size: 11, color: Colors.white),
+                          const SizedBox(width: 4),
+                          Text(
+                            label,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 8,
+                    bottom: 8,
+                    child: _buildDetectionBadge(analysis),
+                  ),
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: _photoOverlayPill(
+                      const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            LucideIcons.camera,
+                            size: 11,
+                            color: Colors.white,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'Change',
+                            style: TextStyle(fontSize: 10, color: Colors.white),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-        );
-      }
-
-  Widget _buildDetectionBadge(HairPhotoAnalysis? analysis) {
-    if (analysis == null || analysis.isAnalyzing) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.72),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
         ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox.square(
-              dimension: 10,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(width: 4),
-            Text(
-              'Scanning',
-              style: TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (analysis.isHair) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(
-          color: const Color(0xFF16A34A),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF16A34A).withValues(alpha: 0.35),
-              blurRadius: 4,
-              offset: const Offset(0, 1.5),
-            ),
-          ],
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(LucideIcons.check, size: 11, color: Colors.white),
-            SizedBox(width: 3),
-            Text(
-              'Verified',
-              style: TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (analysis.isNotHair) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-        decoration: BoxDecoration(
-          color: const Color(0xFFDC2626),
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFDC2626).withValues(alpha: 0.45),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(LucideIcons.alertTriangle, size: 10.5, color: Colors.white),
-            SizedBox(width: 3),
-            Text(
-              'Not Scalp',
-              style: TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Low Clarity
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
-      decoration: BoxDecoration(
-        color: const Color(0xFFD97706),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(LucideIcons.helpCircle, size: 10.5, color: Colors.white),
-          SizedBox(width: 3),
-          Text(
-            'Low Clarity',
-            style: TextStyle(
-              fontSize: 9.5,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            ),
-          ),
-        ],
       ),
     );
   }
+
+  Widget _photoOverlayPill(Widget child) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: Colors.black.withValues(alpha: 0.62),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: child,
+  );
+
+  Widget _buildDetectionBadge(HairPhotoAnalysis? analysis) {
+    if (analysis == null || analysis.isAnalyzing) {
+      return _statusPill(
+        const SizedBox.square(
+          dimension: 10,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            color: Colors.white,
+          ),
+        ),
+        'Checking',
+        const Color(0xFF374151),
+      );
+    }
+    if (analysis.isHair) {
+      return _statusPill(
+        const Icon(LucideIcons.check, size: 11, color: Colors.white),
+        'Scalp confirmed',
+        const Color(0xFF15803D),
+      );
+    }
+    if (analysis.isNotHair) {
+      return _statusPill(
+        const Icon(LucideIcons.refreshCw, size: 11, color: Colors.white),
+        'Try another photo',
+        const Color(0xFFB91C1C),
+      );
+    }
+    if (analysis.isVerificationUnavailable) {
+      return _statusPill(
+        const Icon(LucideIcons.wifiOff, size: 11, color: Colors.white),
+        'Check unavailable',
+        const Color(0xFF4B5563),
+      );
+    }
+    return _statusPill(
+      const Icon(LucideIcons.refreshCw, size: 11, color: Colors.white),
+      'Retake: clearer photo',
+      const Color(0xFFB45309),
+    );
+  }
+
+  Widget _statusPill(Widget icon, String label, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        icon,
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    ),
+  );
 
   void _showPhotoSourceBottomSheet(BuildContext context, String label) {
     final cubit = context.read<HairTestCubit>();

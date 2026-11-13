@@ -4,6 +4,7 @@ enum HairDetectionStatus {
   hairDetected,
   notHair,
   lowClarity,
+  verificationUnavailable,
 }
 
 /// Analysis result for an uploaded hair/scalp photo.
@@ -28,6 +29,8 @@ class HairPhotoAnalysis {
   bool get isAnalyzing => status == HairDetectionStatus.analyzing;
   bool get isNotHair => status == HairDetectionStatus.notHair;
   bool get isLowClarity => status == HairDetectionStatus.lowClarity;
+  bool get isVerificationUnavailable =>
+      status == HairDetectionStatus.verificationUnavailable;
 
   Map<String, dynamic> toJson() => {
     'label': label,
@@ -44,12 +47,11 @@ class HairPhotoAnalysis {
       photoPath: json['photoPath'] as String? ?? '',
       status: HairDetectionStatus.values.firstWhere(
         (e) => e.name == json['status'],
-        orElse: () => HairDetectionStatus.hairDetected,
+        orElse: () => HairDetectionStatus.verificationUnavailable,
       ),
-      confidence: (json['confidence'] as num?)?.toDouble() ?? 0.85,
+      confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
       message: json['message'] as String? ?? '',
       details: json['details'] as String? ?? '',
     );
   }
 }
-

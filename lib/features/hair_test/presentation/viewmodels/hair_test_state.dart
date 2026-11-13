@@ -136,9 +136,15 @@ class HairTestState {
           : errorMessage ?? this.errorMessage,
       clinicalReports: clinicalReports ?? this.clinicalReports,
       assessmentStatus: assessmentStatus ?? this.assessmentStatus,
-      doctorCarePlan: clearDoctorCarePlan ? null : doctorCarePlan ?? this.doctorCarePlan,
-      doctorReviewNote: clearDoctorReviewNote ? null : doctorReviewNote ?? this.doctorReviewNote,
-      aiAssessment: clearAiAssessment ? null : aiAssessment ?? this.aiAssessment,
+      doctorCarePlan: clearDoctorCarePlan
+          ? null
+          : doctorCarePlan ?? this.doctorCarePlan,
+      doctorReviewNote: clearDoctorReviewNote
+          ? null
+          : doctorReviewNote ?? this.doctorReviewNote,
+      aiAssessment: clearAiAssessment
+          ? null
+          : aiAssessment ?? this.aiAssessment,
     );
   }
 
@@ -151,6 +157,14 @@ class HairTestState {
   HairPhotoAnalysis? getAnalysis(String label) => photoAnalysis[label];
   bool get hasNonHairPhoto =>
       photoAnalysis.values.any((a) => a.status == HairDetectionStatus.notHair);
+  bool get hasPhotoNeedingReview => photoAnalysis.values.any(
+    (a) =>
+        a.status == HairDetectionStatus.notHair ||
+        a.status == HairDetectionStatus.lowClarity,
+  );
+  bool get hasUnverifiedPhoto => photoAnalysis.values.any(
+    (a) => a.status == HairDetectionStatus.verificationUnavailable,
+  );
 
   /// Plain-language summary based on the answers selected by the user.
   String get assessmentSummary {

@@ -13,7 +13,9 @@ class ProductsCubit extends Cubit<ProductsState> {
       super(initialState ?? ProductsState.initial());
 
   String? _rootCauseForIndex(int index) {
-    if (state.categories.isNotEmpty && index >= 0 && index < state.categories.length) {
+    if (state.categories.isNotEmpty &&
+        index >= 0 &&
+        index < state.categories.length) {
       final id = state.categories[index].id.toLowerCase();
       if (id == 'all') return null;
       return id;
@@ -32,16 +34,20 @@ class ProductsCubit extends Cubit<ProductsState> {
     return ids[index];
   }
 
-  Future<void> loadProducts({bool refresh = false}) async {
+  Future<void> loadProducts({bool refresh = false, int limit = 20}) async {
     emit(state.copyWith(isLoading: true, errorMessage: null));
     try {
       final categoriesFuture = _repository.getCategories();
       final productsFuture = _repository.getProducts(
         rootCause: _rootCauseForIndex(state.selectedCategoryIndex),
         query: state.searchQuery,
+        limit: limit,
       );
 
-      final (categories, result) = await (categoriesFuture, productsFuture).wait;
+      final (categories, result) = await (
+        categoriesFuture,
+        productsFuture,
+      ).wait;
       ProductItem.cacheProducts(result.items);
       emit(
         state.copyWith(

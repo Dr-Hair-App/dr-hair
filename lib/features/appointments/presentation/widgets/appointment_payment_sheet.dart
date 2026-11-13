@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:dio/dio.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
@@ -33,6 +34,7 @@ class AppointmentPaymentSheet extends StatefulWidget {
   final String? patientToken;
   final String? patientPhone;
   final String? patientName;
+  final PatientAppointmentApi? appointmentApi;
 
   const AppointmentPaymentSheet({
     super.key,
@@ -44,6 +46,7 @@ class AppointmentPaymentSheet extends StatefulWidget {
     this.patientToken,
     this.patientPhone,
     this.patientName,
+    this.appointmentApi,
   });
 
   static Future<AppointmentPaymentResult?> show(
@@ -56,6 +59,7 @@ class AppointmentPaymentSheet extends StatefulWidget {
     String? patientToken,
     String? patientPhone,
     String? patientName,
+    PatientAppointmentApi? appointmentApi,
   }) {
     return showModalBottomSheet<AppointmentPaymentResult>(
       context: context,
@@ -70,6 +74,7 @@ class AppointmentPaymentSheet extends StatefulWidget {
         patientToken: patientToken,
         patientPhone: patientPhone,
         patientName: patientName,
+        appointmentApi: appointmentApi,
       ),
     );
   }
@@ -105,11 +110,24 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) {
     if (!mounted) return;
-    setState(() => _isProcessing = false);
-
     final paymentId = response.paymentId ?? '';
     final signature = response.signature ?? '';
     final orderId = response.orderId ?? _activeIntentId ?? '';
+    final isAuthenticatedPayment =
+        widget.patientToken != null &&
+        widget.patientToken!.trim().isNotEmpty &&
+        widget.patientToken != 'test-token';
+
+    if (isAuthenticatedPayment &&
+        (paymentId.isEmpty || signature.isEmpty || orderId.isEmpty)) {
+      setState(() {
+        _isProcessing = false;
+        _errorMessage = 'Payment returned incomplete verification details. Your appointment is not confirmed. Contact the clinic before trying again.';
+      });
+      return;
+    }
+
+    setState(() => _isProcessing = false);
 
     Navigator.pop(
       context,
@@ -128,15 +146,16 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
     if (!mounted) return;
     setState(() {
       _isProcessing = false;
-      _errorMessage = response.message ??
-          'Payment was not completed. You can retry with Razorpay or choose pay at clinic.';
+      _errorMessage = response.message ?? 'Payment was not completed. You can retry with Razorpay or choose pay at clinic.';
     });
   }
 
   void _handleExternalWallet(ExternalWalletResponse response) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Selected wallet: ${response.walletName ?? 'Wallet'}')),
+      SnackBar(
+        content: Text('Selected wallet: ${response.walletName ?? 'Wallet'}'),
+      ),
     );
   }
 
@@ -209,8 +228,8 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
                           widget.fee <= 0
                               ? '100% Free Consultation · No payment required'
                               : widget.paymentRequired
-                                  ? 'Secure OPD token reservation & consultation fee'
-                                  : 'Reserve your sitting slot · Pay at clinic desk',
+                              ? 'Secure OPD token reservation & consultation fee'
+                              : 'Reserve your sitting slot · Pay at clinic desk',
                           style: const TextStyle(
                             fontSize: 12,
                             color: AppColors.secondaryDark,
@@ -274,8 +293,8 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
                 widget.fee <= 0
                     ? 'FREE CONSULTATION CONFIRMATION'
                     : widget.paymentRequired
-                        ? 'SELECT PAYMENT METHOD'
-                        : 'BOOKING CONFIRMATION MODE',
+                    ? 'SELECT PAYMENT METHOD'
+                    : 'BOOKING CONFIRMATION MODE',
                 style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -340,12 +359,19 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(LucideIcons.alertCircle, size: 16, color: Color(0xFFDC2626)),
+                      const Icon(
+                        LucideIcons.alertCircle,
+                        size: 16,
+                        color: Color(0xFFDC2626),
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _errorMessage!,
-                          style: const TextStyle(fontSize: 11.5, color: Color(0xFFB91C1C)),
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: Color(0xFFB91C1C),
+                          ),
                         ),
                       ),
                     ],
@@ -390,7 +416,9 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w900,
-                            color: widget.fee <= 0 ? const Color(0xFF0D9488) : AppColors.primary,
+                            color: widget.fee <= 0
+                                ? const Color(0xFF0D9488)
+                                : AppColors.primary,
                           ),
                         ),
                       ],
@@ -415,8 +443,8 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
                       widget.fee <= 0
                           ? '100% complimentary in-clinic doctor visit with Dr. Jai Bansal.'
                           : widget.paymentRequired
-                              ? '100% refundable if cancelled up to 2 hours prior to slot.'
-                              : 'Cancel anytime up to 2 hours prior to appointment slot.',
+                          ? '100% refundable if cancelled up to 2 hours prior to slot.'
+                          : 'Cancel anytime up to 2 hours prior to appointment slot.',
                       style: TextStyle(
                         fontSize: 10.5,
                         color: Colors.grey.shade600,
@@ -455,10 +483,10 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
                     _isProcessing
                         ? 'Opening Razorpay Checkout…'
                         : widget.fee <= 0
-                            ? 'Confirm Free Consultation (₹0)'
-                            : _selectedMethod == 'Cash at Clinic'
-                                ? 'Confirm Booking (Pay ₹${widget.fee} at Clinic)'
-                                : 'Pay ₹${widget.fee} & Confirm Visit',
+                        ? 'Confirm Free Consultation (₹0)'
+                        : _selectedMethod == 'Cash at Clinic'
+                        ? 'Confirm Booking (Pay ₹${widget.fee} at Clinic)'
+                        : 'Pay ₹${widget.fee} & Confirm Visit',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
@@ -513,10 +541,12 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
                     title,
                     style: TextStyle(
                       fontSize: 12.5,
-                      fontWeight:
-                          isSelected ? FontWeight.w800 : FontWeight.w600,
-                      color:
-                          isSelected ? AppColors.primaryDark : Colors.grey.shade800,
+                      fontWeight: isSelected
+                          ? FontWeight.w800
+                          : FontWeight.w600,
+                      color: isSelected
+                          ? AppColors.primaryDark
+                          : Colors.grey.shade800,
                     ),
                   ),
                   const SizedBox(height: 1),
@@ -531,9 +561,7 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
               ),
             ),
             Icon(
-              isSelected
-                  ? LucideIcons.checkCircle2
-                  : LucideIcons.circle,
+              isSelected ? LucideIcons.checkCircle2 : LucideIcons.circle,
               size: 18,
               color: isSelected ? AppColors.primary : Colors.grey.shade400,
             ),
@@ -549,10 +577,7 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.secondaryDark,
-          ),
+          style: const TextStyle(fontSize: 12, color: AppColors.secondaryDark),
         ),
         Text(
           value,
@@ -572,8 +597,10 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
       _errorMessage = null;
     });
 
-    final isCash = _selectedMethod == 'Cash at Clinic';
-    final isFree = widget.fee <= 0 || !widget.paymentRequired || _selectedMethod == 'Free Consultation';
+    final isCash = _selectedMethod == 'Cash at Clinic' || (!widget.paymentRequired && widget.fee > 0);
+    final isFree =
+        widget.fee <= 0 ||
+        _selectedMethod == 'Free Consultation';
 
     // 1. Free appointment: confirm immediately with ₹0 fee
     if (isFree) {
@@ -599,7 +626,7 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
         context,
         AppointmentPaymentResult(
           amount: widget.fee,
-          paymentMethod: 'Cash at Clinic',
+          paymentMethod: 'Pay at clinic',
           paymentStatus: 'Pending',
           transactionId: '',
         ),
@@ -617,7 +644,7 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
     // If authenticated, request payment intent order from backend
     if (token != null && token.trim().isNotEmpty && token != 'test-token') {
       try {
-        final api = PatientAppointmentApi();
+        final api = widget.appointmentApi ?? PatientAppointmentApi();
         final res = await api.createPaymentIntent(
           token: token,
           startsAt: widget.startsAt,
@@ -626,13 +653,34 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
               : widget.reason.trim(),
         );
 
-        intentId = (res['orderId'] ?? res['intent_id'] ?? res['intentId'])?.toString();
-        final backendKey = ((res['keyId'] ?? res['key_id']) as String?)?.trim() ?? '';
+        intentId = (res['orderId'] ?? res['intent_id'] ?? res['intentId'])
+            ?.toString();
+        final backendKey =
+            ((res['keyId'] ?? res['key_id']) as String?)?.trim() ?? '';
         if (backendKey.isNotEmpty) activeKeyId = backendKey;
         payableAmount = (res['amount'] as num?)?.toInt() ?? payableAmount;
         currency = (res['currency'] as String?) ?? currency;
+        if (intentId == null || intentId.isEmpty) {
+          if (!mounted) return;
+          setState(() {
+            _isProcessing = false;
+            _errorMessage = 'The secure payment order was not returned. Your appointment has not been booked. Please try again.';
+          });
+          return;
+        }
       } catch (e) {
-        debugPrint('Could not create server order intent, falling back to active key: $e');
+        if (!mounted) return;
+        final serverMessage = e is DioException && e.response?.data is Map
+            ? (e.response?.data as Map)['message']?.toString()
+            : null;
+        setState(() {
+          _isProcessing = false;
+          _errorMessage =
+              serverMessage != null && serverMessage.trim().isNotEmpty
+              ? 'Secure payment could not be started. $serverMessage'
+              : 'Secure payment could not be started. Check your connection and try again. Your appointment has not been booked.';
+        });
+        return;
       }
     }
 
@@ -647,7 +695,8 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
             amount: widget.fee,
             paymentMethod: _selectedMethod,
             paymentStatus: 'Paid',
-            transactionId: 'TXN-CLINIC-${DateTime.now().millisecondsSinceEpoch}',
+            transactionId:
+                'TXN-CLINIC-${DateTime.now().millisecondsSinceEpoch}',
           ),
         );
         return;
@@ -656,8 +705,7 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
       if (!mounted) return;
       setState(() {
         _isProcessing = false;
-        _errorMessage =
-            'Razorpay Key ID is not configured. Add RAZORPAY_KEY_ID to .env or backend environment.';
+        _errorMessage = 'Razorpay Key ID is not configured. Add RAZORPAY_KEY_ID to .env or backend environment.';
       });
       return;
     }
@@ -670,7 +718,8 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
       'amount': payableAmount,
       'currency': currency,
       'name': 'Dr. Hair Clinic',
-      'description': 'Consultation & Scalp Trichoscopy with ${widget.doctorName}',
+      'description':
+          'Consultation & Scalp Trichoscopy with ${widget.doctorName}',
       'theme': {'color': '#0F766E'},
       'prefill': {
         'contact': widget.patientPhone ?? '',
@@ -685,14 +734,17 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
     } catch (e) {
       if (!mounted) return;
       // In automated flutter test / headless runner without native plugin channel:
-      if (token == 'test-token' || widget.patientPhone == 'test-phone' || token == null) {
+      if (token == 'test-token' ||
+          widget.patientPhone == 'test-phone' ||
+          token == null) {
         Navigator.pop(
           context,
           AppointmentPaymentResult(
             amount: widget.fee,
             paymentMethod: _selectedMethod,
             paymentStatus: 'Paid',
-            transactionId: 'TXN-CLINIC-${DateTime.now().millisecondsSinceEpoch}',
+            transactionId:
+                'TXN-CLINIC-${DateTime.now().millisecondsSinceEpoch}',
             orderId: intentId,
           ),
         );

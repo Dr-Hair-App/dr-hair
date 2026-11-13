@@ -1,23 +1,20 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../shop/data/models/product_model.dart';
-import '../../../shop/presentation/viewmodels/cart_cubit.dart';
-import '../../../shop/presentation/viewmodels/products_cubit.dart';
 import '../../domain/models/ai_assessment_model.dart';
 
-/// Complete AI-Powered Assessment Widget containing Health Score,
-/// Root Causes, Nutrition Plan, Lifestyle Tips, and Curated Regimen.
+/// AI screening summary, possible factors, nutrition, lifestyle, and daily routine.
 class AiAssessmentCards extends StatefulWidget {
   final AiAssessmentModel aiAssessment;
   final VoidCallback? onRefresh;
+  final bool isRefreshing;
 
   const AiAssessmentCards({
     super.key,
     required this.aiAssessment,
     this.onRefresh,
+    this.isRefreshing = false,
   });
 
   @override
@@ -25,11 +22,13 @@ class AiAssessmentCards extends StatefulWidget {
 }
 
 class _AiAssessmentCardsState extends State<AiAssessmentCards> {
-  int _selectedTab = 0; // 0: Root Causes, 1: Diet Plan, 2: Lifestyle, 3: Daily Regimen
+  int _selectedTab =
+      0; // 0: Possible factors, 1: Diet Plan, 2: Lifestyle, 3: Daily Regimen
 
   @override
   Widget build(BuildContext context) {
     final ai = widget.aiAssessment;
+    if (!ai.isAvailable) return _buildUnavailableCard();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -53,16 +52,72 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
     );
   }
 
+  Widget _buildUnavailableCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(LucideIcons.info, size: 18, color: Color(0xFF64748B)),
+              SizedBox(width: 8),
+              Text(
+                'AI assessment unavailable',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          const Text(
+            'We couldn’t prepare a reliable result, so no AI score, stage, or product recommendation is shown. You can retry or ask a clinician to review your answers.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.45,
+              color: Color(0xFF475569),
+            ),
+          ),
+          if (widget.onRefresh != null) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: widget.isRefreshing ? null : widget.onRefresh,
+                icon: widget.isRefreshing
+                    ? const SizedBox.square(
+                        dimension: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(LucideIcons.refreshCw, size: 15),
+                label: Text(widget.isRefreshing ? 'Retrying…' : 'Try again'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildScoreAndSummaryCard(AiAssessmentModel ai) {
     final score = ai.scalpHealthScore.clamp(0, 100);
     Color scoreColor = const Color(0xFF10B981); // Emerald Green
-    String scoreLabel = 'Good Follicle Vitality';
+    String scoreLabel = 'Higher screening indicator';
     if (score < 50) {
       scoreColor = const Color(0xFFEF4444); // Red
-      scoreLabel = 'Immediate Care Recommended';
+      scoreLabel = 'Lower screening indicator';
     } else if (score < 75) {
       scoreColor = const Color(0xFFF59E0B); // Amber
-      scoreLabel = 'Moderate Follicle Stress';
+      scoreLabel = 'Mid-range screening indicator';
     }
 
     return Container(
@@ -87,7 +142,10 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF0F766E), Color(0xFF0284C7)],
@@ -121,7 +179,7 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Text(
-                  'Gemini Flash',
+                  'Screening result',
                   style: TextStyle(
                     color: Color(0xFF475569),
                     fontSize: 10,
@@ -205,13 +263,16 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                     ),
                     const SizedBox(height: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: const Text(
-                        'Trichology Protocol • Dr. Jai Bansal',
+                        'AI screening estimate • Not a diagnosis',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
@@ -253,7 +314,7 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
 
   Widget _buildNavigationTabs() {
     final tabs = [
-      {'title': 'Root Causes', 'icon': LucideIcons.activity},
+      {'title': 'Possible factors', 'icon': LucideIcons.activity},
       {'title': 'Diet Plan', 'icon': LucideIcons.utensils},
       {'title': 'Lifestyle', 'icon': LucideIcons.shieldCheck},
       {'title': 'Regimen', 'icon': LucideIcons.clock},
@@ -273,12 +334,17 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                 borderRadius: BorderRadius.circular(20),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 9,
+                  ),
                   decoration: BoxDecoration(
                     color: isSelected ? AppColors.primary : Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: isSelected ? AppColors.primary : const Color(0xFFE2E8F0),
+                      color: isSelected
+                          ? AppColors.primary
+                          : const Color(0xFFE2E8F0),
                     ),
                     boxShadow: isSelected
                         ? [
@@ -296,15 +362,21 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                       Icon(
                         tabs[index]['icon'] as IconData,
                         size: 14,
-                        color: isSelected ? Colors.white : const Color(0xFF64748B),
+                        color: isSelected
+                            ? Colors.white
+                            : const Color(0xFF64748B),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         tabs[index]['title'] as String,
                         style: TextStyle(
                           fontSize: 12.5,
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                          color: isSelected ? Colors.white : const Color(0xFF475569),
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          color: isSelected
+                              ? Colors.white
+                              : const Color(0xFF475569),
                         ),
                       ),
                     ],
@@ -398,11 +470,16 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: severityBg,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: severityColor.withValues(alpha: 0.3)),
+                      border: Border.all(
+                        color: severityColor.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Text(
                       '${cause.severity} Impact',
@@ -475,7 +552,11 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
               ),
               child: Row(
                 children: [
-                  const Icon(LucideIcons.droplets, color: Color(0xFF2563EB), size: 18),
+                  const Icon(
+                    LucideIcons.droplets,
+                    color: Color(0xFF2563EB),
+                    size: 18,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -522,7 +603,10 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
               runSpacing: 6,
               children: diet.keyNutrients.map((nutrient) {
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(20),
@@ -557,11 +641,13 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
             ],
           ),
           const SizedBox(height: 8),
-          ...diet.foodsToEat.map((food) => _buildBulletItem(
-                text: food,
-                iconColor: const Color(0xFF10B981),
-                bgColor: const Color(0xFFECFDF5),
-              )),
+          ...diet.foodsToEat.map(
+            (food) => _buildBulletItem(
+              text: food,
+              iconColor: const Color(0xFF10B981),
+              bgColor: const Color(0xFFECFDF5),
+            ),
+          ),
 
           const SizedBox(height: 16),
 
@@ -581,11 +667,13 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
             ],
           ),
           const SizedBox(height: 8),
-          ...diet.foodsToAvoid.map((food) => _buildBulletItem(
-                text: food,
-                iconColor: const Color(0xFFEF4444),
-                bgColor: const Color(0xFFFEF2F2),
-              )),
+          ...diet.foodsToAvoid.map(
+            (food) => _buildBulletItem(
+              text: food,
+              iconColor: const Color(0xFFEF4444),
+              bgColor: const Color(0xFFFEF2F2),
+            ),
+          ),
         ],
       ),
     );
@@ -641,11 +729,13 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
               ],
             ),
             const SizedBox(height: 8),
-            ...lifestyle.scalpCareTips.map((tip) => _buildBulletItem(
-                  text: tip,
-                  iconColor: AppColors.primary,
-                  bgColor: const Color(0xFFF0FDFA),
-                )),
+            ...lifestyle.scalpCareTips.map(
+              (tip) => _buildBulletItem(
+                text: tip,
+                iconColor: AppColors.primary,
+                bgColor: const Color(0xFFF0FDFA),
+              ),
+            ),
             const SizedBox(height: 16),
           ],
 
@@ -666,11 +756,13 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
               ],
             ),
             const SizedBox(height: 8),
-            ...lifestyle.oilingRules.map((rule) => _buildBulletItem(
-                  text: rule,
-                  iconColor: const Color(0xFFD97706),
-                  bgColor: const Color(0xFFFFFBEB),
-                )),
+            ...lifestyle.oilingRules.map(
+              (rule) => _buildBulletItem(
+                text: rule,
+                iconColor: const Color(0xFFD97706),
+                bgColor: const Color(0xFFFFFBEB),
+              ),
+            ),
             const SizedBox(height: 16),
           ],
 
@@ -691,11 +783,13 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
               ],
             ),
             const SizedBox(height: 8),
-            ...lifestyle.sleepAndStress.map((item) => _buildBulletItem(
-                  text: item,
-                  iconColor: const Color(0xFF6366F1),
-                  bgColor: const Color(0xFFEEF2FF),
-                )),
+            ...lifestyle.sleepAndStress.map(
+              (item) => _buildBulletItem(
+                text: item,
+                iconColor: const Color(0xFF6366F1),
+                bgColor: const Color(0xFFEEF2FF),
+              ),
+            ),
           ],
         ],
       ),
@@ -728,10 +822,14 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
             children: [
               const Row(
                 children: [
-                  Icon(LucideIcons.calendarCheck2, color: AppColors.primary, size: 16),
+                  Icon(
+                    LucideIcons.calendarCheck2,
+                    color: AppColors.primary,
+                    size: 16,
+                  ),
                   SizedBox(width: 6),
                   Text(
-                    'Daily 3-Step Routine',
+                    'Daily care starter plan',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
@@ -748,7 +846,10 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.primary.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(6),
@@ -780,158 +881,7 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
             ],
           ),
         ),
-
-        const SizedBox(height: 16),
-
-        // Recommended Products
-        if (regimen.targetProducts.isNotEmpty) ...[
-          const Text(
-            'Targeted Regimen Products',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF0F172A),
-            ),
-          ),
-          const SizedBox(height: 8),
-          ...regimen.targetProducts.map((prod) => _buildTargetProductItem(prod)),
-        ],
       ],
-    );
-  }
-
-  Widget _buildTargetProductItem(AiTargetProduct target) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(LucideIcons.pill, color: AppColors.primary, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        target.name,
-                        style: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        target.category,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Color(0xFF64748B),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  target.reason,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    height: 1.35,
-                    color: Color(0xFF475569),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Builder(
-                  builder: (context) {
-                    return Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () {
-                        // Find matching product in catalog and add to cart
-                        final catalog = context.read<ProductsCubit?>()?.state.products ?? [];
-                        ProductItem? matched;
-                        for (final p in catalog) {
-                          if (p.name.toLowerCase().contains(target.name.toLowerCase()) ||
-                              target.name.toLowerCase().contains(p.name.toLowerCase())) {
-                            matched = p;
-                            break;
-                          }
-                        }
-                        final prodToAdd = matched ?? (catalog.isNotEmpty ? catalog.first : null);
-                        if (prodToAdd != null) {
-                          final plan = prodToAdd.supplyPlans.isNotEmpty
-                              ? prodToAdd.supplyPlans.first
-                              : ProductSupplyPlan(
-                                  title: 'Standard',
-                                  subtitle: prodToAdd.subtitle,
-                                  price: 999,
-                                  mrp: 1299,
-                                );
-                          context.read<CartCubit?>()?.addProduct(
-                                product: prodToAdd,
-                                plan: plan,
-                                quantity: 1,
-                              );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Added ${prodToAdd.name} to cart'),
-                              backgroundColor: AppColors.primary,
-                              behavior: SnackBarBehavior.floating,
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        }
-                      },
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(LucideIcons.shoppingBag, size: 14, color: AppColors.primary),
-                          SizedBox(width: 5),
-                          Text(
-                            'Add to Kit / Cart',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -948,10 +898,7 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
           Container(
             margin: const EdgeInsets.only(top: 2),
             padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: bgColor,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
             child: Icon(LucideIcons.check, size: 10, color: iconColor),
           ),
           const SizedBox(width: 8),
