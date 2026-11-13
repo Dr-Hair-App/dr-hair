@@ -1,4 +1,5 @@
 import '../../domain/models/hair_photo_analysis.dart';
+import '../../domain/models/ai_assessment_model.dart';
 
 /// Holds the user's assessment answers and completion status.
 class HairTestState {
@@ -31,6 +32,7 @@ class HairTestState {
   final String assessmentStatus;
   final Map<String, dynamic>? doctorCarePlan;
   final String? doctorReviewNote;
+  final AiAssessmentModel? aiAssessment;
 
   const HairTestState({
     this.currentStep = 0,
@@ -62,6 +64,7 @@ class HairTestState {
     this.assessmentStatus = 'submitted',
     this.doctorCarePlan,
     this.doctorReviewNote,
+    this.aiAssessment,
   });
 
   HairTestState copyWith({
@@ -99,6 +102,8 @@ class HairTestState {
     bool clearDoctorCarePlan = false,
     String? doctorReviewNote,
     bool clearDoctorReviewNote = false,
+    AiAssessmentModel? aiAssessment,
+    bool clearAiAssessment = false,
   }) {
     return HairTestState(
       currentStep: currentStep ?? this.currentStep,
@@ -133,6 +138,7 @@ class HairTestState {
       assessmentStatus: assessmentStatus ?? this.assessmentStatus,
       doctorCarePlan: clearDoctorCarePlan ? null : doctorCarePlan ?? this.doctorCarePlan,
       doctorReviewNote: clearDoctorReviewNote ? null : doctorReviewNote ?? this.doctorReviewNote,
+      aiAssessment: clearAiAssessment ? null : aiAssessment ?? this.aiAssessment,
     );
   }
 

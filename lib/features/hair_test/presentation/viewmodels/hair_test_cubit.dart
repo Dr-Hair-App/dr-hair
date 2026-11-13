@@ -12,6 +12,7 @@ import '../../../../core/storage/app_local_cache.dart';
 import '../../../treatment/data/patient_clinical_api.dart';
 import '../../data/hair_image_detector.dart';
 import '../../domain/models/hair_photo_analysis.dart';
+import '../../domain/models/ai_assessment_model.dart';
 import 'hair_test_state.dart';
 
 class HairTestCubit extends Cubit<HairTestState> {
@@ -44,6 +45,9 @@ class HairTestCubit extends Cubit<HairTestState> {
   String get _ageKey => _patientId != null && _patientId!.isNotEmpty
       ? 'hair_test_age_$_patientId'
       : 'hair_test_age';
+  String get _aiAssessmentKey => _patientId != null && _patientId!.isNotEmpty
+      ? 'hair_test_ai_assessment_$_patientId'
+      : 'hair_test_ai_assessment';
 
   HairTestCubit({
     ImagePicker? imagePicker,
@@ -107,6 +111,16 @@ class HairTestCubit extends Cubit<HairTestState> {
         final stage = latest?['hair_loss_stage']?.toString();
         final serverStatus = latest?['status']?.toString() ??
             (carePlans.isNotEmpty || reports.isNotEmpty ? 'reviewed' : 'submitted');
+
+        AiAssessmentModel? aiModel = state.aiAssessment;
+        final rawAi = latest?['ai_assessment'];
+        if (rawAi is Map) {
+          try {
+            aiModel = AiAssessmentModel.fromJson(Map<String, dynamic>.from(rawAi));
+            await _cache.put(_aiAssessmentKey, jsonEncode(aiModel.toJson()));
+          } catch (_) {}
+        }
+
         if (!isClosed) {
           emit(
             state.copyWith(
@@ -120,6 +134,7 @@ class HairTestCubit extends Cubit<HairTestState> {
               clinicalReports: reports,
               assessmentStatus: serverStatus,
               doctorCarePlan: activeCarePlan,
+              aiAssessment: aiModel,
             ),
           );
         }
@@ -253,6 +268,17 @@ class HairTestCubit extends Cubit<HairTestState> {
           _cache.getString('hair_test_age') ??
           '';
 
+      AiAssessmentModel? savedAiModel;
+      final rawAiString = _cache.getString(_aiAssessmentKey);
+      if (rawAiString != null && rawAiString.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(rawAiString);
+          if (decoded is Map) {
+            savedAiModel = AiAssessmentModel.fromJson(Map<String, dynamic>.from(decoded));
+          }
+        } catch (_) {}
+      }
+
       if (hasCompleted) {
         final hasObservedPattern = restored.primaryConcern != null;
         emit(
@@ -265,10 +291,11 @@ class HairTestCubit extends Cubit<HairTestState> {
                 : savedStage ?? 'Stage 1 - Mild temple thinning',
             clearStage: hasObservedPattern,
             dandruff: savedDandruff ?? 'Severe Dandruff & Flakes',
+            aiAssessment: savedAiModel,
           ),
         );
       } else if (rawDraft != null) {
-        emit(restored);
+        emit(restored.copyWith(aiAssessment: savedAiModel));
       }
     } catch (_) {}
   }
@@ -484,6 +511,17 @@ class HairTestCubit extends Cubit<HairTestState> {
         final referenceNo = response.data?['reference_no']?.toString() ??
             response.data?['data']?['reference_no']?.toString() ??
             response.data?['data']?['test']?['reference_no']?.toString();
+
+        final rawAi = response.data?['data']?['ai_assessment'] ??
+            response.data?['data']?['test']?['ai_assessment'];
+        AiAssessmentModel? aiModel;
+        if (rawAi is Map) {
+          try {
+            aiModel = AiAssessmentModel.fromJson(Map<String, dynamic>.from(rawAi));
+            await _cache.put(_aiAssessmentKey, jsonEncode(aiModel.toJson()));
+          } catch (_) {}
+        }
+
         emit(
           state.copyWith(
             referenceNo: referenceNo,
@@ -493,6 +531,7 @@ class HairTestCubit extends Cubit<HairTestState> {
             isCompleted: true,
             isRetesting: false,
             clearErrorMessage: true,
+            aiAssessment: aiModel,
           ),
         );
       } on DioException catch (dioErr) {
@@ -924,6 +963,37 @@ class HairTestCubit extends Cubit<HairTestState> {
     _saveDraft();
   }
 
+  Future<void> fetchAiAssessment({bool forceRefresh = false}) async {
+    final ref = state.referenceNo;
+    if (ref == null || ref.isEmpty) return;
+    final token = _sessionToken;
+    if (token == null || token.isEmpty) return;
+
+    if (!forceRefresh && state.aiAssessment != null) return;
+
+    try {
+      final dioToUse = _dio ??
+          DioClient(
+            baseUrl: ApiEndpoints.backendBaseUrl,
+            enableDebugLogging: false,
+          ).dio;
+      final response = await dioToUse.post<Map<String, dynamic>>(
+        '/HairTest/ai_assessment',
+        data: {'reference_no': ref},
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final rawAi = response.data?['data']?['ai_assessment'] ??
+          response.data?['data']?['test']?['ai_assessment'];
+      if (rawAi is Map) {
+        final aiModel = AiAssessmentModel.fromJson(Map<String, dynamic>.from(rawAi));
+        await _cache.put(_aiAssessmentKey, jsonEncode(aiModel.toJson()));
+        if (!isClosed) {
+          emit(state.copyWith(aiAssessment: aiModel));
+        }
+      }
+    } catch (_) {}
+  }
+
   Future<void> clearSavedAssessment() async {
     for (final key in [
       _draftKey,
@@ -933,6 +1003,7 @@ class HairTestCubit extends Cubit<HairTestState> {
       _dandruffKey,
       _nameKey,
       _ageKey,
+      _aiAssessmentKey,
       'hair_test_draft_v2',
       'hair_test_draft_v1',
       'has_completed_hair_test',
@@ -941,6 +1012,7 @@ class HairTestCubit extends Cubit<HairTestState> {
       'hair_test_dandruff',
       'hair_test_name',
       'hair_test_age',
+      'hair_test_ai_assessment',
     ]) {
       await _cache.remove(key);
     }

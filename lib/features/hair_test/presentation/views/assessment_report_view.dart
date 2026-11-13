@@ -16,6 +16,7 @@ import '../../../shop/presentation/viewmodels/cart_cubit.dart';
 import '../../../shop/presentation/viewmodels/products_cubit.dart';
 import '../viewmodels/hair_test_cubit.dart';
 import '../viewmodels/hair_test_state.dart';
+import '../widgets/ai_assessment_cards.dart';
 
 /// The Clinical Assessment Report View displaying the patient's hair test diagnosis,
 /// verified doctor reports, uploaded scalp photos, personalized recommended products,
@@ -30,6 +31,21 @@ class AssessmentReportView extends StatefulWidget {
 }
 
 class _AssessmentReportViewState extends State<AssessmentReportView> {
+  bool _isRequestingAi = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final cubit = context.read<HairTestCubit?>();
+        if (cubit != null && cubit.state.aiAssessment == null && cubit.state.referenceNo != null) {
+          cubit.fetchAiAssessment();
+        }
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<HairTestCubit, HairTestState>(
@@ -154,6 +170,81 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                       isReviewed,
                       isUnderReview,
                     ),
+
+                    // AI Clinical Trichology & Recommendations
+                    if (state.aiAssessment != null) ...[
+                      const SizedBox(height: 20),
+                      AiAssessmentCards(
+                        aiAssessment: state.aiAssessment!,
+                        onRefresh: () => context.read<HairTestCubit?>()?.fetchAiAssessment(forceRefresh: true),
+                      ),
+                    ] else if (state.referenceNo != null && state.referenceNo!.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(LucideIcons.sparkles, color: AppColors.primary, size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'AI Follicle & Diet Analysis',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  const Text(
+                                    'Generate personalized root causes, diet plan & lifestyle guidelines.',
+                                    style: TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _isRequestingAi
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                                  )
+                                : ElevatedButton(
+                                    onPressed: () async {
+                                      setState(() => _isRequestingAi = true);
+                                      await context.read<HairTestCubit?>()?.fetchAiAssessment(forceRefresh: true);
+                                      if (mounted) setState(() => _isRequestingAi = false);
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    child: const Text('Analyze', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                  ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     // 3. Doctor's Prescribed Regimen (if reviewed by doctor)
                     if (state.doctorCarePlan != null) ...[
