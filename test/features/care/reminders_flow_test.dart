@@ -19,7 +19,8 @@ void main() {
     setUp(() async {
       cache = AppLocalCache.inMemory();
       notificationService = CareNotificationService(cache);
-      careCubit = CareCubit(notificationService)..loadSampleFixturesForTesting();
+      careCubit = CareCubit(notificationService)
+        ..loadSampleFixturesForTesting();
     });
 
     tearDown(() {
@@ -131,30 +132,20 @@ void main() {
     );
 
     testWidgets(
-      'handles notification permission denied state and recovery advice',
+      'does not claim alerts are enabled while native scheduling is unavailable',
       (tester) async {
-        // Set permission to denied
-        await careCubit.requestNotificationPermission(simulateDenial: true);
+        await careCubit.requestNotificationPermission();
+        expect(
+          careCubit.state.notificationPermissionStatus,
+          NotificationPermissionStatus.unavailable,
+        );
 
         await tester.pumpWidget(createTestApp(const RemindersView()));
         await tester.pumpAndSettle();
 
-        expect(find.text('Notifications Disabled'), findsOneWidget);
-        expect(find.text('How to enable in Settings →'), findsOneWidget);
-
-        await tester.tap(find.text('How to enable in Settings →'));
-        await tester.pumpAndSettle();
-
-        expect(find.text('Enable Notifications in Settings'), findsOneWidget);
-        expect(find.text('I Enabled It'), findsOneWidget);
-
-        await tester.tap(find.text('I Enabled It'));
-        await tester.pumpAndSettle();
-
-        expect(
-          careCubit.state.notificationPermissionStatus,
-          NotificationPermissionStatus.granted,
-        );
+        expect(find.text('Scheduled alerts are unavailable'), findsOneWidget);
+        expect(find.text('Send Test Push Notification'), findsNothing);
+        expect(find.text('I Enabled It'), findsNothing);
       },
     );
 

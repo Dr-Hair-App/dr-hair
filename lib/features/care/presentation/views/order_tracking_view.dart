@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
@@ -28,13 +28,91 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
   int _selectedOrderIndex = 0;
   bool _isCancelling = false;
   bool _initialIndexSet = false;
+  bool _isTrackingLoading = false;
+  String? _trackingError;
+  CareOrderTracking? _liveTracking;
+  Timer? _trackingRefreshTimer;
+  int _trackingRequestId = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<CareCubit>().fetchPatientOrders();
+      _loadOrdersAndTracking();
     });
+  }
+
+  Future<void> _loadOrdersAndTracking() async {
+    final orders = await context.read<CareCubit>().fetchPatientOrders();
+    if (!mounted) return;
+    final requestedIndex = widget.initialOrderId == null
+        ? -1
+        : orders.indexWhere((order) => order.orderId == widget.initialOrderId);
+    setState(() {
+      _selectedOrderIndex = requestedIndex >= 0 ? requestedIndex : 0;
+      _initialIndexSet = true;
+    });
+    if (orders.isNotEmpty) await _refreshTracking(orders[_selectedOrderIndex]);
+    _trackingRefreshTimer?.cancel();
+    _trackingRefreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (!mounted) return;
+      final currentOrders = context.read<CareCubit>().state.orders;
+      if (currentOrders.isEmpty) return;
+      final index = _selectedOrderIndex.clamp(0, currentOrders.length - 1);
+      unawaited(_refreshTracking(currentOrders[index]));
+    });
+  }
+
+  Future<void> _refreshTracking(CareOrder order) async {
+    if (order.trackingNumber.isEmpty && order.shiprocketShipmentId.isEmpty ||
+        order.status.startsWith('Preview only')) {
+      return;
+    }
+    final requestId = ++_trackingRequestId;
+    setState(() {
+      _isTrackingLoading = true;
+      _trackingError = null;
+    });
+    try {
+      final tracking = await context.read<CareCubit>().fetchOrderTracking(
+        order.orderId,
+      );
+      if (mounted && requestId == _trackingRequestId) {
+        setState(() => _liveTracking = tracking);
+      }
+    } catch (_) {
+      if (mounted && requestId == _trackingRequestId) {
+        setState(
+          () => _trackingError =
+              'Tracking updates could not be loaded. Try again shortly.',
+        );
+      }
+    } finally {
+      if (mounted && requestId == _trackingRequestId) {
+        setState(() => _isTrackingLoading = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _trackingRefreshTimer?.cancel();
+    _trackingRequestId++;
+    super.dispose();
+  }
+
+  String _formatTrackingDate(String value) {
+    final date = DateTime.tryParse(value);
+    if (date == null) return value;
+    final local = date.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year} · ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _openTrackingLink() async {
+    final value = _liveTracking?.trackUrl ?? '';
+    final uri = Uri.tryParse(value);
+    if (uri == null || uri.scheme != 'https') return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Color _getStatusColor(String status) {
@@ -164,7 +242,12 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
                           selectedColor: AppColors.primary100,
                           onSelected: (selected) {
                             if (selected) {
-                              setState(() => _selectedOrderIndex = idx);
+                              setState(() {
+                                _selectedOrderIndex = idx;
+                                _liveTracking = null;
+                                _trackingError = null;
+                              });
+                              unawaited(_refreshTracking(ord));
                             }
                           },
                         ),
@@ -276,7 +359,12 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
                           Text(
                             isPreviewOrder
                                 ? 'Preview saved locally · no delivery scheduled'
-                                : 'Estimated Arrival: ${order.estimatedDelivery}',
+                                : (_liveTracking
+                                              ?.estimatedDelivery
+                                              .isNotEmpty ==
+                                          true
+                                      ? 'Estimated arrival: ${_liveTracking!.estimatedDelivery}'
+                                      : 'Shipment updates refresh automatically'),
                             style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
@@ -290,91 +378,153 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
                 ),
 
                 if (!isPreviewOrder) ...[
-                  careSectionHeader(title: 'DISPATCH TIMELINE'),
-
-                  // Delivery Stepper with TweenAnimationBuilder
+                  careSectionHeader(title: 'LIVE COURIER TRACKING'),
                   careCard(
-                    child: TweenAnimationBuilder<double>(
-                      tween: Tween<double>(
-                        begin: 0.0,
-                        end: order.currentStep.toDouble(),
-                      ),
-                      duration: const Duration(milliseconds: 1400),
-                      curve: Curves.easeInOutCubic,
-                      builder: (context, animValue, _) {
-                        final timelineSteps = [
-                          (
-                            title: 'Order Confirmed & Payment Verified',
-                            subtitle: 'Oct 20, 2026 · 10:14 AM',
-                          ),
-                          (
-                            title: 'Clinical Formulation Compounded',
-                            subtitle:
-                                'Pharmacist calibrated 5% topical booster',
-                          ),
-                          (
-                            title: 'Dispatched from Central Pharmacy',
-                            subtitle: '${order.courierName} Hub · In transit',
-                          ),
-                          (
-                            title: 'Out for Delivery',
-                            subtitle:
-                                'Courier partner is on the way to your address',
-                          ),
-                          (title: 'Delivered', subtitle: 'Expected by 2:00 PM'),
-                        ];
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            // Animated Progress Summary Row
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      LucideIcons.truck,
-                                      size: 20,
-                                      color: Color(0xFF059669),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Step ${(animValue.clamp(0, math.max(0, order.currentStep)) + 1).toInt()} of 5 · ${order.status}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.primaryDark,
-                                      ),
-                                    ),
-                                  ],
+                            Expanded(
+                              child: Text(
+                                _liveTracking?.currentStatus.isNotEmpty == true
+                                    ? _liveTracking!.currentStatus
+                                    : order.status == 'Shipped'
+                                    ? 'Waiting for the courier’s first scan'
+                                    : 'Live courier tracking starts after dispatch',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.primaryDark,
                                 ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // Animated Timeline Steps
-                            for (int i = 0; i < timelineSteps.length; i++) ...[
-                              _buildTimelineStep(
-                                title: timelineSteps[i].title,
-                                subtitle: timelineSteps[i].subtitle,
-                                isCompleted:
-                                    animValue >= i + 1 ||
-                                    (i < order.currentStep && animValue >= i),
-                                isCurrent:
-                                    i == order.currentStep && animValue >= i,
-                                isReached: animValue >= i,
                               ),
-                              if (i < timelineSteps.length - 1)
-                                _buildTimelineDivider(
-                                  progress: animValue,
-                                  stepIndex: i,
-                                ),
-                            ],
+                            ),
+                            IconButton(
+                              tooltip: 'Refresh tracking',
+                              onPressed: _isTrackingLoading
+                                  ? null
+                                  : () => _refreshTracking(order),
+                              icon: _isTrackingLoading
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(LucideIcons.refreshCw, size: 18),
+                            ),
                           ],
-                        );
-                      },
+                        ),
+                        if (_trackingError != null)
+                          Text(
+                            _trackingError!,
+                            style: const TextStyle(
+                              color: AppColors.danger,
+                              fontSize: 12,
+                            ),
+                          ),
+                        if (order.trackingNumber.isNotEmpty ||
+                            order.shiprocketShipmentId.isNotEmpty)
+                          Text(
+                            'AWB: ${order.trackingNumber.isNotEmpty ? order.trackingNumber : 'Assigned, waiting for courier AWB'}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryDark,
+                            ),
+                          ),
+                        if (_liveTracking?.courier.isNotEmpty == true)
+                          Text(
+                            'Courier: ${_liveTracking!.courier}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryDark,
+                            ),
+                          ),
+                        if (_liveTracking?.updatedAt.isNotEmpty == true)
+                          Text(
+                            'Last update: ${_formatTrackingDate(_liveTracking!.updatedAt)}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        const SizedBox(height: 8),
+                        if (_liveTracking == null &&
+                            !_isTrackingLoading &&
+                            _trackingError == null)
+                          const Text(
+                            'Tracking details will appear here when Shiprocket receives courier scans.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.secondaryDark,
+                            ),
+                          ),
+                        if (_liveTracking?.events.isNotEmpty == true)
+                          ..._liveTracking!.events.map(
+                            (event) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Padding(
+                                    padding: EdgeInsets.only(top: 3, right: 10),
+                                    child: Icon(
+                                      LucideIcons.mapPin,
+                                      size: 15,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          event.activity.isNotEmpty
+                                              ? event.activity
+                                              : event.status,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        if (event.location.isNotEmpty ||
+                                            event.date.isNotEmpty)
+                                          Text(
+                                            [
+                                                  event.location,
+                                                  if (event.date.isNotEmpty)
+                                                    _formatTrackingDate(
+                                                      event.date,
+                                                    ),
+                                                ]
+                                                .where(
+                                                  (value) => value.isNotEmpty,
+                                                )
+                                                .join(' · '),
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.secondaryDark,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        if (_liveTracking?.trackUrl.isNotEmpty == true)
+                          TextButton.icon(
+                            onPressed: _openTrackingLink,
+                            icon: const Icon(
+                              LucideIcons.externalLink,
+                              size: 15,
+                            ),
+                            label: const Text('Open carrier tracking'),
+                          ),
+                      ],
                     ),
                   ),
 
@@ -399,7 +549,7 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
                                   ),
                                 ),
                                 Text(
-                                  'AWB: ${order.trackingNumber}',
+                                  'AWB: ${order.trackingNumber.isNotEmpty ? order.trackingNumber : 'Not assigned yet'}',
                                   style: const TextStyle(
                                     fontSize: 12,
                                     color: AppColors.secondaryDark,
@@ -410,26 +560,31 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
                             Padding(
                               padding: const EdgeInsets.only(right: 8.0),
                               child: GestureDetector(
-                                child: const Icon(
+                                onTap: order.trackingNumber.isEmpty
+                                    ? null
+                                    : () {
+                                        Clipboard.setData(
+                                          ClipboardData(
+                                            text: order.trackingNumber,
+                                          ),
+                                        );
+                                        HapticFeedback.lightImpact();
+                                        AppToast.show(
+                                          context,
+                                          const SnackBar(
+                                            content: Text(
+                                              'Tracking number copied to clipboard!',
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                child: Icon(
                                   LucideIcons.copy,
                                   size: 16,
-                                  color: AppColors.primary,
+                                  color: order.trackingNumber.isEmpty
+                                      ? AppColors.textMuted
+                                      : AppColors.primary,
                                 ),
-
-                                onTap: () {
-                                  Clipboard.setData(
-                                    ClipboardData(text: order.trackingNumber),
-                                  );
-                                  HapticFeedback.lightImpact();
-                                  AppToast.show(
-                                    context,
-                                    const SnackBar(
-                                      content: Text(
-                                        'Tracking number copied to clipboard!',
-                                      ),
-                                    ),
-                                  );
-                                },
                               ),
                             ),
                           ],
@@ -621,109 +776,6 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
           ),
         );
       },
-    );
-  }
-
-  static Widget _buildTimelineStep({
-    required String title,
-    required String subtitle,
-    required bool isCompleted,
-    required bool isCurrent,
-    required bool isReached,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOutCubic,
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isCompleted
-                ? const Color(0xFF10B981)
-                : (isCurrent
-                      ? AppColors.primary
-                      : (isReached
-                            ? AppColors.primary100
-                            : const Color(0xFFF1F5F9))),
-            border: Border.all(
-              color: isCompleted
-                  ? const Color(0xFF10B981)
-                  : (isCurrent ? AppColors.primary : AppColors.border),
-              width: isCurrent ? 2 : 1,
-            ),
-          ),
-          child: Center(
-            child: Icon(
-              isCompleted
-                  ? LucideIcons.check
-                  : (isCurrent ? LucideIcons.loader : LucideIcons.circle),
-              size: 13,
-              color: (isCompleted || isCurrent)
-                  ? Colors.white
-                  : AppColors.textMuted,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: isCompleted || isCurrent
-                      ? AppColors.primaryDark
-                      : AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: (isCompleted || isCurrent)
-                      ? AppColors.secondaryDark
-                      : AppColors.textMuted,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  static Widget _buildTimelineDivider({
-    required double progress,
-    required int stepIndex,
-  }) {
-    final fill = (progress - stepIndex).clamp(0.0, 1.0);
-
-    return Container(
-      margin: const EdgeInsets.only(left: 10.75, top: 4, bottom: 4),
-      width: 2.5,
-      height: 22,
-      decoration: BoxDecoration(
-        color: AppColors.border,
-        borderRadius: BorderRadius.circular(2),
-      ),
-      alignment: Alignment.topCenter,
-      child: FractionallySizedBox(
-        heightFactor: fill,
-        alignment: Alignment.topCenter,
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF10B981),
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-      ),
     );
   }
 }

@@ -30,9 +30,12 @@ class HairTestState {
   final String? errorMessage;
   final List<Map<String, dynamic>> clinicalReports;
   final String assessmentStatus;
+  final String aiAssessmentStatus;
   final Map<String, dynamic>? doctorCarePlan;
   final String? doctorReviewNote;
   final AiAssessmentModel? aiAssessment;
+  final bool isGeneratingDietPlan;
+  final String? dietPlanError;
 
   const HairTestState({
     this.currentStep = 0,
@@ -62,9 +65,12 @@ class HairTestState {
     this.errorMessage,
     this.clinicalReports = const [],
     this.assessmentStatus = 'submitted',
+    this.aiAssessmentStatus = 'idle',
     this.doctorCarePlan,
     this.doctorReviewNote,
     this.aiAssessment,
+    this.isGeneratingDietPlan = false,
+    this.dietPlanError,
   });
 
   HairTestState copyWith({
@@ -98,12 +104,16 @@ class HairTestState {
     bool clearErrorMessage = false,
     List<Map<String, dynamic>>? clinicalReports,
     String? assessmentStatus,
+    String? aiAssessmentStatus,
     Map<String, dynamic>? doctorCarePlan,
     bool clearDoctorCarePlan = false,
     String? doctorReviewNote,
     bool clearDoctorReviewNote = false,
     AiAssessmentModel? aiAssessment,
     bool clearAiAssessment = false,
+    bool? isGeneratingDietPlan,
+    String? dietPlanError,
+    bool clearDietPlanError = false,
   }) {
     return HairTestState(
       currentStep: currentStep ?? this.currentStep,
@@ -136,6 +146,7 @@ class HairTestState {
           : errorMessage ?? this.errorMessage,
       clinicalReports: clinicalReports ?? this.clinicalReports,
       assessmentStatus: assessmentStatus ?? this.assessmentStatus,
+      aiAssessmentStatus: aiAssessmentStatus ?? this.aiAssessmentStatus,
       doctorCarePlan: clearDoctorCarePlan
           ? null
           : doctorCarePlan ?? this.doctorCarePlan,
@@ -145,6 +156,10 @@ class HairTestState {
       aiAssessment: clearAiAssessment
           ? null
           : aiAssessment ?? this.aiAssessment,
+      isGeneratingDietPlan: isGeneratingDietPlan ?? this.isGeneratingDietPlan,
+      dietPlanError: clearDietPlanError
+          ? null
+          : dietPlanError ?? this.dietPlanError,
     );
   }
 
@@ -176,21 +191,8 @@ class HairTestState {
   /// Title of the stage/concern for reports and summaries.
   String get stageTitle => assessmentSummary;
 
-  /// Cautious explanation of the selected stage, not a medical diagnosis.
+  /// Labels the patient's own selection without interpreting it as a diagnosis.
   String get stageDescription {
-    if (stage != null && stage!.contains('Stage 2')) {
-      return 'Your answers suggest a Stage 2 hair-thinning pattern, such as a receding hairline or early crown thinning. This screening summary cannot confirm the cause; a qualified clinician can assess it with you.';
-    }
-    if (stage != null && stage!.contains('Stage 3')) {
-      return 'Your answers suggest a more noticeable hair-thinning pattern. This screening summary cannot confirm the cause; a qualified clinician can assess it with you.';
-    }
-    if (stage != null && stage!.contains('Stage 1')) {
-      return 'Your answers suggest an early hair-thinning pattern. This screening summary cannot confirm the cause; a qualified clinician can assess it with you.';
-    }
-    final concern = primaryConcern?.trim();
-    if (concern != null && concern.isNotEmpty) {
-      return 'You shared $concern as your main concern. This summary is a starting point, not a diagnosis; a qualified clinician can assess it with you.';
-    }
-    return 'Your answers provide a starting point for discussing your hair concerns with a qualified clinician.';
+    return 'This is the concern you selected in your assessment. It has not been confirmed as a diagnosis.';
   }
 }

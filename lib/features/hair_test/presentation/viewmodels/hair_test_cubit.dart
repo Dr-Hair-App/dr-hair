@@ -31,6 +31,7 @@ class HairTestCubit extends Cubit<HairTestState> {
   final PatientClinicalApi _clinicalApi;
   String? _patientId;
   String? _sessionToken;
+  bool _aiStatusPolling = false;
 
   String get _draftKey => _patientId != null && _patientId!.isNotEmpty
       ? 'hair_test_draft_${_patientId}_v2'
@@ -124,11 +125,11 @@ class HairTestCubit extends Cubit<HairTestState> {
         final stage = latest?['hair_loss_stage']?.toString();
         final serverStatus =
             latest?['status']?.toString() ??
-            (carePlans.isNotEmpty || reports.isNotEmpty
-                ? 'reviewed'
-                : 'submitted');
+            (carePlans.isNotEmpty ? 'reviewed' : 'submitted');
 
-        AiAssessmentModel? aiModel = state.aiAssessment;
+        AiAssessmentModel? aiModel = refNo == state.referenceNo
+            ? state.aiAssessment
+            : null;
         final rawAi = latest?['ai_assessment'];
         if (rawAi is Map) {
           try {
@@ -139,11 +140,15 @@ class HairTestCubit extends Cubit<HairTestState> {
           } catch (_) {}
         }
 
+        final aiStatus =
+            latest?['ai_assessment_status']?.toString() ??
+            (aiModel != null ? 'ready' : 'idle');
+        final aiPending = aiStatus == 'queued' || aiStatus == 'processing';
+
         if (!isClosed) {
           emit(
             state.copyWith(
               isCompleted: submitted.isNotEmpty ? true : state.isCompleted,
-              isSubmitted: submitted.isNotEmpty ? true : state.isSubmitted,
               referenceNo: refNo,
               stage: stage,
               name: latest?['full_name']?.toString() ?? state.name,
@@ -151,10 +156,17 @@ class HairTestCubit extends Cubit<HairTestState> {
               dandruff: latest?['dandruff']?.toString() ?? state.dandruff,
               clinicalReports: reports,
               assessmentStatus: serverStatus,
+              aiAssessmentStatus: aiStatus,
+              isSubmitting: aiPending,
+              isSubmitted: submitted.isNotEmpty && !aiPending,
               doctorCarePlan: activeCarePlan,
               aiAssessment: aiModel,
+              clearAiAssessment: aiModel == null,
             ),
           );
+        }
+        if (aiPending && refNo != null && refNo.isNotEmpty) {
+          unawaited(_pollAiAssessmentStatus(refNo, token));
         }
         if (submitted.isNotEmpty) {
           await _cache.put(_completedKey, true);
@@ -571,17 +583,18 @@ class HairTestCubit extends Cubit<HairTestState> {
         if (aiModel == null && (referenceNo == null || referenceNo.isEmpty)) {
           aiModel = _unavailableAiAssessment;
         }
+        final aiStatus =
+            response.data?['data']?['ai_assessment_status']?.toString() ??
+            (aiModel != null ? 'ready' : 'queued');
+        final aiPending = aiStatus == 'queued' || aiStatus == 'processing';
 
         emit(
           state.copyWith(
             referenceNo: referenceNo,
             assessmentStatus: 'submitted',
-            isSubmitting:
-                aiModel == null &&
-                referenceNo != null &&
-                referenceNo.isNotEmpty,
-            isSubmitted:
-                aiModel != null || referenceNo == null || referenceNo.isEmpty,
+            aiAssessmentStatus: aiStatus,
+            isSubmitting: aiPending,
+            isSubmitted: !aiPending,
             isCompleted: true,
             isRetesting: false,
             clearErrorMessage: true,
@@ -590,13 +603,8 @@ class HairTestCubit extends Cubit<HairTestState> {
           ),
         );
 
-        if (state.isSubmitting) {
-          await fetchAiAssessment(sessionToken: sessionToken);
-          if (isClosed) return;
-          if (state.aiAssessment == null) {
-            emit(state.copyWith(aiAssessment: _unavailableAiAssessment));
-          }
-          emit(state.copyWith(isSubmitting: false, isSubmitted: true));
+        if (aiPending && referenceNo != null && referenceNo.isNotEmpty) {
+          unawaited(_pollAiAssessmentStatus(referenceNo, sessionToken!));
         }
       } on DioException catch (dioErr) {
         final serverMessage = dioErr.response?.data is Map
@@ -1049,7 +1057,106 @@ class HairTestCubit extends Cubit<HairTestState> {
     if (token == null || token.isEmpty) return;
 
     if (!forceRefresh && state.aiAssessment != null) return;
+    final dioToUse =
+        _dio ??
+        DioClient(
+          baseUrl: ApiEndpoints.backendBaseUrl,
+          enableDebugLogging: false,
+        ).dio;
+    if (forceRefresh) {
+      await dioToUse.post<Map<String, dynamic>>(
+        ApiEndpoints.hairTestAiAssessmentRetry(ref),
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+    }
+    if (!isClosed) {
+      emit(state.copyWith(isSubmitting: true, isSubmitted: false));
+    }
+    await _pollAiAssessmentStatus(ref, token);
+  }
 
+  Future<void> _pollAiAssessmentStatus(String referenceNo, String token) async {
+    if (_aiStatusPolling || token.isEmpty || referenceNo.isEmpty) return;
+    _aiStatusPolling = true;
+    var retryDelay = 2;
+    try {
+      while (!isClosed &&
+          state.referenceNo == referenceNo &&
+          state.isSubmitting) {
+        try {
+          final dioToUse =
+              _dio ??
+              DioClient(
+                baseUrl: ApiEndpoints.backendBaseUrl,
+                enableDebugLogging: false,
+              ).dio;
+          final response = await dioToUse.get<Map<String, dynamic>>(
+            ApiEndpoints.hairTestAiAssessmentStatus(referenceNo),
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          );
+          final payload = response.data?['data'];
+          final status = payload is Map
+              ? payload['status']?.toString() ?? 'processing'
+              : 'processing';
+          if (status == 'ready') {
+            final rawAi = payload is Map ? payload['ai_assessment'] : null;
+            if (rawAi is Map) {
+              final aiModel = AiAssessmentModel.fromJson(
+                Map<String, dynamic>.from(rawAi),
+              );
+              await _cache.put(_aiAssessmentKey, jsonEncode(aiModel.toJson()));
+              if (!isClosed) {
+                emit(
+                  state.copyWith(
+                    aiAssessment: aiModel,
+                    aiAssessmentStatus: 'ready',
+                    isSubmitting: false,
+                    isSubmitted: true,
+                  ),
+                );
+              }
+              return;
+            }
+          } else if (status == 'failed') {
+            if (!isClosed) {
+              emit(
+                state.copyWith(
+                  aiAssessment: _unavailableAiAssessment,
+                  aiAssessmentStatus: 'failed',
+                  assessmentStatus: 'ai_processing_failed',
+                  isSubmitting: false,
+                  isSubmitted: true,
+                ),
+              );
+            }
+            return;
+          } else if (!isClosed) {
+            emit(
+              state.copyWith(aiAssessmentStatus: status, isSubmitting: true),
+            );
+          }
+        } catch (_) {
+          // Keep waiting through transient network failures; the job remains on the server.
+        }
+        await Future<void>.delayed(Duration(seconds: retryDelay));
+        retryDelay = (retryDelay + 2).clamp(2, 12).toInt();
+      }
+    } finally {
+      _aiStatusPolling = false;
+    }
+  }
+
+  Future<bool> generatePersonalizedDietPlan() async {
+    final ref = state.referenceNo;
+    final token = _sessionToken;
+    if (ref == null ||
+        ref.isEmpty ||
+        token == null ||
+        token.isEmpty ||
+        state.isGeneratingDietPlan) {
+      return false;
+    }
+    emit(state.copyWith(isGeneratingDietPlan: true, clearDietPlanError: true));
     try {
       final dioToUse =
           _dio ??
@@ -1058,28 +1165,31 @@ class HairTestCubit extends Cubit<HairTestState> {
             enableDebugLogging: false,
           ).dio;
       final response = await dioToUse.post<Map<String, dynamic>>(
-        '/HairTest/ai_assessment',
-        data: {'reference_no': ref},
+        ApiEndpoints.hairTestDietPlan(ref),
         options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
-      final rawAi =
-          response.data?['data']?['ai_assessment'] ??
-          response.data?['data']?['test']?['ai_assessment'];
-      if (rawAi is Map) {
-        final aiModel = AiAssessmentModel.fromJson(
-          Map<String, dynamic>.from(rawAi),
+      final rawAi = response.data?['data']?['ai_assessment'];
+      if (rawAi is! Map) throw StateError('Meal plan response is missing.');
+      final aiModel = AiAssessmentModel.fromJson(
+        Map<String, dynamic>.from(rawAi),
+      );
+      await _cache.put(_aiAssessmentKey, jsonEncode(aiModel.toJson()));
+      if (!isClosed) {
+        emit(
+          state.copyWith(aiAssessment: aiModel, isGeneratingDietPlan: false),
         );
-        await _cache.put(_aiAssessmentKey, jsonEncode(aiModel.toJson()));
-        if (!isClosed) {
-          emit(state.copyWith(aiAssessment: aiModel));
-        }
-      } else if (!isClosed) {
-        emit(state.copyWith(aiAssessment: _unavailableAiAssessment));
       }
+      return true;
     } catch (_) {
       if (!isClosed) {
-        emit(state.copyWith(aiAssessment: _unavailableAiAssessment));
+        emit(
+          state.copyWith(
+            isGeneratingDietPlan: false,
+            dietPlanError: 'The meal plan could not be created right now. Please try again.',
+          ),
+        );
       }
+      return false;
     }
   }
 

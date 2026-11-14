@@ -96,10 +96,45 @@ sequenceDiagram
 | 13 | `/api/v1/patient/reports/{reportId}/download` | `GET` | `application/json` | ✅ | `features/treatment` |
 | 14 | `/api/v1/patient/progress-checkins` | `GET` | `application/json` | ✅ | `features/care` |
 | 15 | `/api/v1/patient/progress-checkins` | `POST` | `application/json` | ✅ | `features/care` |
+| 16 | `/api/v1/appointments/availability?from=YYYY-MM-DD&to=YYYY-MM-DD` | `GET` | `application/json` | ❌ | `features/appointments` |
+| 17 | `/api/v1/patient/care-events` | `GET` / `PUT` | `application/json` | ✅ | `features/care` |
 
 ---
 
 ## 📖 Detailed Endpoint Specifications
+
+### Daily care events
+`GET` returns events owned by the authenticated patient for a date range (maximum 93 days). `PUT` idempotently updates a daily event using `event_date`, `event_type`, and `event_key`. Routine/diet events support `pending`, `completed`, and `skipped`; water uses `logged` plus a daily integer count; symptom logs include selected symptom labels, severity, and an optional note. Severe symptoms or pain, burning, and sores return a clinic-contact recommendation. No diagnosis or medication advice is generated.
+
+- **URL**: `{BASE_URL}/api/v1/patient/care-events`
+- **Authentication**: Required for both methods
+- **GET query**: `from=YYYY-MM-DD&to=YYYY-MM-DD`
+- **PUT example**:
+  ```json
+  {"event_date":"2026-11-13","event_type":"routine","event_key":"rt_1","status":"skipped","note":"Was travelling"}
+  ```
+
+### Clinic appointment availability
+Returns the public schedule for a date range, including clinic timezone, session hours, closed dates, booking window, and booked clinic-local slot keys. The response contains no patient or appointment identifiers. Booking/payment endpoints still validate availability on the server when a slot is submitted.
+
+- **URL**: `{BASE_URL}/api/v1/appointments/availability?from=2026-12-01&to=2026-12-31`
+- **Method**: `GET`
+- **Authentication**: None
+- **Range limit**: At most 41 calendar days per request
+- **Example data**:
+  ```json
+  {
+    "timezone": "Asia/Kolkata",
+    "booking_window_days": 90,
+    "weekly_closed_weekdays": [7],
+    "sessions": [
+      {"label": "Morning Session", "opens_at": "10:00", "closes_at": "12:30"},
+      {"label": "Evening Session", "opens_at": "15:30", "closes_at": "18:30"}
+    ],
+    "closed_dates": [{"date": "2026-12-25"}],
+    "booked_slots": ["2026-12-02T10:30"]
+  }
+  ```
 
 ### 1. Send Login / Signup OTP
 Initiates authentication by sending a one-time password to the user's mobile number or email address.
@@ -273,6 +308,8 @@ Upload one file as `file`, or up to five mixed files as repeated `files` fields.
 
 ### 8. Submit Hair Test Form
 Comprehensive multi-step hair evaluation questionnaire submission, including questionnaire answers and scalp photos.
+
+Submission now returns as soon as the assessment is stored. The response includes `reference_no` and `ai_assessment_status: queued`; the app polls `GET /api/v1/hair-tests/{referenceNo}/ai_assessment/status` until the status is `ready` or `failed`. A persistent backend worker must be running for queued assessments to finish. A failed result can be requeued through `POST /api/v1/hair-tests/{referenceNo}/ai_assessment/retry` by the assessment owner.
 
 - **URL**: `{BASE_URL}/HairTest/submit_form`
 - **Method**: `POST`
@@ -530,6 +567,14 @@ The GET response lists only the signed-in patient's check-ins. For POST, upload 
 - **Headers**: `Authorization: Bearer <token>`
 - **POST JSON fields**: `id`, `date` (ISO-8601), `scalp_region`, `shedding_level`, `notes`, `density_rating` (1–5), and `photos` (one to three objects with `angle`, `public_id`, `url`, `file_name`, `mime_type`, and `bytes`, returned by the shared media upload endpoint).
 - **GET response data**: `{ "items": [{ "id": "…", "date": "…", "density_rating": 4, "photos": [{ "angle": "front", "url": "https://…", "file_name": "…" }] }] }`.
+
+### 15. Get live shipment tracking
+Fetches the latest Shiprocket status and courier scan history for an order owned by the signed-in patient. The app refreshes while the tracking screen is open and can also request a manual refresh. Tracking becomes available after a Shiprocket AWB is assigned.
+
+- **URL**: `{BASE_URL}/api/v1/patient/orders/{orderId}/tracking`
+- **Method**: `GET`
+- **Headers**: `Authorization: Bearer <token>`
+- **Response data**: `{ "awb_code": "…", "courier": "…", "current_status": "IN TRANSIT", "estimated_delivery": "…", "events": [{ "date": "…", "status": "…", "activity": "…", "location": "…" }] }`.
 
 ### Flutter Hair Assessment Fields Now Synced
 `POST /api/v1/hair-tests/submit_form` associates the assessment with the authenticated account and stores the current app answers: `full_name`, `age`, `gender`, `primary_concern`, `stage`, `duration`, `dandruff`, `gut_health`, `stress_level`, and `family_history`. Scalp photos are not included because the current app intentionally keeps them on-device.

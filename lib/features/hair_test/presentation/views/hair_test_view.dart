@@ -59,11 +59,6 @@ class _HairTestContent extends StatelessWidget {
             ),
           );
         }
-        if (state.isSubmitted) {
-          try {
-            context.push(RouteNames.assessmentResult);
-          } catch (_) {}
-        }
       },
       builder: (context, state) {
         if (state.isSubmitting) {

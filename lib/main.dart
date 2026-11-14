@@ -22,6 +22,7 @@ import 'features/auth/presentation/viewmodels/auth_cubit.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/appointments/presentation/clinic_appointment_cubit.dart';
 import 'features/care/presentation/viewmodels/care_cubit.dart';
+import 'features/home/presentation/viewmodels/home_summary_cubit.dart';
 import 'features/hair_test/presentation/viewmodels/hair_test_cubit.dart';
 import 'features/shop/data/datasources/cart_remote_data_source.dart';
 import 'features/shop/presentation/viewmodels/cart_cubit.dart';
@@ -197,6 +198,9 @@ class _MyAppState extends State<MyApp> {
         BlocProvider<HairTestCubit>(
           create: (_) => HairTestCubit()..loadSavedState(),
         ),
+        BlocProvider<HomeSummaryCubit>(
+          create: (_) => HomeSummaryCubit(),
+        ),
       ],
       child: Builder(
         builder: (context) {
@@ -206,6 +210,7 @@ class _MyAppState extends State<MyApp> {
             cartCubit: context.read<CartCubit>(),
             appointmentCubit: context.read<ClinicAppointmentCubit>(),
             hairTestCubit: context.read<HairTestCubit>(),
+            homeSummaryCubit: context.read<HomeSummaryCubit>(),
           );
           return app;
         },

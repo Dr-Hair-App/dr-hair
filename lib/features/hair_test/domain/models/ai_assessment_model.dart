@@ -200,6 +200,11 @@ class AiAssessmentModel {
   final bool isAvailable;
   final String generatedBy;
   final String? generatedAt;
+  final List<Map<String, dynamic>> availableProducts;
+  final String productAvailabilityStatus;
+  final bool shopEnabled;
+  final Map<String, dynamic>? customMealPlan;
+  final bool requiresClinician;
 
   const AiAssessmentModel({
     this.scalpHealthScore = 70,
@@ -214,16 +219,19 @@ class AiAssessmentModel {
     this.isAvailable = true,
     this.generatedBy = 'Dr. Hair Assistant',
     this.generatedAt,
+    this.availableProducts = const [],
+    this.productAvailabilityStatus = 'checked',
+    this.shopEnabled = false,
+    this.customMealPlan,
+    this.requiresClinician = false,
   });
 
   factory AiAssessmentModel.fromJson(Map<String, dynamic> json) {
     final rawCauses = json['root_causes'];
     final nextStep = json['next_step_recommendation'];
     final generator = json['generated_by']?.toString() ?? '';
-    final isAvailable =
-        json['ai_status']?.toString() != 'unavailable' &&
-        generator != 'unavailable' &&
-        generator != 'clinical-rules-engine';
+    final statusRequiresClinician =
+        json['ai_status']?.toString() == 'clinician_review_required';
     final legacyStage = json['stage_classification']?.toString() ?? '';
     final nextStepType = nextStep is Map
         ? (nextStep['type']?.toString() == 'doctor_appointment'
@@ -237,11 +245,21 @@ class AiAssessmentModel {
           ).hasMatch(legacyStage)
         ? 'doctor_appointment'
         : '';
+    final requiresClinician =
+        statusRequiresClinician || nextStepType == 'doctor_appointment';
+    final isAvailable =
+        json['ai_status']?.toString() != 'unavailable' &&
+        !requiresClinician &&
+        generator != 'unavailable' &&
+        generator != 'clinical-rules-engine';
     final regimen = json['recommended_regimen'] is Map
         ? AiRecommendedRegimen.fromJson(
             Map<String, dynamic>.from(json['recommended_regimen']),
           )
         : const AiRecommendedRegimen();
+    final availability = json['product_availability'] is Map
+        ? Map<String, dynamic>.from(json['product_availability'])
+        : const <String, dynamic>{};
 
     return AiAssessmentModel(
       scalpHealthScore: isAvailable
@@ -279,6 +297,19 @@ class AiAssessmentModel {
       isAvailable: isAvailable,
       generatedBy: generator.isNotEmpty ? generator : 'Dr. Hair Assistant',
       generatedAt: json['generated_at']?.toString(),
+      availableProducts: json['available_products'] is List
+          ? (json['available_products'] as List)
+                .whereType<Map>()
+                .map((product) => Map<String, dynamic>.from(product))
+                .toList()
+          : const [],
+      productAvailabilityStatus:
+          availability['status']?.toString() ?? 'checked',
+      shopEnabled: availability['shop_enabled'] == true,
+      customMealPlan: json['custom_meal_plan'] is Map
+          ? Map<String, dynamic>.from(json['custom_meal_plan'])
+          : null,
+      requiresClinician: requiresClinician,
     );
   }
 
@@ -297,5 +328,12 @@ class AiAssessmentModel {
     'ai_status': isAvailable ? 'available' : 'unavailable',
     'generated_by': generatedBy,
     'generated_at': generatedAt,
+    'available_products': availableProducts,
+    'product_availability': {
+      'status': productAvailabilityStatus,
+      'shop_enabled': shopEnabled,
+    },
+    if (customMealPlan != null) 'custom_meal_plan': customMealPlan,
+    if (requiresClinician) 'ai_status': 'clinician_review_required',
   };
 }

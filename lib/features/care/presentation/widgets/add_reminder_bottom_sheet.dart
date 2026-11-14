@@ -346,12 +346,13 @@ class _AddReminderBottomSheetState extends State<AddReminderBottomSheet> {
         AppToast.show(
           context,
           const SnackBar(
-            content: Text('Reminder saved to local care schedule.'),
-            backgroundColor: AppColors.primaryDark,
+            content: Text(
+              'Reminder could not be synced. Check your connection and try again.',
+            ),
+            backgroundColor: AppColors.danger,
             behavior: SnackBarBehavior.floating,
           ),
         );
-        Navigator.pop(context);
       }
     } finally {
       if (mounted) {
@@ -461,7 +462,16 @@ class _AddReminderBottomSheetState extends State<AddReminderBottomSheet> {
       }
     } catch (_) {
       if (mounted) {
-        Navigator.pop(context);
+        AppToast.show(
+          context,
+          const SnackBar(
+            content: Text(
+              'Reminder could not be deleted. Check your connection and try again.',
+            ),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } finally {
       if (mounted) {

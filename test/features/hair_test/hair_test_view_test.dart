@@ -22,6 +22,32 @@ void main() {
     expect(find.textContaining('Gemini'), findsNothing);
     expect(find.text('Assessment Report'), findsNothing);
 
+    await tester.pump(const Duration(seconds: 25));
+    expect(find.text('This is taking longer than usual.'), findsOneWidget);
+    expect(find.text('Contact the clinic'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await cubit.close();
+  });
+
+  testWidgets('respects reduce-motion settings on the waiting screen', (
+    tester,
+  ) async {
+    final cubit = HairTestCubit();
+    cubit.emit(cubit.state.copyWith(isSubmitting: true));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: HairTestView(cubit: cubit),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(LucideIcons.clock3), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
     await tester.pumpWidget(const SizedBox.shrink());
     await cubit.close();
   });
@@ -104,8 +130,9 @@ void main() {
 
       // Report is displayed once submitted
       expect(find.text('Assessment Report'), findsOneWidget);
-      expect(find.text('Report Sent to Expert Clinic Team'), findsOneWidget);
-      expect(find.text('Assigned to Dr. Jai Bansal'), findsOneWidget);
+      expect(find.text('Your assessment is ready'), findsOneWidget);
+      expect(find.text('Assessment Submitted'), findsOneWidget);
+      expect(find.textContaining('Dr. Jai Bansal'), findsNothing);
 
       // Bottom price bar elements must NOT exist
       expect(find.text('₹1445'), findsNothing);

@@ -2,15 +2,18 @@ import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../data/patient_appointment_api.dart';
 
 class AppointmentDatePickerBottomSheet extends StatefulWidget {
   final DateTime? initialDate;
   final String? initialSlot;
+  final PatientAppointmentApi? api;
 
   const AppointmentDatePickerBottomSheet({
     super.key,
     this.initialDate,
     this.initialSlot,
+    this.api,
   });
 
   /// Static helper to open the reusable bottom sheet
@@ -18,6 +21,7 @@ class AppointmentDatePickerBottomSheet extends StatefulWidget {
     BuildContext context, {
     DateTime? initialDate,
     String? initialSlot,
+    PatientAppointmentApi? api,
   }) {
     return showModalBottomSheet<DateTime>(
       context: context,
@@ -26,6 +30,7 @@ class AppointmentDatePickerBottomSheet extends StatefulWidget {
       builder: (context) => AppointmentDatePickerBottomSheet(
         initialDate: initialDate,
         initialSlot: initialSlot,
+        api: api,
       ),
     );
   }
@@ -40,38 +45,20 @@ class _AppointmentDatePickerBottomSheetState
   late DateTime _focusedMonth;
   DateTime? _selectedDate;
   String? _selectedSlot;
-
-  // Dr. Jai Bansal's Official Sitting Time Slots
-  static const List<String> _morningSlots = [
-    '10:00 AM',
-    '10:30 AM',
-    '11:00 AM',
-    '11:30 AM',
-    '12:00 PM',
-    '12:30 PM',
-  ];
-
-  static const List<String> _eveningSlots = [
-    '03:30 PM',
-    '04:00 PM',
-    '04:30 PM',
-    '05:00 PM',
-    '05:30 PM',
-    '06:00 PM',
-    '06:30 PM',
-  ];
-
-  // Official Clinic Holidays (Year-Month-Day formatted)
-  static const Set<String> _clinicHolidays = {
-    '2026-11-01', // Diwali
-    '2026-11-02', // Goverdhan Puja
-    '2026-12-25', // Christmas
-    '2027-01-26', // Republic Day
-  };
+  late final PatientAppointmentApi _api;
+  bool _isLoadingAvailability = true;
+  String? _availabilityError;
+  int _bookingWindowDays = 90;
+  String _timezone = 'Asia/Kolkata';
+  Set<int> _closedWeekdays = {DateTime.sunday};
+  Set<String> _closedDates = {};
+  Set<String> _bookedSlots = {};
+  List<Map<String, dynamic>> _sessions = const [];
 
   @override
   void initState() {
     super.initState();
+    _api = widget.api ?? PatientAppointmentApi();
     final now = DateTime.now();
     _focusedMonth = DateTime(now.year, now.month);
 
@@ -82,28 +69,176 @@ class _AppointmentDatePickerBottomSheetState
         widget.initialDate!.day,
       );
       _selectedSlot = widget.initialSlot;
-    } else {
-      // Pick first upcoming valid working day
-      var candidate = now;
-      while (candidate.weekday == DateTime.sunday || _isHoliday(candidate)) {
-        candidate = candidate.add(const Duration(days: 1));
+    }
+    _loadAvailability();
+  }
+
+  String _dateKey(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  Future<void> _loadAvailability({bool showLoading = true}) async {
+    final month = _focusedMonth;
+    if (showLoading && mounted) {
+      setState(() {
+        _isLoadingAvailability = true;
+        _availabilityError = null;
+      });
+    }
+    try {
+      final response = await _api.getAvailability(
+        from: DateTime(month.year, month.month, 1),
+        to: DateTime(month.year, month.month + 1, 0),
+      );
+      if (!mounted ||
+          month.year != _focusedMonth.year ||
+          month.month != _focusedMonth.month) {
+        return;
       }
-      _selectedDate = DateTime(candidate.year, candidate.month, candidate.day);
+      final rawSessions = response['sessions'];
+      final rawClosedDates = response['closed_dates'];
+      final rawBookedSlots = response['booked_slots'];
+      if (rawSessions is! List ||
+          rawSessions.isEmpty ||
+          response['timezone'] is! String ||
+          response['booking_window_days'] is! num ||
+          response['weekly_closed_weekdays'] is! List ||
+          rawClosedDates is! List ||
+          rawBookedSlots is! List) {
+        throw const FormatException(
+          'Clinic availability response is incomplete.',
+        );
+      }
+      final rawWeekdays = response['weekly_closed_weekdays'] as List;
+      final sessions = rawSessions
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      if (sessions.isEmpty) {
+        throw const FormatException(
+          'Clinic availability has no valid sessions.',
+        );
+      }
+      setState(() {
+        _bookingWindowDays =
+            (response['booking_window_days'] as num?)?.toInt() ?? 90;
+        _timezone = response['timezone']?.toString() ?? 'Asia/Kolkata';
+        _closedWeekdays = rawWeekdays
+            .whereType<num>()
+            .map((day) => day.toInt())
+            .toSet();
+        _sessions = sessions;
+        _closedDates = rawClosedDates
+            .whereType<Map>()
+            .map((item) => item['date']?.toString() ?? '')
+            .where((date) => date.isNotEmpty)
+            .toSet();
+        _bookedSlots = rawBookedSlots.map((item) => item.toString()).toSet();
+        _isLoadingAvailability = false;
+        _availabilityError = null;
+        if (_selectedDate == null || !_isDateSelectable(_selectedDate!)) {
+          _selectedDate = _firstSelectableDateInMonth(month);
+          _selectedSlot = null;
+        } else if (_selectedSlot != null &&
+            _isSlotUnavailable(_selectedDate!, _selectedSlot!)) {
+          _selectedSlot = null;
+        }
+      });
+    } catch (_) {
+      if (!mounted ||
+          month.year != _focusedMonth.year ||
+          month.month != _focusedMonth.month) {
+        return;
+      }
+      setState(() {
+        _isLoadingAvailability = false;
+        _availabilityError = 'Appointment availability could not be loaded.';
+        _selectedSlot = null;
+      });
     }
   }
 
-  bool _isHoliday(DateTime date) {
-    final key =
-        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-    return _clinicHolidays.contains(key);
+  DateTime? _firstSelectableDateInMonth(DateTime month) {
+    final today = DateTime.now();
+    final startDay = month.year == today.year && month.month == today.month
+        ? today.day
+        : 1;
+    final days = DateTime(month.year, month.month + 1, 0).day;
+    for (var day = startDay; day <= days; day++) {
+      final date = DateTime(month.year, month.month, day);
+      if (_isDateSelectable(date)) return date;
+    }
+    return null;
   }
 
-  bool _isSunday(DateTime date) => date.weekday == DateTime.sunday;
+  bool _isWeeklyClosed(DateTime date) => _closedWeekdays.contains(date.weekday);
+
+  bool _isHoliday(DateTime date) => _closedDates.contains(_dateKey(date));
 
   bool _isPastDay(DateTime date) {
     final today = DateTime.now();
     final startOfToday = DateTime(today.year, today.month, today.day);
     return date.isBefore(startOfToday);
+  }
+
+  bool _isDateSelectable(DateTime date) {
+    final lastBookableDate = DateTime.now().add(
+      Duration(days: _bookingWindowDays),
+    );
+    return !_isLoadingAvailability &&
+        _availabilityError == null &&
+        !_isPastDay(date) &&
+        !date.isAfter(
+          DateTime(
+            lastBookableDate.year,
+            lastBookableDate.month,
+            lastBookableDate.day,
+          ),
+        ) &&
+        !_closedWeekdays.contains(date.weekday) &&
+        !_closedDates.contains(_dateKey(date)) &&
+        _slotsForDate(date).any((slot) => !_isSlotUnavailable(date, slot));
+  }
+
+  bool _isSlotUnavailable(DateTime date, String slot) =>
+      _bookedSlots.contains('${_dateKey(date)}T${_slot24Hour(slot)}') ||
+      _isSlotPast(date, slot);
+
+  String _slot24Hour(String slot) {
+    final parts = slot.split(' ');
+    final time = parts.first.split(':');
+    var hour = int.parse(time[0]);
+    if (parts.length > 1 && parts[1] == 'PM' && hour != 12) hour += 12;
+    if (parts.length > 1 && parts[1] == 'AM' && hour == 12) hour = 0;
+    return '${hour.toString().padLeft(2, '0')}:${time[1]}';
+  }
+
+  List<String> _slotsForSession(Map<String, dynamic> session) {
+    final opens = _minutesFromClock(session['opens_at']?.toString());
+    final closes = _minutesFromClock(session['closes_at']?.toString());
+    if (opens == null || closes == null || closes < opens) return const [];
+    return [
+      for (var minutes = opens; minutes <= closes; minutes += 30)
+        _formatSlot(minutes),
+    ];
+  }
+
+  List<String> _slotsForDate(DateTime date) => _sessions
+      .expand(_slotsForSession)
+      .where((slot) => !_isSlotUnavailable(date, slot))
+      .toList();
+
+  int? _minutesFromClock(String? value) {
+    if (value == null || !RegExp(r'^\d{2}:\d{2}$').hasMatch(value)) return null;
+    final parts = value.split(':').map(int.parse).toList();
+    if (parts[0] > 23 || parts[1] > 59) return null;
+    return parts[0] * 60 + parts[1];
+  }
+
+  String _formatSlot(int minutes) {
+    final hour24 = minutes ~/ 60;
+    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+    final minute = (minutes % 60).toString().padLeft(2, '0');
+    return '$hour12:$minute ${hour24 < 12 ? 'AM' : 'PM'}';
   }
 
   DateTime _combineDateAndTime(DateTime date, String slotStr) {
@@ -122,9 +257,20 @@ class _AppointmentDatePickerBottomSheetState
   }
 
   void _nextMonth() {
+    final today = DateTime.now();
+    final lastBookableDate = today.add(Duration(days: _bookingWindowDays));
+    final nextMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+    if (nextMonth.isAfter(
+      DateTime(lastBookableDate.year, lastBookableDate.month),
+    )) {
+      return;
+    }
     setState(() {
-      _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+      _focusedMonth = nextMonth;
+      _selectedDate = null;
+      _selectedSlot = null;
     });
+    _loadAvailability();
   }
 
   void _prevMonth() {
@@ -134,7 +280,32 @@ class _AppointmentDatePickerBottomSheetState
     }
     setState(() {
       _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+      _selectedDate = null;
+      _selectedSlot = null;
     });
+    _loadAvailability();
+  }
+
+  Future<void> _confirmSlot() async {
+    final selectedDate = _selectedDate;
+    final selectedSlot = _selectedSlot;
+    if (selectedDate == null || selectedSlot == null) return;
+    await _loadAvailability();
+    if (!mounted) return;
+    if (_availabilityError != null ||
+        !_isDateSelectable(selectedDate) ||
+        _isSlotUnavailable(selectedDate, selectedSlot)) {
+      setState(() => _selectedSlot = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'That slot is no longer available. Choose another time.',
+          ),
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).pop(_combineDateAndTime(selectedDate, selectedSlot));
   }
 
   @override
@@ -142,6 +313,11 @@ class _AppointmentDatePickerBottomSheetState
     final now = DateTime.now();
     final canGoPrev =
         _focusedMonth.year > now.year || _focusedMonth.month > now.month;
+    final lastBookableDate = now.add(Duration(days: _bookingWindowDays));
+    final nextMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+    final canGoNext = !nextMonth.isAfter(
+      DateTime(lastBookableDate.year, lastBookableDate.month),
+    );
 
     return Container(
       constraints: BoxConstraints(
@@ -200,7 +376,11 @@ class _AppointmentDatePickerBottomSheetState
                 ),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(LucideIcons.x, size: 20, color: AppColors.textSecondary),
+                  icon: const Icon(
+                    LucideIcons.x,
+                    size: 20,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -232,11 +412,13 @@ class _AppointmentDatePickerBottomSheetState
                           icon: Icon(
                             LucideIcons.chevronLeft,
                             size: 18,
-                            color: canGoPrev ? AppColors.primary : AppColors.textMuted,
+                            color: canGoPrev
+                                ? AppColors.primary
+                                : AppColors.textMuted,
                           ),
                         ),
                         IconButton(
-                          onPressed: _nextMonth,
+                          onPressed: canGoNext ? _nextMonth : null,
                           icon: const Icon(
                             LucideIcons.chevronRight,
                             size: 18,
@@ -262,25 +444,55 @@ class _AppointmentDatePickerBottomSheetState
 
                 // Legend / Notifications
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
-                    color: AppColors.primary5,
+                    color: _availabilityError != null
+                        ? const Color(0xFFFFF7ED)
+                        : AppColors.primary5,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(LucideIcons.info, color: AppColors.primary, size: 14),
-                      SizedBox(width: 8),
+                      if (_isLoadingAvailability)
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        Icon(
+                          _availabilityError != null
+                              ? LucideIcons.circleAlert
+                              : LucideIcons.info,
+                          color: _availabilityError != null
+                              ? const Color(0xFFB45309)
+                              : AppColors.primary,
+                          size: 14,
+                        ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Mon – Sat Open · Sundays & Holidays are Closed for OPD',
+                          _availabilityError ??
+                              (_isLoadingAvailability
+                                  ? 'Loading clinic availability…'
+                                  : 'Availability shown in $_timezone time · up to $_bookingWindowDays days ahead'),
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
+                            color: _availabilityError != null
+                                ? const Color(0xFF92400E)
+                                : AppColors.primary,
                           ),
                         ),
                       ),
+                      if (_availabilityError != null)
+                        TextButton(
+                          onPressed: _loadAvailability,
+                          child: const Text('Retry'),
+                        ),
                     ],
                   ),
                 ),
@@ -313,9 +525,30 @@ class _AppointmentDatePickerBottomSheetState
 
                   const SizedBox(height: 12),
 
-                  _buildSlotCategory('Morning Session (10:00 AM – 01:00 PM)', _morningSlots),
-                  const SizedBox(height: 14),
-                  _buildSlotCategory('Evening Session (03:30 PM – 07:00 PM)', _eveningSlots),
+                  if (_isLoadingAvailability)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 22),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_availabilityError != null)
+                    const Text('Refresh availability to see appointment times.')
+                  else if (_slotsForDate(_selectedDate!).isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        'No times are available on this date. Choose another day.',
+                      ),
+                    )
+                  else ...[
+                    for (var index = 0; index < _sessions.length; index++) ...[
+                      _buildSlotCategory(
+                        '${_sessions[index]['label'] ?? 'Clinic Session'} (${_sessions[index]['opens_at']} – ${_sessions[index]['closes_at']})',
+                        _slotsForSession(_sessions[index]),
+                      ),
+                      if (index < _sessions.length - 1)
+                        const SizedBox(height: 14),
+                    ],
+                  ],
                 ],
               ],
             ),
@@ -344,7 +577,10 @@ class _AppointmentDatePickerBottomSheetState
                     children: [
                       const Text(
                         'Selected Appointment Slot',
-                        style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -360,18 +596,19 @@ class _AppointmentDatePickerBottomSheetState
                 ),
                 const SizedBox(width: 12),
                 FilledButton(
-                  onPressed: (_selectedDate != null && _selectedSlot != null)
-                      ? () {
-                          final combined = _combineDateAndTime(
-                            _selectedDate!,
-                            _selectedSlot!,
-                          );
-                          Navigator.of(context).pop(combined);
-                        }
+                  onPressed:
+                      (_selectedDate != null &&
+                          _selectedSlot != null &&
+                          !_isLoadingAvailability &&
+                          _availabilityError == null)
+                      ? _confirmSlot
                       : null,
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -402,25 +639,38 @@ class _AppointmentDatePickerBottomSheetState
 
   String _monthName(DateTime month) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return '${months[month.month - 1]} ${month.year}';
   }
 
   Widget _buildWeekdayHeader() {
-    const weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S (Off)'];
+    const weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
     return Row(
-      children: weekdays.map((day) {
-        final isSunday = day.contains('Off');
+      children: List.generate(weekdays.length, (index) {
+        final day = weekdays[index];
+        final isClosed = _closedWeekdays.contains(index + 1);
         return Expanded(
           child: Center(
             child: Text(
-              day,
+              isClosed ? '$day (Off)' : day,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: isSunday ? const Color(0xFFEF4444) : AppColors.textSecondary,
+                color: isClosed
+                    ? const Color(0xFFEF4444)
+                    : AppColors.textSecondary,
               ),
             ),
           ),
@@ -453,12 +703,12 @@ class _AppointmentDatePickerBottomSheetState
               }
 
               final cellDate = DateTime(year, month, dayIndex);
-              final isPast = _isPastDay(cellDate);
-              final isSunday = _isSunday(cellDate);
+              final isSunday = _isWeeklyClosed(cellDate);
               final isHoliday = _isHoliday(cellDate);
-              final isDisabled = isPast || isSunday || isHoliday;
+              final isDisabled = !_isDateSelectable(cellDate);
 
-              final isSelected = _selectedDate != null &&
+              final isSelected =
+                  _selectedDate != null &&
                   _selectedDate!.year == cellDate.year &&
                   _selectedDate!.month == cellDate.month &&
                   _selectedDate!.day == cellDate.day;
@@ -470,14 +720,18 @@ class _AppointmentDatePickerBottomSheetState
                           if (isSunday) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Dr. Jai Bansal\'s clinic is closed on Sundays (Weekly Off).'),
+                                content: Text(
+                                  'Dr. Jai Bansal\'s clinic is closed on Sundays (Weekly Off).',
+                                ),
                                 duration: Duration(seconds: 2),
                               ),
                             );
                           } else if (isHoliday) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Selected date is an official clinic holiday.'),
+                                content: Text(
+                                  'Selected date is an official clinic holiday.',
+                                ),
                                 duration: Duration(seconds: 2),
                               ),
                             );
@@ -504,9 +758,15 @@ class _AppointmentDatePickerBottomSheetState
                       border: isSelected
                           ? Border.all(color: AppColors.primary, width: 1.5)
                           : isSunday
-                          ? Border.all(color: const Color(0xFFFCA5A5).withValues(alpha: 0.4))
+                          ? Border.all(
+                              color: const Color(0xFFFCA5A5)
+                                  .withValues(alpha: 0.4),
+                            )
                           : isHoliday
-                          ? Border.all(color: const Color(0xFFFCD34D).withValues(alpha: 0.5))
+                          ? Border.all(
+                              color: const Color(0xFFFCD34D)
+                                  .withValues(alpha: 0.5),
+                            )
                           : null,
                     ),
                     child: Column(
@@ -516,15 +776,17 @@ class _AppointmentDatePickerBottomSheetState
                           dayIndex.toString(),
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                            fontWeight: isSelected
+                                ? FontWeight.w800
+                                : FontWeight.w600,
                             color: isSelected
                                 ? Colors.white
                                 : isDisabled
                                 ? isSunday
-                                ? const Color(0xFFEF4444)
-                                : isHoliday
-                                ? const Color(0xFFD97706)
-                                : AppColors.textMuted
+                                      ? const Color(0xFFEF4444)
+                                      : isHoliday
+                                      ? const Color(0xFFD97706)
+                                      : AppColors.textMuted
                                 : AppColors.primaryDark,
                           ),
                         ),
@@ -575,7 +837,9 @@ class _AppointmentDatePickerBottomSheetState
           spacing: 8,
           runSpacing: 8,
           children: slots.map((slot) {
-            final isPast = _selectedDate != null && _isSlotPast(_selectedDate!, slot);
+            final isUnavailable =
+                _selectedDate != null &&
+                _isSlotUnavailable(_selectedDate!, slot);
             final isSelected = _selectedSlot == slot;
 
             return ChoiceChip(
@@ -584,7 +848,7 @@ class _AppointmentDatePickerBottomSheetState
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isPast
+                  color: isUnavailable
                       ? AppColors.textMuted
                       : isSelected
                       ? Colors.white
@@ -600,12 +864,15 @@ class _AppointmentDatePickerBottomSheetState
                 side: BorderSide(
                   color: isSelected
                       ? AppColors.primary
-                      : isPast
+                      : isUnavailable
                       ? const Color(0xFFE2E8F0)
                       : AppColors.border,
                 ),
               ),
-              onSelected: isPast
+              onSelected:
+                  isUnavailable ||
+                      _isLoadingAvailability ||
+                      _availabilityError != null
                   ? null
                   : (selected) {
                       setState(() {

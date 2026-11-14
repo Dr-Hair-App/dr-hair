@@ -9,9 +9,8 @@ class PatientAppointmentApi {
   PatientAppointmentApi({Dio? dio})
     : _dio = dio ?? DioClient(baseUrl: ApiEndpoints.backendBaseUrl).dio;
 
-  Options _authorized(String token) => Options(
-    headers: {'Authorization': 'Bearer $token'},
-  );
+  Options _authorized(String token) =>
+      Options(headers: {'Authorization': 'Bearer $token'});
 
   Future<List<Map<String, dynamic>>> list(String token) async {
     final response = await _dio.get<Map<String, dynamic>>(
@@ -20,8 +19,13 @@ class PatientAppointmentApi {
     );
     final data = response.data?['data'];
     final items = data is Map ? data['items'] : null;
-    if (items is! List) throw const FormatException('Appointment list response is invalid.');
-    return items.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+    if (items is! List) {
+      throw const FormatException('Appointment list response is invalid.');
+    }
+    return items
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
   }
 
   Future<Map<String, dynamic>> getBillingConfig(String? token) async {
@@ -32,6 +36,20 @@ class PatientAppointmentApi {
     return _readData(response.data);
   }
 
+  Future<Map<String, dynamic>> getAvailability({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      ApiEndpoints.appointmentAvailability,
+      queryParameters: {'from': _dateKey(from), 'to': _dateKey(to)},
+    );
+    return _readData(response.data);
+  }
+
+  String _dateKey(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
   Future<Map<String, dynamic>> createPaymentIntent({
     required String token,
     required DateTime startsAt,
@@ -39,10 +57,7 @@ class PatientAppointmentApi {
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       ApiEndpoints.patientAppointmentCreatePaymentIntent,
-      data: {
-        'starts_at': startsAt.toUtc().toIso8601String(),
-        'reason': reason,
-      },
+      data: {'starts_at': startsAt.toUtc().toIso8601String(), 'reason': reason},
       options: _authorized(token),
     );
     return _readData(response.data);
@@ -110,7 +125,9 @@ class PatientAppointmentApi {
 
   Map<String, dynamic> _readData(Map<String, dynamic>? envelope) {
     final data = envelope?['data'];
-    if (data is! Map) throw const FormatException('Appointment response is invalid.');
+    if (data is! Map) {
+      throw const FormatException('Appointment response is invalid.');
+    }
     return Map<String, dynamic>.from(data);
   }
 }

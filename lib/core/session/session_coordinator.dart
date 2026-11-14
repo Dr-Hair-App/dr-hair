@@ -9,6 +9,7 @@ import '../../features/auth/presentation/viewmodels/auth_cubit.dart';
 import '../../features/auth/presentation/viewmodels/auth_state.dart';
 import '../../features/care/presentation/viewmodels/care_cubit.dart';
 import '../../features/hair_test/presentation/viewmodels/hair_test_cubit.dart';
+import '../../features/home/presentation/viewmodels/home_summary_cubit.dart';
 import '../../features/shop/presentation/viewmodels/cart_cubit.dart';
 import '../routes/app_router.dart';
 import '../routes/route_names.dart';
@@ -43,6 +44,7 @@ class SessionCoordinator {
     required CartCubit cartCubit,
     required ClinicAppointmentCubit appointmentCubit,
     required HairTestCubit hairTestCubit,
+    HomeSummaryCubit? homeSummaryCubit,
   }) {
     _authCubit = authCubit;
     _careCubit = careCubit;
@@ -58,6 +60,7 @@ class SessionCoordinator {
         cartCubit: cartCubit,
         appointmentCubit: appointmentCubit,
         hairTestCubit: hairTestCubit,
+        homeSummaryCubit: homeSummaryCubit,
       );
     });
 
@@ -68,6 +71,7 @@ class SessionCoordinator {
       cartCubit: cartCubit,
       appointmentCubit: appointmentCubit,
       hairTestCubit: hairTestCubit,
+      homeSummaryCubit: homeSummaryCubit,
     );
   }
 
@@ -77,6 +81,7 @@ class SessionCoordinator {
     required CartCubit cartCubit,
     required ClinicAppointmentCubit appointmentCubit,
     required HairTestCubit hairTestCubit,
+    HomeSummaryCubit? homeSummaryCubit,
   }) {
     if (state.status == AuthStatus.authenticated && state.user != null) {
       final patientId = state.user?.patientId ?? state.user?.id.toString();
@@ -88,6 +93,7 @@ class SessionCoordinator {
         final token = state.sessionToken;
         careCubit.bindPatient(patientId, sessionToken: token);
         hairTestCubit.bindPatient(patientId, sessionToken: token);
+        homeSummaryCubit?.bindPatient(patientId, sessionToken: token);
         if (token != null && token.isNotEmpty) {
           appointmentCubit.loadFromApi(token).catchError((_) {});
         }
@@ -97,6 +103,7 @@ class SessionCoordinator {
       final oldPatientId = _lastBoundPatientId!;
       _lastBoundPatientId = null;
       unawaited(CrashlyticsService.clearPatientIdentifier());
+      homeSummaryCubit?.clearPatient();
       unawaited(
         clearPatientSession(
           patientId: oldPatientId,

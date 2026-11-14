@@ -7,7 +7,9 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/network/dio_client.dart';
 
 class ContactView extends StatefulWidget {
-  const ContactView({super.key});
+  final String? initialMessage;
+
+  const ContactView({super.key, this.initialMessage});
 
   @override
   State<ContactView> createState() => _ContactViewState();
@@ -20,6 +22,12 @@ class _ContactViewState extends State<ContactView> {
   final _phoneController = TextEditingController();
   final _messageController = TextEditingController();
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _messageController.text = widget.initialMessage ?? '';
+  }
 
   @override
   void dispose() {

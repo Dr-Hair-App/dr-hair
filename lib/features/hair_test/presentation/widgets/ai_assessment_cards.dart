@@ -1,7 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/routes/route_names.dart';
 import '../../domain/models/ai_assessment_model.dart';
 
 /// AI screening summary, possible factors, nutrition, lifestyle, and daily routine.
@@ -9,12 +11,20 @@ class AiAssessmentCards extends StatefulWidget {
   final AiAssessmentModel aiAssessment;
   final VoidCallback? onRefresh;
   final bool isRefreshing;
+  final Future<void> Function()? onGenerateDietPlan;
+  final bool isGeneratingDietPlan;
+  final String? dietPlanError;
+  final String? assessmentReferenceNo;
 
   const AiAssessmentCards({
     super.key,
     required this.aiAssessment,
     this.onRefresh,
     this.isRefreshing = false,
+    this.onGenerateDietPlan,
+    this.isGeneratingDietPlan = false,
+    this.dietPlanError,
+    this.assessmentReferenceNo,
   });
 
   @override
@@ -24,6 +34,14 @@ class AiAssessmentCards extends StatefulWidget {
 class _AiAssessmentCardsState extends State<AiAssessmentCards> {
   int _selectedTab =
       0; // 0: Possible factors, 1: Diet Plan, 2: Lifestyle, 3: Daily Regimen
+
+  @override
+  void didUpdateWidget(covariant AiAssessmentCards oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.aiAssessment.nextStepType == 'doctor_appointment') {
+      _selectedTab = 0;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +57,7 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
         const SizedBox(height: 16),
 
         // 2. Interactive Navigation Tabs
-        _buildNavigationTabs(),
+        _buildNavigationTabs(ai),
 
         const SizedBox(height: 16),
 
@@ -110,14 +128,11 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
 
   Widget _buildScoreAndSummaryCard(AiAssessmentModel ai) {
     final score = ai.scalpHealthScore.clamp(0, 100);
-    Color scoreColor = const Color(0xFF10B981); // Emerald Green
-    String scoreLabel = 'Higher screening indicator';
+    // Emerald Green
     if (score < 50) {
-      scoreColor = const Color(0xFFEF4444); // Red
-      scoreLabel = 'Lower screening indicator';
+      // Red
     } else if (score < 75) {
-      scoreColor = const Color(0xFFF59E0B); // Amber
-      scoreLabel = 'Mid-range screening indicator';
+      // Amber
     }
 
     return Container(
@@ -192,98 +207,29 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
 
           const SizedBox(height: 16),
 
-          // Score Gauge & Stage Section
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Circular Score Gauge
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 76,
-                    height: 76,
-                    child: CircularProgressIndicator(
-                      value: score / 100,
-                      strokeWidth: 8,
-                      backgroundColor: const Color(0xFFF1F5F9),
-                      valueColor: AlwaysStoppedAnimation<Color>(scoreColor),
-                      strokeCap: StrokeCap.round,
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Row(
+              children: [
+                Icon(LucideIcons.info, size: 15, color: AppColors.primary),
+                SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    'Questionnaire-based guidance only · Not a diagnosis',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primaryDark,
                     ),
                   ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '$score',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: scoreColor,
-                          height: 1,
-                        ),
-                      ),
-                      const Text(
-                        '/100',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(width: 16),
-
-              // Stage & Health Rating Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      scoreLabel,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: scoreColor,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      ai.stageClassification,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        'AI screening estimate • Not a diagnosis',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
 
           if (ai.summary.isNotEmpty) ...[
@@ -312,25 +258,31 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
     );
   }
 
-  Widget _buildNavigationTabs() {
-    final tabs = [
-      {'title': 'Possible factors', 'icon': LucideIcons.activity},
-      {'title': 'Diet Plan', 'icon': LucideIcons.utensils},
-      {'title': 'Lifestyle', 'icon': LucideIcons.shieldCheck},
-      {'title': 'Regimen', 'icon': LucideIcons.clock},
+  Widget _buildNavigationTabs(AiAssessmentModel ai) {
+    final tabs = <({int id, String title, IconData icon})>[
+      (id: 0, title: 'Possible factors', icon: LucideIcons.activity),
+      if (ai.nextStepType != 'doctor_appointment')
+        (id: 1, title: 'Diet Plan', icon: LucideIcons.utensils),
+      if (ai.nextStepType != 'doctor_appointment') ...[
+        (id: 2, title: 'Lifestyle', icon: LucideIcons.shieldCheck),
+        (id: 3, title: 'Regimen', icon: LucideIcons.clock),
+      ],
     ];
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 2),
       child: Row(
         children: List.generate(tabs.length, (index) {
-          final isSelected = _selectedTab == index;
+          final tab = tabs[index];
+          final isSelected = _selectedTab == tab.id;
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () => setState(() => _selectedTab = index),
+                onTap: () => setState(() => _selectedTab = tab.id),
                 borderRadius: BorderRadius.circular(20),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -360,7 +312,7 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        tabs[index]['icon'] as IconData,
+                        tab.icon,
                         size: 14,
                         color: isSelected
                             ? Colors.white
@@ -368,7 +320,7 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        tabs[index]['title'] as String,
+                        tab.title,
                         style: TextStyle(
                           fontSize: 12.5,
                           fontWeight: isSelected
@@ -391,11 +343,14 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
   }
 
   Widget _buildActiveTabContent(AiAssessmentModel ai) {
+    if (_selectedTab != 0 && ai.nextStepType == 'doctor_appointment') {
+      return _buildRootCausesTab(ai.rootCauses);
+    }
     switch (_selectedTab) {
       case 0:
         return _buildRootCausesTab(ai.rootCauses);
       case 1:
-        return _buildDietPlanTab(ai.dietPlan);
+        return _buildDietPlanTab(ai);
       case 2:
         return _buildLifestyleTab(ai.lifestyleGuidance);
       case 3:
@@ -409,7 +364,9 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
-          child: Text('No specific root causes identified.'),
+          child: Text(
+            'No possible contributors were identified from these answers.',
+          ),
         ),
       );
     }
@@ -417,98 +374,69 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
     return Column(
       key: const ValueKey('root_causes_tab'),
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: rootCauses.map((cause) {
-        Color severityColor;
-        Color severityBg;
-        switch (cause.severity.toLowerCase()) {
-          case 'high':
-            severityColor = const Color(0xFFDC2626);
-            severityBg = const Color(0xFFFEF2F2);
-            break;
-          case 'moderate':
-            severityColor = const Color(0xFFD97706);
-            severityBg = const Color(0xFFFFFBEB);
-            break;
-          case 'low':
-          default:
-            severityColor = const Color(0xFF0F766E);
-            severityBg = const Color(0xFFF0FDFA);
-            break;
-        }
-
-        return Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x060F172A),
-                blurRadius: 6,
-                offset: Offset(0, 2),
-              ),
-            ],
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 10),
+          child: Text(
+            'Possible contributors based on your answers. These are not confirmed causes; ask a clinician if you are unsure.',
+            style: TextStyle(
+              fontSize: 11.5,
+              height: 1.4,
+              color: Color(0xFF64748B),
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      cause.factor,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: severityBg,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: severityColor.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Text(
-                      '${cause.severity} Impact',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: severityColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                cause.explanation,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  height: 1.45,
-                  color: Color(0xFF475569),
+        ),
+        ...rootCauses.map(
+          (cause) => Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x060F172A),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
                 ),
-              ),
-            ],
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  cause.factor,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  cause.explanation,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    height: 1.45,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-      }).toList(),
+        ),
+      ],
     );
   }
 
-  Widget _buildDietPlanTab(AiDietPlan diet) {
+  Widget _buildDietPlanTab(AiAssessmentModel ai) {
+    final diet = ai.dietPlan;
+    final customPlan = ai.customMealPlan;
+    final days = customPlan?['days'] is List
+        ? (customPlan!['days'] as List).whereType<Map>().toList()
+        : const <Map>[];
     return Container(
       key: const ValueKey('diet_plan_tab'),
       width: double.infinity,
@@ -673,6 +601,138 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
               iconColor: const Color(0xFFEF4444),
               bgColor: const Color(0xFFFEF2F2),
             ),
+          ),
+          const SizedBox(height: 18),
+          if (customPlan != null && days.isNotEmpty) ...[
+            _buildGeneratedMealPlan(context, customPlan, days),
+            const SizedBox(height: 12),
+          ],
+          if (widget.dietPlanError != null) ...[
+            Text(
+              widget.dietPlanError!,
+              style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (widget.onGenerateDietPlan != null)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: widget.isGeneratingDietPlan
+                    ? null
+                    : widget.onGenerateDietPlan,
+                icon: widget.isGeneratingDietPlan
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(LucideIcons.sparkles, size: 16),
+                label: Text(
+                  widget.isGeneratingDietPlan
+                      ? 'Creating your meal plan…'
+                      : customPlan == null
+                      ? 'Create a 7-day meal plan with Assistant'
+                      : 'Create a new 7-day meal plan',
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGeneratedMealPlan(
+    BuildContext context,
+    Map<String, dynamic> plan,
+    List<Map> days,
+  ) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDFA),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF99F6E4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Your 7-day meal plan',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF115E59),
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'General nutrition guidance · not a diagnosis or treatment plan',
+            style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
+          ),
+          if ((plan['summary']?.toString() ?? '').isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Text(
+              plan['summary'].toString(),
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: Color(0xFF334155),
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          for (final day in days)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    day['day']?.toString() ?? '',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0F766E),
+                    ),
+                  ),
+                  for (final meal
+                      in (day['meals'] is List
+                          ? day['meals'] as List
+                          : const []))
+                    if (meal is Map)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Text(
+                          '${meal['type'] ?? 'Meal'} · ${meal['name'] ?? ''}',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            height: 1.35,
+                            color: Color(0xFF334155),
+                          ),
+                        ),
+                      ),
+                ],
+              ),
+            ),
+          if ((plan['safety_note']?.toString() ?? '').isNotEmpty)
+            Text(
+              plan['safety_note'].toString(),
+              style: const TextStyle(
+                fontSize: 10.5,
+                height: 1.35,
+                color: Color(0xFF64748B),
+              ),
+            ),
+          const SizedBox(height: 6),
+          TextButton.icon(
+            onPressed: () => context.push(
+              RouteNames.contact,
+              extra:
+                  'I would like a clinician to review my AI meal plan because it may not be suitable for me. Assessment reference: ${widget.assessmentReferenceNo ?? 'not available'}.',
+            ),
+            icon: const Icon(LucideIcons.flag, size: 15),
+            label: const Text('Report a plan that seems unsuitable'),
           ),
         ],
       ),

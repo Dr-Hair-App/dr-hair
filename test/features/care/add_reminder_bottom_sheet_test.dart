@@ -21,7 +21,8 @@ void main() {
     setUp(() async {
       cache = AppLocalCache.inMemory();
       notificationService = CareNotificationService(cache);
-      careCubit = CareCubit(notificationService)..loadSampleFixturesForTesting();
+      careCubit = CareCubit(notificationService)
+        ..loadSampleFixturesForTesting();
     });
 
     tearDown(() {
@@ -121,46 +122,47 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('editing an existing reminder shows Edit header and delete button', (
-      tester,
-    ) async {
-      const existing = CareReminder(
-        id: 'test_rem_1',
-        title: 'Morning Scalp Tonic',
-        subtitle: 'Topical Serum · Daily',
-        time: TimeOfDay(hour: 8, minute: 30),
-        treatmentType: 'Topical Serum',
-        repeatDays: [1, 2, 3, 4, 5, 6, 7],
-        isEnabled: true,
-        notes: 'Spray 3 pumps onto dry scalp',
-      );
+    testWidgets(
+      'editing an existing reminder shows Edit header and delete button',
+      (tester) async {
+        const existing = CareReminder(
+          id: 'test_rem_1',
+          title: 'Morning Scalp Tonic',
+          subtitle: 'Topical Serum · Daily',
+          time: TimeOfDay(hour: 8, minute: 30),
+          treatmentType: 'Topical Serum',
+          repeatDays: [1, 2, 3, 4, 5, 6, 7],
+          isEnabled: true,
+          notes: 'Spray 3 pumps onto dry scalp',
+        );
 
-      await tester.pumpWidget(
-        createTestApp(
-          Builder(
-            builder: (context) => ElevatedButton(
-              onPressed: () => AddReminderBottomSheet.show(
-                context,
-                reminderToEdit: existing,
+        await tester.pumpWidget(
+          createTestApp(
+            Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => AddReminderBottomSheet.show(
+                  context,
+                  reminderToEdit: existing,
+                ),
+                child: const Text('Edit Sheet'),
               ),
-              child: const Text('Edit Sheet'),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Edit Sheet'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Edit Sheet'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('Edit Care Reminder'), findsOneWidget);
-      expect(find.text('Update Reminder'), findsOneWidget);
-      expect(find.text('Morning Scalp Tonic'), findsOneWidget);
-      expect(find.text('Spray 3 pumps onto dry scalp'), findsOneWidget);
+        expect(find.text('Edit Care Reminder'), findsOneWidget);
+        expect(find.text('Update Reminder'), findsOneWidget);
+        expect(find.text('Morning Scalp Tonic'), findsOneWidget);
+        expect(find.text('Spray 3 pumps onto dry scalp'), findsOneWidget);
 
-      // Verify trash icon exists for editing
-      expect(find.byIcon(LucideIcons.trash2), findsOneWidget);
-    });
+        // Verify trash icon exists for editing
+        expect(find.byIcon(LucideIcons.trash2), findsOneWidget);
+      },
+    );
 
     testWidgets('tapping custom time opens Cupertino time picker modal', (
       tester,

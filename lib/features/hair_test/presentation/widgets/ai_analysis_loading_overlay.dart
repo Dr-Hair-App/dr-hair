@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
 
@@ -17,15 +18,10 @@ class AiAnalysisLoadingOverlay extends StatefulWidget {
 
 class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
     with SingleTickerProviderStateMixin {
-  static const _statusMessages = [
-    'Reviewing your answers',
-    'Preparing practical care guidance',
-    'Choosing the right next step',
-  ];
-
   late final AnimationController _motionController;
-  Timer? _messageTimer;
-  int _messageIndex = 0;
+  Timer? _longWaitTimer;
+  bool _reduceMotion = false;
+  bool _takingLonger = false;
 
   @override
   void initState() {
@@ -34,26 +30,62 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
       vsync: this,
       duration: const Duration(milliseconds: 5200),
     )..repeat();
-    _messageTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+    _longWaitTimer = Timer(const Duration(seconds: 25), () {
       if (mounted) {
-        setState(() {
-          _messageIndex = (_messageIndex + 1) % _statusMessages.length;
-        });
+        setState(() => _takingLonger = true);
       }
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (reduceMotion == _reduceMotion) return;
+    _reduceMotion = reduceMotion;
+    if (reduceMotion) {
+      _motionController.stop();
+    } else {
+      _motionController.repeat();
+    }
+  }
+
+  @override
   void dispose() {
-    _messageTimer?.cancel();
+    _longWaitTimer?.cancel();
     _motionController.dispose();
     super.dispose();
   }
 
+  Future<void> _contactClinic() async {
+    const phoneNumber = '917240005000';
+    const message =
+        'Hello, my Dr. Hair assessment is taking longer to prepare. Can you guide me?';
+    final uri = Uri.parse(
+      'https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}',
+    );
+    try {
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+          mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open WhatsApp. Please retry.'),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open WhatsApp. Please retry.'),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
-
     return Scaffold(
       backgroundColor: const Color(0xFFF7FAF9),
       body: SafeArea(
@@ -66,165 +98,193 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
                   const Positioned.fill(
                     child: CustomPaint(painter: _SoftBackdropPainter()),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: const Color(0xFFDCECE8)),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x0C0F766E),
-                                blurRadius: 18,
-                                offset: Offset(0, 6),
+                  Align(
+                    alignment: Alignment.center,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 480),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
                               ),
-                            ],
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                LucideIcons.sparkles,
-                                color: AppColors.primary,
-                                size: 15,
-                              ),
-                              SizedBox(width: 7),
-                              Text(
-                                'Dr. Hair Assistant',
-                                style: TextStyle(
-                                  color: AppColors.primaryDark,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.1,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: const Color(0xFFDCECE8),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 22),
-                        AnimatedBuilder(
-                          animation: _motionController,
-                          builder: (context, child) => CustomPaint(
-                            size: const Size.square(224),
-                            painter: _CarePathPainter(
-                              progress: reduceMotion
-                                  ? 0.18
-                                  : _motionController.value,
-                            ),
-                            child: SizedBox.square(
-                              dimension: 224,
-                              child: Center(
-                                child: Container(
-                                  width: 76,
-                                  height: 76,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.primary.withValues(
-                                          alpha: 0.12,
-                                        ),
-                                        blurRadius: 24,
-                                        spreadRadius: 4,
-                                      ),
-                                    ],
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x0C0F766E),
+                                    blurRadius: 18,
+                                    offset: Offset(0, 6),
                                   ),
-                                  child: const Icon(
-                                    LucideIcons.heartPulse,
+                                ],
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    LucideIcons.sparkles,
                                     color: AppColors.primary,
-                                    size: 34,
+                                    size: 15,
                                   ),
-                                ),
+                                  SizedBox(width: 7),
+                                  Text(
+                                    'Dr. Hair Assistant',
+                                    style: TextStyle(
+                                      color: AppColors.primaryDark,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.1,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        const Text(
-                          'Putting your care pathway together',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Color(0xFF163A36),
-                            fontSize: 21,
-                            height: 1.2,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.4,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'We’re reviewing your answers to prepare useful care guidance and a suitable next step.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Color(0xFF667C78),
-                            fontSize: 14,
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Container(
-                          constraints: const BoxConstraints(maxWidth: 360),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.88),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFE4EEEB)),
-                          ),
-                          child: Row(
-                            children: [
-                              const SizedBox.square(
-                                dimension: 17,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.primary,
+                            const SizedBox(height: 22),
+                            AnimatedBuilder(
+                              animation: _motionController,
+                              builder: (context, child) => CustomPaint(
+                                size: const Size.square(224),
+                                painter: _CarePathPainter(
+                                  progress: _reduceMotion
+                                      ? 0.18
+                                      : _motionController.value,
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 260),
-                                  child: Text(
-                                    _statusMessages[_messageIndex],
-                                    key: ValueKey(_messageIndex),
-                                    style: const TextStyle(
-                                      color: Color(0xFF31534E),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
+                                child: SizedBox.square(
+                                  dimension: 224,
+                                  child: Center(
+                                    child: Container(
+                                      width: 76,
+                                      height: 76,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Colors.white,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AppColors.primary.withValues(
+                                              alpha: 0.12,
+                                            ),
+                                            blurRadius: 24,
+                                            spreadRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Icon(
+                                        LucideIcons.heartPulse,
+                                        color: AppColors.primary,
+                                        size: 34,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                              const Icon(
-                                LucideIcons.arrowRight,
-                                size: 16,
-                                color: Color(0xFF8AA39E),
+                            ),
+                            const SizedBox(height: 14),
+                            const Text(
+                              'Putting your care pathway together',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Color(0xFF163A36),
+                                fontSize: 21,
+                                height: 1.2,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.4,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'We’re reviewing your answers to prepare useful care guidance and a suitable next step.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Color(0xFF667C78),
+                                fontSize: 14,
+                                height: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Container(
+                              constraints: const BoxConstraints(maxWidth: 360),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.88),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(0xFFE4EEEB),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  if (_reduceMotion)
+                                    const Icon(
+                                      LucideIcons.clock3,
+                                      size: 17,
+                                      color: AppColors.primary,
+                                    )
+                                  else
+                                    const SizedBox.square(
+                                      dimension: 17,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Reviewing your answers and preparing next steps',
+                                      style: const TextStyle(
+                                        color: Color(0xFF31534E),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_takingLonger) ...[
+                              const SizedBox(height: 14),
+                              const Text(
+                                'This is taking longer than usual.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Color(0xFF667C78),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: _contactClinic,
+                                icon: const Icon(
+                                  LucideIcons.messageCircle,
+                                  size: 16,
+                                ),
+                                label: const Text('Contact the clinic'),
                               ),
                             ],
-                          ),
+                            const SizedBox(height: 15),
+                            const Text(
+                              'Your result will appear as soon as it’s ready.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Color(0xFF8A9B98),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 15),
-                        const Text(
-                          'Your result will appear as soon as it’s ready.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Color(0xFF8A9B98),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ],

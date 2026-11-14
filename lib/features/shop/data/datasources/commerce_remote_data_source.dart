@@ -171,4 +171,20 @@ class CommerceRemoteDataSource {
     }
     return null;
   }
+
+  Future<CareOrderTracking> fetchOrderTracking({
+    String? token,
+    required String orderId,
+  }) async {
+    final headers = await _buildHeaders(token: token);
+    final response = await _dio.get<Map<String, dynamic>>(
+      ApiEndpoints.patientOrderTracking(orderId),
+      options: Options(headers: headers),
+    );
+    final data = response.data?['data'];
+    if (data is Map<String, dynamic>) {
+      return CareOrderTracking.fromJson(data);
+    }
+    throw const FormatException('Invalid order tracking response format');
+  }
 }

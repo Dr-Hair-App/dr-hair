@@ -23,19 +23,28 @@ import '../../../videos/domain/models/video_story_model.dart';
 import '../../../videos/domain/repositories/video_repository.dart';
 import '../../data/content_api.dart';
 import '../../../app_config/presentation/viewmodels/app_config_cubit.dart';
+import '../../../auth/presentation/viewmodels/auth_cubit.dart';
+import '../../../reviews/data/datasources/review_remote_data_source.dart';
+import '../../../reviews/data/models/review_model.dart';
 import '../viewmodels/home_journey_selector.dart';
+import '../viewmodels/home_summary_cubit.dart';
+import '../widgets/home_action_cards_section.dart';
 import '../widgets/medicine_card.dart';
 
 class HomeView extends StatefulWidget {
   final VoidCallback onStartHairTest;
   final VideoRepository? videoRepository;
   final ProductRepository? productRepository;
+  final HomeSummaryCubit? homeSummaryCubit;
+  final ReviewRemoteDataSource? reviewDataSource;
 
   const HomeView({
     super.key,
     required this.onStartHairTest,
     this.videoRepository,
     this.productRepository,
+    this.homeSummaryCubit,
+    this.reviewDataSource,
   });
 
   @override
@@ -50,6 +59,7 @@ class _HomeViewState extends State<HomeView>
   late final List<Animation<Offset>> _sectionPosition;
   Future<List<VideoStoryModel>>? _videoStoriesFuture;
   Future<List<ProductItem>>? _productsFuture;
+  Future<List<ReviewModel>>? _reviewsFuture;
   late final Future<List<ContentItem>> _tipsFuture;
   late final Future<List<ContentItem>> _faqsFuture;
   bool _motionConfigured = false;
@@ -72,6 +82,20 @@ class _HomeViewState extends State<HomeView>
               .catchError((_) => const <ProductItem>[]);
   }
 
+  void _fetchReviews() {
+    if (widget.reviewDataSource != null) {
+      _reviewsFuture = widget.reviewDataSource!.getReviews().catchError(
+        (_) => const <ReviewModel>[],
+      );
+    } else {
+      _reviewsFuture = _isTestExecution
+          ? Future.value(const <ReviewModel>[])
+          : ReviewRemoteDataSource().getReviews().catchError(
+              (_) => const <ReviewModel>[],
+            );
+    }
+  }
+
   static const bool _isFlutterTest = bool.fromEnvironment(
     'flutter.test',
     defaultValue: false,
@@ -86,6 +110,7 @@ class _HomeViewState extends State<HomeView>
     super.initState();
     _fetchVideoStories();
     _fetchProducts();
+    _fetchReviews();
 
     _tipsFuture = _isTestExecution
         ? Future.value(const <ContentItem>[])
@@ -121,12 +146,20 @@ class _HomeViewState extends State<HomeView>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_motionConfigured) return;
-    _motionConfigured = true;
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _entranceController.value = 1;
-    } else {
-      _entranceController.forward();
+    if (!_motionConfigured) {
+      _motionConfigured = true;
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _entranceController.value = 1;
+      } else {
+        _entranceController.forward();
+      }
+    }
+    final authState = context.read<AuthCubit?>()?.state;
+    final token = authState?.sessionToken;
+    final homeCubit =
+        widget.homeSummaryCubit ?? context.read<HomeSummaryCubit?>();
+    if (token != null && token.isNotEmpty && homeCubit?.sessionToken != token) {
+      homeCubit?.loadHomeSummary(token);
     }
   }
 
@@ -185,12 +218,29 @@ class _HomeViewState extends State<HomeView>
     return BlocBuilder<HairTestCubit, HairTestState>(
       builder: (context, hairState) {
         final completed = hairState.isCompleted && !hairState.isRetesting;
+        final homeSummaryState = widget.homeSummaryCubit != null
+            ? widget.homeSummaryCubit!.state
+            : context.watch<HomeSummaryCubit?>()?.state;
+        final hasDynamicCards = homeSummaryState?.hasCards ?? false;
+        final suppressProducts =
+            homeSummaryState?.actionCards.any((c) => c.isClinicianUrgent) ??
+            false;
+        final showPendingStepper =
+            !completed &&
+            !(homeSummaryState?.actionCards.any((c) => c.isPendingAssessment) ??
+                false);
+
         return RefreshIndicator(
           color: AppColors.primary,
           onRefresh: () async {
             _fetchVideoStories();
             _fetchProducts();
+            _fetchReviews();
             context.read<AppConfigCubit?>()?.loadConfig();
+            context.read<HairTestCubit?>()?.loadSavedState();
+            final cubit =
+                widget.homeSummaryCubit ?? context.read<HomeSummaryCubit?>();
+            await cubit?.refresh();
             if (mounted) setState(() {});
           },
           child: SingleChildScrollView(
@@ -201,29 +251,37 @@ class _HomeViewState extends State<HomeView>
               children: [
                 _revealSection(0, _buildHeroSection(context)),
 
-                if (completed) ...[
+                // DYNAMIC CARE DASHBOARD: Priorities 1-6 (Urgent care, Pending action, Shared report, Care plan, Products, Appointments)
+                const SizedBox(height: 16),
+                _revealSection(
+                  1,
+                  HomeActionCardsSection(cubit: widget.homeSummaryCubit),
+                ),
+
+                if (showPendingStepper) ...[
                   const SizedBox(height: 16),
-                  _revealSection(1, _buildTodayCard(context)),
-                ] else ...[
-                  const SizedBox(height: 16),
-                  _revealSection(
-                    1,
-                    _buildPendingAssessmentStepper(context, hairState),
-                  ),
+                  _buildPendingAssessmentStepper(context, hairState),
                 ],
 
-                if (showShop) ...[
+                if (completed) ...[
+                  const SizedBox(height: 16),
+                  _buildTodayCard(context),
+                ],
+
+                if (showShop && !suppressProducts) ...[
                   const SizedBox(height: 20),
                   _revealSection(2, _buildEssentialProducts(context)),
                 ],
 
-                if (showClinicAppointment) ...[
+                if (showClinicAppointment && !suppressProducts) ...[
                   const SizedBox(height: 20),
                   _revealSection(3, _buildClinicAppointmentCard(context)),
                 ],
 
-                const SizedBox(height: 20),
-                _revealSection(4, _buildUrgentCareCard()),
+                if (!hasDynamicCards) ...[
+                  const SizedBox(height: 20),
+                  _revealSection(4, _buildUrgentCareCard()),
+                ],
 
                 if (showReviews) ...[
                   const SizedBox(height: 20),
@@ -240,9 +298,6 @@ class _HomeViewState extends State<HomeView>
 
                 const SizedBox(height: 20),
                 _revealSection(8, _buildWhyTrustDrHair()),
-
-                const SizedBox(height: 20),
-                _revealSection(9, _buildAnalyticsSection()),
 
                 const SizedBox(height: 20),
                 _revealSection(10, _buildFaqSection()),
@@ -544,198 +599,6 @@ class _HomeViewState extends State<HomeView>
     );
   }
 
-  // --- SECTION 3: ANALYTICS & SOCIAL PROOF ---
-  Widget _buildAnalyticsSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: AppColors.lightCardGradient,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: AppColors.primary100),
-        ),
-        child: Column(
-          children: [
-            const Text(
-              'Trusted by Thousands',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: AppColors.primaryDark,
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Real results backed by expertise and experience',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: AppColors.secondaryDark),
-            ),
-            const SizedBox(height: 16),
-
-            // Stat Grid
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    icon: LucideIcons.smile,
-                    value: '20,000+',
-                    title: 'Happy Customers',
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: _buildStatCard(
-                    icon: LucideIcons.trophy,
-                    value: '30+',
-                    title: 'Years Experience',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            // Google Ratings Center Card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary5,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      LucideIcons.thumbsUp,
-                      color: AppColors.primary,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Text(
-                              '4.9',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.primaryDark,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Row(
-                              children: List.generate(
-                                5,
-                                (index) => const Icon(
-                                  LucideIcons.star,
-                                  color: AppColors.starGold,
-                                  size: 16,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Demo rating • sample data',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: AppColors.secondaryDark,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    icon: LucideIcons.heart,
-                    value: '50M+',
-                    title: 'Grafts Done',
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: _buildStatCard(
-                    icon: LucideIcons.userRound,
-                    value: '18,000+',
-                    title: 'Grade 6/7 Cases',
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard({
-    required IconData icon,
-    required String value,
-    required String title,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.primary5,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: AppColors.primary, size: 18),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: AppColors.primaryDark,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 10,
-              color: AppColors.secondaryDark,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // --- SECTION 4: ESSENTIAL PRODUCTS ---
   Widget _buildEssentialProducts(BuildContext context) {
     return _EssentialProductsSection(productsFuture: _productsFuture);
@@ -745,13 +608,20 @@ class _HomeViewState extends State<HomeView>
     return BlocBuilder<CareCubit, CareState>(
       builder: (context, state) {
         final pendingTasks = state.routineTasks
-            .where((task) => !task.isCompleted)
+            .where((task) => !task.isCompleted && !task.isSkipped)
             .toList();
         final nextTask = pendingTasks.isEmpty ? null : pendingTasks.first;
-        final isComplete = state.routineTasks.isNotEmpty && nextTask == null;
+        final isComplete =
+            state.routineTasks.isNotEmpty &&
+            state.routineTasks.every((task) => task.isCompleted);
+        final allTasksHandled =
+            state.routineTasks.isNotEmpty &&
+            state.routineTasks.every(
+              (task) => task.isCompleted || task.isSkipped,
+            );
         final routineActionLabel = state.routineTasks.isEmpty
             ? 'Set up routine'
-            : isComplete
+            : isComplete || allTasksHandled
             ? 'View routine'
             : 'Continue routine';
         return Padding(
@@ -815,7 +685,9 @@ class _HomeViewState extends State<HomeView>
                   isComplete
                       ? 'You’ve completed today’s care steps.'
                       : nextTask == null
-                      ? 'Add a care step to start tracking today.'
+                      ? allTasksHandled
+                            ? 'No care steps are left for today.'
+                            : 'Add a care step to start tracking today.'
                       : 'Next up: ${nextTask.title}',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -825,6 +697,16 @@ class _HomeViewState extends State<HomeView>
                     color: AppColors.secondaryDark,
                   ),
                 ),
+                if (state.isCareEventSyncPending) ...[
+                  const SizedBox(height: 5),
+                  const Text(
+                    'Some check-ins are waiting to sync.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -1472,7 +1354,7 @@ class _HomeViewState extends State<HomeView>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Visit Dr. Jai Bansal',
+                  'Clinic Consultation',
                   style: TextStyle(
                     fontWeight: FontWeight.w800,
                     color: AppColors.primaryDark,
@@ -1480,7 +1362,7 @@ class _HomeViewState extends State<HomeView>
                 ),
                 SizedBox(height: 3),
                 Text(
-                  'Request a physical clinic appointment.',
+                  'Request an in-person clinic appointment.',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.secondaryDark,
@@ -1501,142 +1383,132 @@ class _HomeViewState extends State<HomeView>
 
   // --- SECTION 10: REVIEWS ---
   Widget _buildReviewsSection(BuildContext context) {
-    final reviews = [
-      {
-        'name': 'Amit Verma',
-        'rating': 5,
-        'comment': 'After 3 months of following the custom kit, my hair thinning significantly reduced and my density improved visibly.',
-      },
-      {
-        'name': 'Pooja Nair',
-        'rating': 5,
-        'comment': 'The AI hair test is surprisingly thorough. The doctor-prescribed serum worked wonders for my chronic hair shedding.',
-      },
-      {
-        'name': 'Siddharth Roy',
-        'rating': 5,
-        'comment': 'I was skeptical at first, but DrHair gave me actual clinical insight into my scalp condition. Highly recommended!',
-      },
-    ];
+    return FutureBuilder<List<ReviewModel>>(
+      future: _reviewsFuture,
+      builder: (context, snapshot) {
+        final reviews = snapshot.data ?? const <ReviewModel>[];
+        if (reviews.isEmpty) {
+          return const SizedBox.shrink();
+        }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Expanded(
-                child: Text(
-                  'Voices of Success',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primaryDark,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Voices of Success',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryDark,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => context.push(RouteNames.reviews),
-                child: const Text(
-                  'All Reviews',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => context.push(RouteNames.reviews),
+                    child: const Text(
+                      'All Reviews',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-        ),
-        const Padding(
-          padding: EdgeInsets.only(left: 20, top: 4),
-          child: Text(
-            'Sample testimonials shown for this app demo.',
-            style: TextStyle(fontSize: 11, color: AppColors.secondaryDark),
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 175,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            scrollDirection: Axis.horizontal,
-            itemCount: reviews.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 16),
-            itemBuilder: (context, index) {
-              final r = reviews[index];
-              return Container(
-                width: 280,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.primary5,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: AppColors.primary100),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 175,
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                scrollDirection: Axis.horizontal,
+                itemCount: reviews.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 16),
+                itemBuilder: (context, index) {
+                  final r = reviews[index];
+                  final initial = r.name.isNotEmpty ? r.name[0] : 'P';
+                  return Container(
+                    width: 280,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary5,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: AppColors.primary100),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: AppColors.primary,
-                          child: Text(
-                            (r['name'] as String)[0],
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        Row(
                           children: [
-                            Text(
-                              r['name'] as String,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primaryDark,
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundColor: AppColors.primary,
+                              child: Text(
+                                initial,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                            Row(
-                              children: List.generate(
-                                r['rating'] as int,
-                                (i) => const Icon(
-                                  LucideIcons.star,
-                                  color: AppColors.starGold,
-                                  size: 14,
-                                ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    r.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.primaryDark,
+                                    ),
+                                  ),
+                                  Row(
+                                    children: List.generate(
+                                      r.rating,
+                                      (i) => const Icon(
+                                        LucideIcons.star,
+                                        color: AppColors.starGold,
+                                        size: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 12),
+                        Text(
+                          r.comment,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.secondaryDark,
+                            height: 1.4,
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      r['comment'] as String,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.secondaryDark,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1757,34 +1629,22 @@ class _HomeViewState extends State<HomeView>
     return FutureBuilder<List<ContentItem>>(
       future: _faqsFuture,
       builder: (context, snapshot) {
-        final List<Map<String, String>> faqs;
-        if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-          faqs = snapshot.data!
-              .map(
-                (item) => {
-                  'question': item.title,
-                  'answer': item.content.isNotEmpty
-                      ? item.content
-                      : item.subtitle,
-                },
-              )
-              .toList();
-        } else {
-          faqs = const [
-            {
-              'question': 'What is doctor-backed hair recovery?',
-              'answer': 'Unlike generic commercial shampoos, our plans involve licensed dermatologists assessing your scalp photos, lifestyle, and genetics to formulate targeted clinical topicals and nutrients.',
-            },
-            {
-              'question': 'How long until I see visible results?',
-              'answer': 'Most patients experience hair shedding reduction within 4-6 weeks, followed by noticeable follicular thickening and new growth in 3-5 months.',
-            },
-            {
-              'question': 'Is the online hair test really free?',
-              'answer': 'Yes, the 3-minute diagnostic assessment and initial follicular health report are 100% free with no obligation to purchase.',
-            },
-          ];
-        }
+        final faqs = (snapshot.data ?? const <ContentItem>[])
+            .map(
+              (item) => {
+                'question': item.title,
+                'answer': item.content.isNotEmpty
+                    ? item.content
+                    : item.subtitle,
+              },
+            )
+            .where(
+              (item) =>
+                  item['question']!.trim().isNotEmpty &&
+                  item['answer']!.trim().isNotEmpty,
+            )
+            .toList();
+        if (faqs.isEmpty) return const SizedBox.shrink();
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),

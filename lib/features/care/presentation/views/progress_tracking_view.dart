@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../auth/presentation/viewmodels/auth_cubit.dart';
 import '../../domain/models/care_models.dart';
 import '../viewmodels/care_cubit.dart';
 import '../viewmodels/care_state.dart';
@@ -436,7 +437,7 @@ class _ProgressTrackingViewState extends State<ProgressTrackingView> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Its photos and notes will be removed from your treatment timeline on this device. This cannot be undone.',
+                'This check-in will be removed from your saved progress timeline. This cannot be undone.',
                 style: TextStyle(
                   fontSize: 13,
                   height: 1.45,
@@ -471,7 +472,22 @@ class _ProgressTrackingViewState extends State<ProgressTrackingView> {
     );
     if (confirmed != true || !context.mounted) return;
     HapticFeedback.mediumImpact();
-    context.read<CareCubit>().deleteProgressCheckIn(checkIn.id);
+    try {
+      await context.read<CareCubit>().deleteProgressCheckIn(checkIn.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Progress check-in deleted.')),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not delete this check-in. Please retry.'),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildPhotoThumbnail({
@@ -591,6 +607,8 @@ class _ProgressTrackingViewState extends State<ProgressTrackingView> {
   Widget build(BuildContext context) {
     return BlocBuilder<CareCubit, CareState>(
       builder: (context, state) {
+        final isSignedIn =
+            context.watch<AuthCubit?>()?.state.isAuthenticated == true;
         final sortedCheckIns = List<ProgressCheckIn>.from(state.checkIns)
           ..sort((a, b) => b.date.compareTo(a.date));
 
@@ -614,7 +632,7 @@ class _ProgressTrackingViewState extends State<ProgressTrackingView> {
                       size: 19,
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -637,7 +655,9 @@ class _ProgressTrackingViewState extends State<ProgressTrackingView> {
                           ),
                           SizedBox(height: 5),
                           Text(
-                            'Sample timeline entries are demo data. New photos are saved on this device and are not reviewed by a clinician.',
+                            isSignedIn
+                                ? 'Signed-in check-ins sync to your account. A clinician review appears only after the clinic records one.'
+                                : 'Signed-out check-ins stay on this device. They are not shared with the clinic or clinician-reviewed.',
                             style: TextStyle(
                               fontSize: 11,
                               height: 1.35,

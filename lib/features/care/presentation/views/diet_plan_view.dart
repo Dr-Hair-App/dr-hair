@@ -51,33 +51,37 @@ class DietPlanView extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Header Card
-                        careCard(
-                          backgroundColor: const Color(0xFFFFF7ED),
-                          border: Border.all(color: const Color(0xFFFFEDD5)),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '🥗 ${state.dietTreatmentName}',
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF9A3412),
+                        if (hasPlans)
+                          careCard(
+                            backgroundColor: const Color(0xFFFFF7ED),
+                            border: Border.all(color: const Color(0xFFFFEDD5)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  state.dietTreatmentName.isNotEmpty
+                                      ? state.dietTreatmentName
+                                      : 'Your nutrition plan',
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF9A3412),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Curated by ${state.dietDoctorName} • Hair follicles are metabolically demanding tissues. Supplying adequate keratin building amino acids, biotin, and ferritin prevents telogen shedding.',
-                                style: const TextStyle(
-                                  fontSize: 12.5,
-                                  color: Color(0xFF7C2D12),
-                                  height: 1.4,
-                                ),
-                              ),
-                            ],
+                                if (state.dietDoctorName.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Added by ${state.dietDoctorName}',
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      color: Color(0xFF7C2D12),
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
-                        ),
 
                         // Interactive Water Intake Tracker
                         careCard(
@@ -115,7 +119,7 @@ class DietPlanView extends StatelessWidget {
                                             ),
                                           ),
                                           Text(
-                                            '${state.waterCups} of 8 glasses logged (~${(state.waterCups * 0.3).toStringAsFixed(1)}L)',
+                                            '${state.waterCups} glasses logged today',
                                             style: const TextStyle(
                                               fontSize: 11.5,
                                               color: AppColors.secondaryDark,
@@ -154,22 +158,6 @@ class DietPlanView extends StatelessWidget {
                                     ],
                                   ),
                                 ],
-                              ),
-                              const SizedBox(height: 10),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: LinearProgressIndicator(
-                                  value: (state.waterCups / 8.0).clamp(
-                                    0.0,
-                                    1.0,
-                                  ),
-                                  minHeight: 8,
-                                  backgroundColor: const Color(0xFFF0F9FF),
-                                  valueColor:
-                                      const AlwaysStoppedAnimation<Color>(
-                                        Color(0xFF0284C7),
-                                      ),
-                                ),
                               ),
                             ],
                           ),

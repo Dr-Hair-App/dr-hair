@@ -241,7 +241,16 @@ class RoutineTrackerView extends StatelessWidget {
 
               careSectionHeader(
                 title: 'TODAY’S CARE STEPS',
-                subtitle: 'Tap an item when you complete that step today',
+                subtitle: 'Mark each step complete or skip it for today',
+              ),
+
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () => _showSymptomCheckIn(context),
+                  icon: const Icon(LucideIcons.heartPulse, size: 16),
+                  label: const Text('Report a symptom'),
+                ),
               ),
 
               if (state.routineTasks.isEmpty)
@@ -282,7 +291,7 @@ class RoutineTrackerView extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Your hair assessment has been submitted. Dr. Hair doctors are reviewing your profile and your daily treatment steps will appear here once assigned.',
+                        'Your assigned care steps will appear here when they are added to your care plan.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 12,
@@ -320,6 +329,7 @@ class RoutineTrackerView extends StatelessWidget {
               else
                 ...state.routineTasks.map((task) {
                   final isDone = task.isCompleted;
+                  final isSkipped = task.isSkipped;
 
                   Color tagBg;
                   Color tagColor;
@@ -452,8 +462,44 @@ class RoutineTrackerView extends StatelessWidget {
                                       height: 1.35,
                                     ),
                                   ),
+                                  if (isSkipped) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      task.skipReason.isEmpty
+                                          ? 'Skipped today'
+                                          : 'Skipped today · ${task.skipReason}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
+                            ),
+                            PopupMenuButton<String>(
+                              tooltip: 'Care step options',
+                              onSelected: (action) {
+                                if (action == 'skip') {
+                                  _showSkipReasonDialog(context, task.id);
+                                } else if (action == 'undo_skip') {
+                                  context.read<CareCubit>().toggleRoutineTask(
+                                    task.id,
+                                  );
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                if (!isSkipped)
+                                  const PopupMenuItem(
+                                    value: 'skip',
+                                    child: Text('Skip for today'),
+                                  )
+                                else
+                                  const PopupMenuItem(
+                                    value: 'undo_skip',
+                                    child: Text('Mark complete'),
+                                  ),
+                              ],
                             ),
                           ],
                         ),
@@ -474,6 +520,174 @@ class RoutineTrackerView extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+Future<void> _showSkipReasonDialog(BuildContext context, String taskId) async {
+  var note = '';
+  final reason = await showDialog<String>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Skip this step today?'),
+      content: TextField(
+        maxLength: 240,
+        maxLines: 2,
+        onChanged: (value) => note = value,
+        decoration: const InputDecoration(
+          hintText: 'Why? (optional)',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, note.trim()),
+          child: const Text('Skip today'),
+        ),
+      ],
+    ),
+  );
+  if (reason == null || !context.mounted) return;
+  await context.read<CareCubit>().skipRoutineTask(taskId, reason: reason);
+}
+
+Future<void> _showSymptomCheckIn(BuildContext context) async {
+  const options = <String, String>{
+    'itching': 'Itching',
+    'pain': 'Pain',
+    'burning': 'Burning',
+    'redness': 'Redness',
+    'sores': 'Sores or open areas',
+    'increased_shedding': 'Increased shedding',
+    'other': 'Other',
+  };
+  final selected = <String>{};
+  var note = '';
+  var severity = 'mild';
+  final result =
+      await showDialog<({List<String> symptoms, String severity, String note})>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Symptom check-in'),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Select what you are experiencing.'),
+                    ),
+                    const SizedBox(height: 8),
+                    ...options.entries.map(
+                      (item) => CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(item.value),
+                        value: selected.contains(item.key),
+                        onChanged: (checked) => setDialogState(() {
+                          if (checked == true) {
+                            selected.add(item.key);
+                          } else {
+                            selected.remove(item.key);
+                          }
+                        }),
+                      ),
+                    ),
+                    DropdownButtonFormField<String>(
+                      initialValue: severity,
+                      decoration: const InputDecoration(labelText: 'Severity'),
+                      items: const [
+                        DropdownMenuItem(value: 'mild', child: Text('Mild')),
+                        DropdownMenuItem(
+                          value: 'moderate',
+                          child: Text('Moderate'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'severe',
+                          child: Text('Severe'),
+                        ),
+                      ],
+                      onChanged: (value) =>
+                          setDialogState(() => severity = value ?? 'mild'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      maxLength: 1000,
+                      maxLines: 3,
+                      onChanged: (value) => note = value,
+                      decoration: const InputDecoration(
+                        labelText: 'Anything else? (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: selected.isEmpty
+                    ? null
+                    : () => Navigator.pop(dialogContext, (
+                        symptoms: selected.toList(),
+                        severity: severity,
+                        note: note.trim(),
+                      )),
+                child: const Text('Save check-in'),
+              ),
+            ],
+          ),
+        ),
+      );
+  if (result == null || !context.mounted) return;
+  final needsClinic = await context.read<CareCubit>().logSymptoms(
+    symptoms: result.symptoms,
+    severity: result.severity,
+    note: result.note,
+  );
+  if (!context.mounted) return;
+  if (needsClinic) {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Please contact the clinic'),
+        content: const Text(
+          'These symptoms should be reviewed by a clinician. We have not made a diagnosis or changed your care plan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.push(RouteNames.contact);
+            },
+            child: const Text('Contact clinic'),
+          ),
+        ],
+      ),
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          context.read<CareCubit>().state.isCareEventSyncPending
+              ? 'Saved on this device. It will sync when you are online.'
+              : 'Symptom check-in saved.',
+        ),
+      ),
     );
   }
 }

@@ -11,8 +11,8 @@ class PatientDietPlanResponse {
 
   const PatientDietPlanResponse({
     required this.meals,
-    this.treatmentName = 'Personalized Nutrition Plan',
-    this.doctorName = 'Dr. Hair Clinical Team',
+    this.treatmentName = '',
+    this.doctorName = '',
   });
 }
 
@@ -20,7 +20,7 @@ class PatientDietApi {
   final Dio _dio;
 
   PatientDietApi({Dio? dio})
-      : _dio = dio ?? DioClient(baseUrl: ApiEndpoints.backendBaseUrl).dio;
+    : _dio = dio ?? DioClient(baseUrl: ApiEndpoints.backendBaseUrl).dio;
 
   Future<PatientDietPlanResponse> getPatientDietPlan(String token) async {
     final response = await _dio.get<Map<String, dynamic>>(
@@ -42,9 +42,8 @@ class PatientDietApi {
 
     return PatientDietPlanResponse(
       meals: meals,
-      treatmentName:
-          data['treatment_name'] as String? ?? 'Personalized Nutrition Plan',
-      doctorName: data['doctor_name'] as String? ?? 'Dr. Hair Clinical Team',
+      treatmentName: data['treatment_name'] as String? ?? '',
+      doctorName: data['doctor_name'] as String? ?? '',
     );
   }
 }

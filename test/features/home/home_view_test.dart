@@ -11,9 +11,28 @@ import 'package:dr_hair/core/theme/app_theme.dart';
 import 'package:dr_hair/features/shop/data/models/category_model.dart';
 import 'package:dr_hair/features/shop/data/models/product_model.dart';
 import 'package:dr_hair/features/shop/domain/repositories/product_repository.dart';
+import 'package:dr_hair/features/reviews/data/datasources/review_remote_data_source.dart';
+import 'package:dr_hair/features/reviews/data/models/review_model.dart';
 import 'package:dr_hair/features/videos/domain/models/video_story_model.dart';
 import 'package:dr_hair/features/videos/domain/repositories/video_repository.dart';
+
 import '../../helpers/video_test_fixtures.dart';
+
+class _FakeReviewRemoteDataSource extends Fake
+    implements ReviewRemoteDataSource {
+  @override
+  Future<List<ReviewModel>> getReviews({String? category, int? page}) async {
+    return const [
+      ReviewModel(
+        id: 'rev-1',
+        name: 'Rahul Sharma',
+        rating: 5,
+        category: 'Hair Fall',
+        comment: 'Great clinical progress in 3 months with verified treatment.',
+      ),
+    ];
+  }
+}
 
 class _FakeHomeProductRepository implements ProductRepository {
   @override
@@ -43,7 +62,8 @@ class _FakeHomeProductRepository implements ProductRepository {
 }
 
 class _PendingProductRepository implements ProductRepository {
-  final Future<({List<ProductItem> items, bool hasMore, int total})> pendingFuture;
+  final Future<({List<ProductItem> items, bool hasMore, int total})>
+  pendingFuture;
 
   _PendingProductRepository(this.pendingFuture);
 
@@ -83,7 +103,10 @@ class _FakeHomeVideoRepository implements VideoRepository {
 }
 
 void main() {
-  Widget buildHomeView({VoidCallback? onStartHairTest}) {
+  Widget buildHomeView({
+    VoidCallback? onStartHairTest,
+    ReviewRemoteDataSource? reviewDataSource,
+  }) {
     return MultiBlocProvider(
       providers: [
         BlocProvider<CareCubit>(create: (_) => CareCubit()),
@@ -96,6 +119,7 @@ void main() {
             onStartHairTest: onStartHairTest ?? () {},
             productRepository: _FakeHomeProductRepository(),
             videoRepository: _FakeHomeVideoRepository(),
+            reviewDataSource: reviewDataSource ?? _FakeReviewRemoteDataSource(),
           ),
         ),
       ),
@@ -119,10 +143,14 @@ void main() {
       expect(find.byType(HomeView), findsOneWidget);
       expect(find.text('Essential Products'), findsOneWidget);
       expect(find.text('Prefer expert guidance?'), findsNothing);
-      expect(find.text('Visit Dr. Jai Bansal'), findsOneWidget);
+      expect(find.text('Clinic Consultation'), findsOneWidget);
       expect(find.text('URGENT CARE'), findsOneWidget);
       expect(find.text('Voices of Success'), findsOneWidget);
       expect(find.text('Free Hair Test'), findsOneWidget);
+      expect(find.text('50M+'), findsNothing);
+      expect(find.text('20,000+'), findsNothing);
+      expect(find.text('18,000+'), findsNothing);
+      expect(find.text('Trusted by Thousands'), findsNothing);
 
       // Verify vertical positioning order:
       final productsTop = tester.getTopLeft(find.text('Essential Products')).dy;
@@ -158,44 +186,45 @@ void main() {
     expect(reviewsTop, lessThan(videosTop));
   });
 
-  testWidgets('HomeView displays Pending Assessment Stepper and triggers onStartHairTest', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
+  testWidgets(
+    'HomeView displays Pending Assessment Stepper and triggers onStartHairTest',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
 
-    bool started = false;
-    await tester.pumpWidget(
-      buildHomeView(
-        onStartHairTest: () {
-          started = true;
-        },
-      ),
-    );
-    await tester.pumpAndSettle();
+      bool started = false;
+      await tester.pumpWidget(
+        buildHomeView(
+          onStartHairTest: () {
+            started = true;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    // Verify Stepper Header and Milestone labels
-    expect(find.text('Hair & Scalp Assessment'), findsOneWidget);
-    expect(find.text('PENDING'), findsOneWidget);
-    expect(find.text('Pattern'), findsOneWidget);
-    expect(find.text('Scalp'), findsOneWidget);
-    expect(find.text('Habits'), findsOneWidget);
-    expect(find.text('Photos'), findsOneWidget);
+      // Verify Stepper Header and Milestone labels
+      expect(find.text('Hair & Scalp Assessment'), findsOneWidget);
+      expect(find.text('PENDING'), findsOneWidget);
+      expect(find.text('Pattern'), findsOneWidget);
+      expect(find.text('Scalp'), findsOneWidget);
+      expect(find.text('Habits'), findsOneWidget);
+      expect(find.text('Photos'), findsOneWidget);
 
-    // Verify Stepper CTA button and interaction
-    final ctaButton = find.text('Start Free Hair Assessment');
-    expect(ctaButton, findsOneWidget);
+      // Verify Stepper CTA button and interaction
+      final ctaButton = find.text('Start Free Hair Assessment');
+      expect(ctaButton, findsOneWidget);
 
-    await tester.ensureVisible(ctaButton);
-    await tester.tap(ctaButton);
-    await tester.pumpAndSettle();
+      await tester.ensureVisible(ctaButton);
+      await tester.tap(ctaButton);
+      await tester.pumpAndSettle();
 
-    expect(started, isTrue);
-  });
+      expect(started, isTrue);
+    },
+  );
 
   testWidgets(
     'HomeView renders Skeletonizer shimmer while products and videos are loading',
@@ -207,7 +236,8 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      final completer = Completer<({List<ProductItem> items, bool hasMore, int total})>();
+      final completer =
+          Completer<({List<ProductItem> items, bool hasMore, int total})>();
 
       await tester.pumpWidget(
         MultiBlocProvider(

@@ -5,11 +5,15 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/storage/app_local_cache.dart';
 import '../../domain/models/care_models.dart';
 
-enum NotificationPermissionStatus { notDetermined, granted, denied }
+enum NotificationPermissionStatus {
+  notDetermined,
+  granted,
+  denied,
+  unavailable,
+}
 
 /// Service managing reminder notification scheduling, permissions, and persistence.
 class CareNotificationService {
-  static const String _permissionKey = 'care_notification_permission_status';
   static const String _remindersStorageKey = 'care_persisted_reminders_v1';
   static const String _routineStorageKey = 'care_persisted_routine_v1';
   static const String _routineDayKey = 'care_persisted_routine_day_v1';
@@ -29,31 +33,13 @@ class CareNotificationService {
 
   /// Retrieves the current notification permission status.
   NotificationPermissionStatus getPermissionStatus() {
-    final raw = _cache?.getString(_permissionKey);
-    if (raw == 'granted') return NotificationPermissionStatus.granted;
-    if (raw == 'denied') return NotificationPermissionStatus.denied;
-    return NotificationPermissionStatus.notDetermined;
+    return NotificationPermissionStatus.unavailable;
   }
 
-  /// Requests notification permission honestly.
-  /// If simulated in local demo environment, sets status to granted unless explicitly denied.
-  Future<NotificationPermissionStatus> requestPermission({
-    bool simulateDenial = false,
-  }) async {
-    final status = simulateDenial
-        ? NotificationPermissionStatus.denied
-        : NotificationPermissionStatus.granted;
-    await _cache?.put(
-      _permissionKey,
-      status == NotificationPermissionStatus.granted ? 'granted' : 'denied',
-    );
-    return status;
-  }
-
-  /// Resets permission back to notDetermined for testing.
-  Future<void> resetPermission() async {
-    await _cache?.remove(_permissionKey);
-  }
+  /// No native notification plugin is configured in this build, so do not
+  /// display or persist a simulated permission result.
+  Future<NotificationPermissionStatus> requestPermission() async =>
+      NotificationPermissionStatus.unavailable;
 
   /// Persists the active list of reminders to local storage.
   Future<bool> saveReminders(List<CareReminder> reminders) async {
@@ -126,17 +112,14 @@ class CareNotificationService {
     // Android: android.permission.POST_NOTIFICATIONS, ExactAlarm permission
     // iOS: UNUserNotificationCenter.requestAuthorization(options: [.alert, .sound, .badge])
     debugPrint(
-      '[CareNotificationService] Scheduled reminder "${reminder.title}" at ${reminder.timeFormatted} (${reminder.daysSummary})',
+      '[CareNotificationService] Saved reminder "${reminder.title}"; timed alerts are unavailable in this build.',
     );
   }
 
   /// Cancels a scheduled reminder notification.
   Future<void> cancelReminder(String reminderId) async {
-    debugPrint('[CareNotificationService] Cancelled reminder $reminderId');
-  }
-
-  /// Explains how to recover if permission was denied in device settings.
-  static String getPermissionDeniedRecoveryAdvice() {
-    return 'Dose notifications are disabled. To receive clinical regimen alerts, open your device Settings > Apps > Dr. Hair > Notifications and enable Allow Notifications.';
+    debugPrint(
+      '[CareNotificationService] Removed reminder $reminderId; no native alert was scheduled.',
+    );
   }
 }

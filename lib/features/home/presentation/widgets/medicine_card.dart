@@ -32,7 +32,7 @@ class MedicineCard extends StatelessWidget {
     required this.price,
     required this.imageUrl,
     this.category = MedicineCategory.dermatologist,
-    this.rating = 4.8,
+    this.rating = 0,
     this.onTap,
     this.width = 220,
     this.showAddToCart = false,
@@ -44,7 +44,7 @@ class MedicineCard extends StatelessWidget {
 
     return Semantics(
       label:
-          '$title, ${category.displayName}, price $price, rated ${rating.toStringAsFixed(1)} out of 5 stars',
+          '$title, ${category.displayName}, price $price${rating > 0 ? ', rated ${rating.toStringAsFixed(1)} out of 5 stars' : ''}',
       button: true,
       child: Container(
         width: width,
@@ -220,21 +220,23 @@ class MedicineCard extends StatelessWidget {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(
-                                      LucideIcons.star,
-                                      size: 13,
-                                      color: AppColors.starGold,
-                                    ),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      rating.toStringAsFixed(1),
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.primaryDark,
+                                    if (rating > 0) ...[
+                                      const Icon(
+                                        LucideIcons.star,
+                                        size: 13,
+                                        color: AppColors.starGold,
                                       ),
-                                    ),
-                                    const SizedBox(width: 6),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        rating.toStringAsFixed(1),
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.primaryDark,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                    ],
                                     const Icon(
                                       LucideIcons.chevronRight,
                                       size: 14,

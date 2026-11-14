@@ -1,56 +1,149 @@
+import 'package:dio/dio.dart';
 import 'package:dr_hair/features/reviews/presentation/views/reviews_view.dart';
+import 'package:dr_hair/features/reviews/data/datasources/review_remote_data_source.dart';
+import 'package:dr_hair/features/reviews/data/models/review_model.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+class _FakeReviewDataSource extends ReviewRemoteDataSource {
+  final Future<List<ReviewModel>> Function(String? category) load;
+
+  _FakeReviewDataSource(this.load) : super(dio: Dio());
+
+  @override
+  Future<List<ReviewModel>> getReviews({String? category, int? page}) =>
+      load(category);
+}
+
+const _testReviews = [
+  ReviewModel(
+    id: 'review_hair_fall',
+    name: 'Test Patient One',
+    rating: 5,
+    category: 'Hair Fall',
+    comment: 'Test review for the filter flow.',
+  ),
+  ReviewModel(
+    id: 'review_dandruff',
+    name: 'Test Patient Two',
+    rating: 4,
+    category: 'Dandruff',
+    comment: 'Another test review for the filter flow.',
+  ),
+];
+
 void main() {
-  testWidgets('ReviewsView renders rating card and filters with NestedScrollView',
-      (tester) async {
+  testWidgets(
+    'ReviewsView renders published stories and filters with NestedScrollView',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ReviewsView(
+            remoteDataSource: _FakeReviewDataSource(
+              (category) async => _testReviews
+                  .where(
+                    (review) => category == null || review.category == category,
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Patient Stories'), findsOneWidget);
+
+      // Category chips
+      expect(find.text('All'), findsOneWidget);
+      expect(find.text('Hair Fall'), findsOneWidget);
+      expect(find.text('Regrowth'), findsOneWidget);
+      expect(find.text('Dandruff'), findsOneWidget);
+
+      // Only the injected review records appear.
+      expect(find.text('Test Patient One'), findsOneWidget);
+      expect(find.text('Rahul Sharma'), findsNothing);
+
+      // Switch filter to Dandruff
+      await tester.tap(find.text('Dandruff'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Test Patient Two'), findsOneWidget);
+      expect(find.text('Test Patient One'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'ReviewsView docks category bar and changes background on scroll',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ReviewsView(
+            remoteDataSource: _FakeReviewDataSource(
+              (category) async => _testReviews
+                  .where(
+                    (review) => category == null || review.category == category,
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verify initial un-docked state
+      expect(find.byType(NestedScrollView), findsOneWidget);
+      expect(find.text('Patient Stories'), findsOneWidget);
+
+      // Scroll down to collapse header and dock category bar
+      await tester.drag(find.byType(NestedScrollView), const Offset(0, -300));
+      await tester.pumpAndSettle();
+
+      // Category chips remain pinned and accessible
+      expect(find.text('All'), findsOneWidget);
+      expect(find.text('Hair Fall'), findsOneWidget);
+      expect(find.text('Patient Stories'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'ReviewsView shows a truthful empty state when API has no reviews',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ReviewsView(
+            remoteDataSource: _FakeReviewDataSource((_) async => const []),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('No reviews found in this category'), findsOneWidget);
+      expect(find.text('Rahul Sharma'), findsNothing);
+      expect(find.text('Ananya Mehra'), findsNothing);
+      expect(find.text('4.8'), findsNothing);
+    },
+  );
+
+  testWidgets('ReviewsView offers retry after a load failure', (tester) async {
+    var calls = 0;
     await tester.pumpWidget(
-      const MaterialApp(
-        home: ReviewsView(),
+      MaterialApp(
+        home: ReviewsView(
+          remoteDataSource: _FakeReviewDataSource((_) async {
+            calls++;
+            if (calls == 1) throw StateError('offline');
+            return _testReviews;
+          }),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Patient Stories'), findsOneWidget);
-
-    // Category chips
-    expect(find.text('All'), findsOneWidget);
-    expect(find.text('Hair Fall'), findsOneWidget);
-    expect(find.text('Regrowth'), findsOneWidget);
-    expect(find.text('Dandruff'), findsOneWidget);
-
-    // Initial shows Rahul Sharma
-    expect(find.text('Rahul Sharma'), findsOneWidget);
-
-    // Switch filter to Dandruff
-    await tester.tap(find.text('Dandruff'));
+    expect(find.textContaining('Reviews could not be loaded'), findsOneWidget);
+    await tester.tap(find.text('Try again'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ananya Mehra'), findsOneWidget);
-    expect(find.text('Rahul Sharma'), findsNothing);
-  });
-
-  testWidgets('ReviewsView docks category bar and changes background on scroll',
-      (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: ReviewsView(),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    // Verify initial un-docked state
-    expect(find.byType(NestedScrollView), findsOneWidget);
-    expect(find.text('Patient Stories'), findsOneWidget);
-
-    // Scroll down to collapse header and dock category bar
-    await tester.drag(find.byType(NestedScrollView), const Offset(0, -300));
-    await tester.pumpAndSettle();
-
-    // Category chips remain pinned and accessible
-    expect(find.text('All'), findsOneWidget);
-    expect(find.text('Hair Fall'), findsOneWidget);
-    expect(find.text('Patient Stories'), findsOneWidget);
+    expect(find.text('Test Patient One'), findsOneWidget);
+    expect(calls, 2);
   });
 }

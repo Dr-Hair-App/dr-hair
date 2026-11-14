@@ -8,38 +8,41 @@ import 'package:skeletonizer/skeletonizer.dart';
 
 void main() {
   group('ProductSupplyPlan.ensureThreePlans', () {
-    test('when admin provides 1 plan, dynamically computes 3 plans with pricing', () {
-      final adminPlans = [
-        const ProductSupplyPlan(
-          title: '1 Month',
-          subtitle: 'Starter bottle',
-          price: 1000,
-          mrp: 1500,
-        ),
-      ];
+    test(
+      'when admin provides 1 plan, dynamically computes 3 plans with pricing',
+      () {
+        final adminPlans = [
+          const ProductSupplyPlan(
+            title: '1 Month',
+            subtitle: 'Starter bottle',
+            price: 1000,
+            mrp: 1500,
+          ),
+        ];
 
-      final plans = ProductSupplyPlan.ensureThreePlans(adminPlans);
-      expect(plans.length, 3);
+        final plans = ProductSupplyPlan.ensureThreePlans(adminPlans);
+        expect(plans.length, 3);
 
-      // Plan 1
-      expect(plans[0].title, '1 Month');
-      expect(plans[0].price, 1000);
-      expect(plans[0].mrp, 1500);
+        // Plan 1
+        expect(plans[0].title, '1 Month');
+        expect(plans[0].price, 1000);
+        expect(plans[0].mrp, 1500);
 
-      // Plan 2 (2 Months at 10% discount)
-      expect(plans[1].title, '2 Months');
-      expect(plans[1].price, 1800); // 1000 * 2 * 0.90
-      expect(plans[1].mrp, 3000); // 1500 * 2
-      expect(plans[1].badge, 'Most Popular');
-      expect(plans[1].monthlyPrice, 900);
+        // Plan 2 (2 Months at 10% discount)
+        expect(plans[1].title, '2 Months');
+        expect(plans[1].price, 1800); // 1000 * 2 * 0.90
+        expect(plans[1].mrp, 3000); // 1500 * 2
+        expect(plans[1].badge, 'Most Popular');
+        expect(plans[1].monthlyPrice, 900);
 
-      // Plan 3 (3 Months at 18% discount)
-      expect(plans[2].title, '3 Months');
-      expect(plans[2].price, 2460); // 1000 * 3 * 0.82
-      expect(plans[2].mrp, 4500); // 1500 * 3
-      expect(plans[2].badge, 'Best Value');
-      expect(plans[2].monthlyPrice, 820);
-    });
+        // Plan 3 (3 Months at 18% discount)
+        expect(plans[2].title, '3 Months');
+        expect(plans[2].price, 2460); // 1000 * 3 * 0.82
+        expect(plans[2].mrp, 4500); // 1500 * 3
+        expect(plans[2].badge, 'Best Value');
+        expect(plans[2].monthlyPrice, 820);
+      },
+    );
 
     test('when admin provides 3 plans, preserves all admin plans', () {
       final adminPlans = [
@@ -204,7 +207,10 @@ void main() {
         // Add to cart to show quantity controls
         await tester.tap(find.textContaining('Add to cart'));
         await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('product-added-controls')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('product-added-controls')),
+          findsOneWidget,
+        );
 
         // Increment quantity (+ button)
         await tester.tap(find.byIcon(LucideIcons.plus));
@@ -325,6 +331,8 @@ void main() {
     testWidgets('suggested products render and show accurate info', (
       tester,
     ) async {
+      ProductItem.clearCachedProducts();
+      ProductItem.cacheProducts(ProductItem.demoCatalog);
       tester.view.physicalSize = const Size(420, 920);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -361,7 +369,10 @@ void main() {
         // Tap Add to cart to show quantity controls and View button
         await tester.tap(find.textContaining('Add to cart'));
         await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('product-added-controls')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('product-added-controls')),
+          findsOneWidget,
+        );
         expect(find.text('View'), findsOneWidget);
         expect(find.byIcon(LucideIcons.trash2), findsOneWidget);
         expect(find.byIcon(LucideIcons.plus), findsOneWidget);
@@ -406,7 +417,10 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Product unavailable'), findsOneWidget);
-        expect(find.text('This product is no longer available.'), findsOneWidget);
+        expect(
+          find.text('This product is no longer available.'),
+          findsOneWidget,
+        );
         expect(find.text('Browse products'), findsOneWidget);
       },
     );
@@ -446,7 +460,9 @@ void main() {
         );
 
         await tester.pumpWidget(
-          MaterialApp(home: ProductDetailsView(initialProduct: singlePlanProduct)),
+          MaterialApp(
+            home: ProductDetailsView(initialProduct: singlePlanProduct),
+          ),
         );
 
         // All 3 plans should be visible on screen

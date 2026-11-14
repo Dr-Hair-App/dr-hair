@@ -20,8 +20,9 @@ class _ReviewsViewState extends State<ReviewsView> {
   int _selectedFilterIndex = 0;
   final List<String> _filters = ['All', 'Hair Fall', 'Regrowth', 'Dandruff'];
   late final ReviewRemoteDataSource _dataSource;
-  List<ReviewModel> _reviews = ReviewModel.defaultReviews;
+  List<ReviewModel> _reviews = const [];
   bool _isLoading = false;
+  String? _loadErrorMessage;
   late final ScrollController _scrollController;
   bool _isScrolledPastHeader = false;
 
@@ -52,15 +53,26 @@ class _ReviewsViewState extends State<ReviewsView> {
 
   Future<void> _loadReviews() async {
     setState(() => _isLoading = true);
+    _loadErrorMessage = null;
     final category = _selectedFilterIndex == 0
         ? null
         : _filters[_selectedFilterIndex];
-    final items = await _dataSource.getReviews(category: category);
-    if (!mounted) return;
-    setState(() {
-      _reviews = items;
-      _isLoading = false;
-    });
+    try {
+      final items = await _dataSource.getReviews(category: category);
+      if (!mounted) return;
+      setState(() {
+        _reviews = items;
+        _isLoading = false;
+        _loadErrorMessage = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _loadErrorMessage =
+            'Reviews could not be loaded. Check your connection and retry.';
+      });
+    }
   }
 
   @override
@@ -161,7 +173,13 @@ class _ReviewsViewState extends State<ReviewsView> {
                                           ),
 
                                           const SizedBox(height: 10),
-                                          _buildRatingCard(),
+                                          const Text(
+                                            'Stories shared by patients',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: AppColors.secondaryDark,
+                                            ),
+                                          ),
                                           const SizedBox(height: 10),
                                         ],
                                       ),
@@ -230,19 +248,39 @@ class _ReviewsViewState extends State<ReviewsView> {
                       context,
                     ),
                   ),
-                  if (_isLoading && _reviews.isEmpty)
-                    const SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    )
-                  else if (filteredReviews.isEmpty)
+                  if ((_isLoading && _reviews.isEmpty) ||
+                      _loadErrorMessage != null ||
+                      filteredReviews.isEmpty)
                     SliverFillRemaining(
                       hasScrollBody: false,
-                      child: _buildEmptyState(),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) {
+                          final scale = Tween<double>(begin: 0.98, end: 1)
+                              .animate(
+                                CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.easeOutCubic,
+                                ),
+                              );
+                          return FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(scale: scale, child: child),
+                          );
+                        },
+                        child: _isLoading && _reviews.isEmpty
+                            ? const Center(
+                                key: ValueKey('reviews_loading'),
+                                child: CircularProgressIndicator(
+                                  color: AppColors.primary,
+                                ),
+                              )
+                            : _loadErrorMessage != null
+                            ? _buildErrorState(_loadErrorMessage!)
+                            : _buildEmptyState(),
+                      ),
                     )
                   else
                     SliverPadding(
@@ -262,83 +300,6 @@ class _ReviewsViewState extends State<ReviewsView> {
             },
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildRatingCard() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppColors.primary5,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.primary100),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.primary100),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 4,
-                ),
-              ],
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(LucideIcons.star, color: AppColors.starGold, size: 17),
-                SizedBox(width: 4),
-                Text(
-                  '4.8',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primaryDark,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Patient satisfaction rating',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary,
-                  ),
-                ),
-                SizedBox(height: 1),
-                Text(
-                  'Verified outcomes across 12,000+ active care plans',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: AppColors.secondaryDark,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -391,6 +352,43 @@ class _ReviewsViewState extends State<ReviewsView> {
       ),
     );
   }
+
+  Widget _buildErrorState(String message) {
+    return Center(
+      key: const ValueKey('reviews_load_error'),
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.92, end: 1),
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              builder: (context, scale, child) =>
+                  Transform.scale(scale: scale, child: child),
+              child: const Icon(
+                LucideIcons.wifiOff,
+                size: 36,
+                color: AppColors.secondaryDark,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.secondaryDark),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonal(
+              onPressed: _loadReviews,
+              child: const Text('Try again'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _ReviewCard extends StatefulWidget {
@@ -402,21 +400,46 @@ class _ReviewCard extends StatefulWidget {
   State<_ReviewCard> createState() => _ReviewCardState();
 }
 
-class _ReviewCardState extends State<_ReviewCard> {
-  bool _isPressed = false;
+class _ReviewCardState extends State<_ReviewCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pressController;
+  late final Animation<double> _pressScale;
+
+  @override
+  void initState() {
+    super.initState();
+    _pressController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 140),
+    );
+    _pressScale = Tween<double>(begin: 1, end: 0.985).animate(
+      CurvedAnimation(parent: _pressController, curve: Curves.easeOutCubic),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pressController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final r = widget.review;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
-    return AnimatedScale(
-      scale: _isPressed ? 0.985 : 1.0,
-      duration: const Duration(milliseconds: 140),
-      curve: Curves.easeOutCubic,
+    return AnimatedBuilder(
+      animation: _pressController,
+      builder: (context, child) => Transform.scale(
+        scale: reduceMotion ? 1 : _pressScale.value,
+        child: child,
+      ),
       child: GestureDetector(
-        onTapDown: (_) => setState(() => _isPressed = true),
-        onTapUp: (_) => setState(() => _isPressed = false),
-        onTapCancel: () => setState(() => _isPressed = false),
+        onTapDown: (_) {
+          if (!reduceMotion) _pressController.forward();
+        },
+        onTapUp: (_) => _pressController.reverse(),
+        onTapCancel: _pressController.reverse,
         child: Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(

@@ -29,6 +29,21 @@ class PatientClinicalApi {
     return data;
   }
 
+  Future<Map<String, dynamic>> getHomeSummary(String accessToken) async {
+    final response = await _client.dio.get<Map<String, dynamic>>(
+      ApiEndpoints.patientHomeSummary,
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    final envelope = response.data;
+    final data = envelope?['data'];
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException(
+        'The patient home summary response is invalid.',
+      );
+    }
+    return data;
+  }
+
   Future<Uri> getReportDownloadUri({
     required String accessToken,
     required String reportId,
@@ -62,6 +77,46 @@ class PatientClinicalApi {
     }
     return [];
   }
+
+  Future<List<Map<String, dynamic>>> getCareEvents({
+    required String accessToken,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final response = await _client.dio.get<Map<String, dynamic>>(
+      ApiEndpoints.patientCareEvents,
+      queryParameters: {'from': _dateKey(from), 'to': _dateKey(to)},
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    final data = response.data?['data'];
+    final items = data is Map ? data['items'] : null;
+    if (items is! List) {
+      throw const FormatException('The daily care event response is invalid.');
+    }
+    return items
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> saveCareEvent({
+    required String accessToken,
+    required Map<String, dynamic> event,
+  }) async {
+    final response = await _client.dio.put<Map<String, dynamic>>(
+      ApiEndpoints.patientCareEvents,
+      data: event,
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    final data = response.data?['data'];
+    if (data is! Map) {
+      throw const FormatException('The daily care event response is invalid.');
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
+  String _dateKey(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   Future<List<Map<String, dynamic>>> addRoutineStep({
     required String accessToken,

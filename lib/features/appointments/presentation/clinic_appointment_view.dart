@@ -59,6 +59,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     final picked = await AppointmentDatePickerBottomSheet.show(
       context,
       initialDate: _startsAt,
+      api: context.read<ClinicAppointmentCubit>().api,
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -290,6 +291,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
       context,
       initialDate: initialDate,
       initialSlot: initialSlot,
+      api: context.read<ClinicAppointmentCubit>().api,
     );
 
     if (picked == null || !mounted) return;
@@ -562,20 +564,23 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
               // Dynamic Billing & Payment Policy Banner (Configured from Admin Panel)
               Container(
                 margin: const EdgeInsets.only(top: 14),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: isFirstFree
                       ? const Color(0xFFF0FDF4)
                       : (!billing.paymentRequired
-                          ? const Color(0xFFF0FDFA)
-                          : const Color(0xFFEFF6FF)),
+                            ? const Color(0xFFF0FDFA)
+                            : const Color(0xFFEFF6FF)),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
                     color: isFirstFree
                         ? const Color(0xFF86EFAC)
                         : (!billing.paymentRequired
-                            ? const Color(0xFF99F6E4)
-                            : const Color(0xFFBFDBFE)),
+                              ? const Color(0xFF99F6E4)
+                              : const Color(0xFFBFDBFE)),
                   ),
                 ),
                 child: Row(
@@ -586,22 +591,22 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                         color: isFirstFree
                             ? const Color(0xFFDCFCE7)
                             : (!billing.paymentRequired
-                                ? const Color(0xFFCCFBF1)
-                                : const Color(0xFFDBEAFE)),
+                                  ? const Color(0xFFCCFBF1)
+                                  : const Color(0xFFDBEAFE)),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         isFirstFree
                             ? LucideIcons.sparkles
                             : (!billing.paymentRequired
-                                ? LucideIcons.banknote
-                                : LucideIcons.creditCard),
+                                  ? LucideIcons.banknote
+                                  : LucideIcons.creditCard),
                         size: 18,
                         color: isFirstFree
                             ? const Color(0xFF16A34A)
                             : (!billing.paymentRequired
-                                ? const Color(0xFF0D9488)
-                                : const Color(0xFF2563EB)),
+                                  ? const Color(0xFF0D9488)
+                                  : const Color(0xFF2563EB)),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -615,41 +620,46 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                 isFirstFree
                                     ? '1st Clinic Visit 100% FREE'
                                     : (!billing.paymentRequired
-                                        ? 'No Online Payment Required'
-                                        : 'Online Payment Required'),
+                                          ? 'No Online Payment Required'
+                                          : 'Online Payment Required'),
                                 style: TextStyle(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w800,
                                   color: isFirstFree
                                       ? const Color(0xFF15803D)
                                       : (!billing.paymentRequired
-                                          ? const Color(0xFF0F766E)
-                                          : const Color(0xFF1D4ED8)),
+                                            ? const Color(0xFF0F766E)
+                                            : const Color(0xFF1D4ED8)),
                                 ),
                               ),
                               const SizedBox(width: 6),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1.5,
+                                ),
                                 decoration: BoxDecoration(
                                   color: isFirstFree
                                       ? const Color(0xFFBBF7D0)
                                       : (!billing.paymentRequired
-                                          ? const Color(0xFF99F6E4)
-                                          : const Color(0xFF93C5FD)),
+                                            ? const Color(0xFF99F6E4)
+                                            : const Color(0xFF93C5FD)),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
                                   isFirstFree
                                       ? '₹0'
-                                      : (!billing.paymentRequired ? 'Pay at Clinic' : '₹$fee'),
+                                      : (!billing.paymentRequired
+                                            ? 'Pay at Clinic'
+                                            : '₹$fee'),
                                   style: TextStyle(
                                     fontSize: 9.5,
                                     fontWeight: FontWeight.w800,
                                     color: isFirstFree
                                         ? const Color(0xFF14532D)
                                         : (!billing.paymentRequired
-                                            ? const Color(0xFF115E59)
-                                            : const Color(0xFF1E3A8A)),
+                                              ? const Color(0xFF115E59)
+                                              : const Color(0xFF1E3A8A)),
                                   ),
                                 ),
                               ),
@@ -660,16 +670,16 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                             isFirstFree
                                 ? 'Welcome offer: Your first consultation with Dr. Jai Bansal is complimentary.'
                                 : (!billing.paymentRequired
-                                    ? 'Online payment is OFF. Reserve your slot now; pay consultation fee ${fee > 0 ? "₹$fee " : ""}at clinic reception.'
-                                    : 'Consultation fee of ₹$fee payable via Razorpay (UPI, Card, NetBanking) for instant token.'),
+                                      ? 'Online payment is OFF. Reserve your slot now; pay consultation fee ${fee > 0 ? "₹$fee " : ""}at clinic reception.'
+                                      : 'Consultation fee of ₹$fee payable via Razorpay (UPI, Card, NetBanking) for instant token.'),
                             style: TextStyle(
                               fontSize: 10.5,
                               height: 1.35,
                               color: isFirstFree
                                   ? const Color(0xFF166534)
                                   : (!billing.paymentRequired
-                                      ? const Color(0xFF134E4A)
-                                      : const Color(0xFF1E40AF)),
+                                        ? const Color(0xFF134E4A)
+                                        : const Color(0xFF1E40AF)),
                             ),
                           ),
                         ],
@@ -1201,14 +1211,14 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                     isFirstFree
                         ? LucideIcons.sparkles
                         : (!billing.paymentRequired
-                            ? LucideIcons.banknote
-                            : LucideIcons.receipt),
+                              ? LucideIcons.banknote
+                              : LucideIcons.receipt),
                     size: 16,
                     color: isFirstFree
                         ? const Color(0xFF16A34A)
                         : (!billing.paymentRequired
-                            ? const Color(0xFF0D9488)
-                            : AppColors.primary),
+                              ? const Color(0xFF0D9488)
+                              : AppColors.primary),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -1233,7 +1243,10 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                     ),
                   if (!billing.paymentRequired && !isFirstFree)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF0FDF4),
                         borderRadius: BorderRadius.circular(5),

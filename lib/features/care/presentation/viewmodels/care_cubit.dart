@@ -36,17 +36,26 @@ class CareCubit extends Cubit<CareState> {
       ? 'care_routine_tasks_${_patientId}_v1'
       : 'care_routine_tasks_v1';
 
+  String get _careEventsCacheKey => _patientId != null && _patientId!.isNotEmpty
+      ? 'care_daily_events_${_patientId}_v1'
+      : 'care_daily_events_v1';
+
+  String get _careEventsOutboxKey =>
+      _patientId != null && _patientId!.isNotEmpty
+      ? 'care_daily_events_outbox_${_patientId}_v1'
+      : 'care_daily_events_outbox_v1';
+
   CareCubit([
     this._notificationService,
     PatientClinicalApi? clinicalApi,
     PatientProgressApi? progressApi,
     CommerceRemoteDataSource? commerceDataSource,
     PatientDietApi? dietApi,
-  ])  : _clinicalApi = clinicalApi ?? PatientClinicalApi(),
-        _progressApi = progressApi ?? PatientProgressApi(),
-        _commerceDataSource = commerceDataSource ?? CommerceRemoteDataSource(),
-        _dietApi = dietApi ?? PatientDietApi(),
-        super(const CareState()) {
+  ]) : _clinicalApi = clinicalApi ?? PatientClinicalApi(),
+       _progressApi = progressApi ?? PatientProgressApi(),
+       _commerceDataSource = commerceDataSource ?? CommerceRemoteDataSource(),
+       _dietApi = dietApi ?? PatientDietApi(),
+       super(const CareState()) {
     _initPersistence();
   }
 
@@ -56,6 +65,9 @@ class CareCubit extends Cubit<CareState> {
       _sessionToken = null;
       if (!isClosed) emit(const CareState());
       return;
+    }
+    if (_patientId != patientId && !isClosed) {
+      emit(const CareState());
     }
     _patientId = patientId;
     _sessionToken = sessionToken;
@@ -68,11 +80,7 @@ class CareCubit extends Cubit<CareState> {
   void loadSampleFixturesForTesting() {
     if (isClosed) return;
     _initializeDefaultData();
-    emit(
-      state.copyWith(
-        checkIns: ProgressCheckIn.sampleFixtures,
-      ),
-    );
+    emit(state.copyWith(checkIns: ProgressCheckIn.sampleFixtures));
   }
 
   Future<void> _initPersistence() async {
@@ -106,6 +114,13 @@ class CareCubit extends Cubit<CareState> {
       cache.getString(_routineHistoryKey),
       (json) => json['day'] as String? ?? '',
     );
+    final careEvents = _readList(
+      cache.getString(_careEventsCacheKey),
+      CareEvent.fromJson,
+    );
+    final todayCareEvents = (careEvents ?? state.careEvents)
+        .where((event) => event.eventDate == today)
+        .toList();
 
     if (isClosed) return;
     emit(
@@ -116,6 +131,8 @@ class CareCubit extends Cubit<CareState> {
         checkIns: checkIns ?? state.checkIns,
         orders: orders ?? state.orders,
         routineCompletionDays: routineDays ?? state.routineCompletionDays,
+        careEvents: careEvents ?? state.careEvents,
+        waterCups: _waterValueForDay(todayCareEvents),
       ),
     );
   }
@@ -123,119 +140,114 @@ class CareCubit extends Cubit<CareState> {
   Future<void> _syncWithBackend(String token) async {
     try {
       final record = await _clinicalApi.getClinicalRecord(token);
+      final syncedCareEvents = await _syncCareEvents(token);
+      final currentDay = _localDayKey(DateTime.now());
+      final todaysCareEvents = (syncedCareEvents ?? state.careEvents)
+          .where((event) => event.eventDate == currentDay)
+          .toList();
       final carePlans = record['care_plans'] as List? ?? [];
       List<RoutineTask>? serverTasks;
       if (carePlans.isNotEmpty) {
         final activePlan = carePlans.first;
         if (activePlan is Map) {
           final steps = activePlan['routine_steps'] as List? ?? [];
-          final completionMap = {
-            for (final t in state.routineTasks) t.title: t.isCompleted
-          };
-          serverTasks = steps.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final step = entry.value;
-            if (step is! Map) return null;
-            final tTitle = step['title']?.toString() ?? '';
-            return RoutineTask(
-              id: 'rt_${idx + 1}',
-              title: tTitle,
-              subtitle: step['subtitle']?.toString() ?? '',
-              category: step['category']?.toString() ?? 'Treatment',
-              timeOfDay: step['time_of_day']?.toString() ?? 'Daily',
-              isCompleted: completionMap[tTitle] ?? false,
-            );
-          }).whereType<RoutineTask>().where((t) => t.title.isNotEmpty).toList();
+          serverTasks = _routineTasksFromSteps(
+            steps,
+            syncedCareEvents ?? state.careEvents,
+            currentDay,
+          );
         }
       }
 
       // Also check direct routine-steps endpoint
       try {
         final directSteps = await _clinicalApi.getRoutineSteps(token);
-        if (directSteps.isNotEmpty) {
-          final completionMap = {
-            for (final t in state.routineTasks) t.title: t.isCompleted
-          };
-          serverTasks = directSteps.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final step = entry.value;
-            final tTitle = step['title']?.toString() ?? '';
-            return RoutineTask(
-              id: 'rt_${idx + 1}',
-              title: tTitle,
-              subtitle: step['subtitle']?.toString() ?? '',
-              category: step['category']?.toString() ?? 'Lifestyle',
-              timeOfDay: step['time_of_day']?.toString() ?? 'Daily',
-              isCompleted: completionMap[tTitle] ?? false,
-            );
-          }).where((t) => t.title.isNotEmpty).toList();
+        if (directSteps.isNotEmpty ||
+            serverTasks == null ||
+            serverTasks.isEmpty) {
+          serverTasks = _routineTasksFromSteps(
+            directSteps,
+            syncedCareEvents ?? state.careEvents,
+            currentDay,
+          );
         }
       } catch (_) {}
 
       List<ProgressCheckIn>? serverCheckIns;
       try {
         final rawCheckIns = await _progressApi.listCheckIns(token: token);
-        serverCheckIns = rawCheckIns.map((item) {
-          final photos = (item['photos'] as List? ?? []);
-          String? front;
-          String? top;
-          String? back;
-          for (final p in photos) {
-            if (p is Map) {
-              final angle = p['angle']?.toString().toLowerCase();
-              final url = p['url']?.toString();
-              if (angle == 'front') front = url;
-              if (angle == 'top') top = url;
-              if (angle == 'back') back = url;
-            }
-          }
-          final primaryPhoto = front ?? top ?? back ?? '';
-          final dateStr = item['date']?.toString();
-          final date = dateStr != null
-              ? DateTime.tryParse(dateStr) ?? DateTime.now()
-              : DateTime.now();
-          return ProgressCheckIn(
-            id: item['id']?.toString() ?? '',
-            date: date,
-            imagePath: primaryPhoto,
-            frontImagePath: front,
-            topImagePath: top,
-            backImagePath: back,
-            scalpRegion: item['scalp_region']?.toString() ?? 'Scalp',
-            sheddingLevel: item['shedding_level']?.toString() ?? 'Normal',
-            notes: item['notes']?.toString() ?? '',
-            densityRating: (item['density_rating'] as num?)?.toInt() ?? 3,
-            isDoctorReviewed: item['doctor_note'] != null &&
-                item['doctor_note'].toString().trim().isNotEmpty,
-            doctorNote: item['doctor_note']?.toString(),
-          );
-        }).where((ci) => ci.id.isNotEmpty).toList();
+        serverCheckIns = rawCheckIns
+            .map((item) {
+              final photos = (item['photos'] as List? ?? []);
+              String? front;
+              String? top;
+              String? back;
+              for (final p in photos) {
+                if (p is Map) {
+                  final angle = p['angle']?.toString().toLowerCase();
+                  final url = p['url']?.toString();
+                  if (angle == 'front') front = url;
+                  if (angle == 'top') top = url;
+                  if (angle == 'back') back = url;
+                }
+              }
+              final primaryPhoto = front ?? top ?? back ?? '';
+              final dateStr = item['date']?.toString();
+              final date = dateStr != null
+                  ? DateTime.tryParse(dateStr) ?? DateTime.now()
+                  : DateTime.now();
+              return ProgressCheckIn(
+                id: item['id']?.toString() ?? '',
+                date: date,
+                imagePath: primaryPhoto,
+                frontImagePath: front,
+                topImagePath: top,
+                backImagePath: back,
+                scalpRegion: item['scalp_region']?.toString() ?? 'Scalp',
+                sheddingLevel: item['shedding_level']?.toString() ?? 'Normal',
+                notes: item['notes']?.toString() ?? '',
+                densityRating: (item['density_rating'] as num?)?.toInt() ?? 3,
+                isDoctorReviewed:
+                    item['doctor_note'] != null &&
+                    item['doctor_note'].toString().trim().isNotEmpty,
+                doctorNote: item['doctor_note']?.toString(),
+              );
+            })
+            .where((ci) => ci.id.isNotEmpty)
+            .toList();
       } catch (_) {}
 
       List<CareOrder>? serverOrders;
       try {
-        final rawOrders = await _commerceDataSource.fetchPatientOrders(token: token);
-        if (rawOrders.isNotEmpty) {
-          serverOrders = rawOrders;
-        }
+        final rawOrders = await _commerceDataSource.fetchPatientOrders(
+          token: token,
+        );
+        serverOrders = rawOrders;
       } catch (_) {}
 
       List<CareReminder>? serverReminders;
       try {
         final rawReminders = await _clinicalApi.getReminders(token);
-        if (rawReminders.isNotEmpty) {
-          serverReminders = rawReminders
-              .map(CareReminder.fromJson)
-              .where((r) => r.id.isNotEmpty && r.title.isNotEmpty)
-              .toList();
-        }
+        serverReminders = rawReminders
+            .map(CareReminder.fromJson)
+            .where((r) => r.id.isNotEmpty && r.title.isNotEmpty)
+            .toList();
       } catch (_) {}
 
       if (isClosed) return;
       emit(
         state.copyWith(
-          routineTasks: serverTasks ??
+          routineTasks:
+              serverTasks ??
               (carePlans.isEmpty ? const [] : state.routineTasks),
+          careEvents: syncedCareEvents,
+          isCareEventSyncPending: state.isCareEventSyncPending,
+          waterCups: syncedCareEvents == null
+              ? state.waterCups
+              : _waterValueForDay(todaysCareEvents),
+          routineCompletionDays:
+              _routineDaysFromEvents(syncedCareEvents) ??
+              state.routineCompletionDays,
           checkIns: serverCheckIns ?? state.checkIns,
           orders: serverOrders ?? state.orders,
           reminders: serverReminders ?? state.reminders,
@@ -255,6 +267,223 @@ class CareCubit extends Cubit<CareState> {
     } catch (_) {}
   }
 
+  Future<List<CareEvent>?> _syncCareEvents(String token) async {
+    final cache = AppLocalCache.instance;
+    final pending =
+        _readList(cache.getString(_careEventsOutboxKey), CareEvent.fromJson) ??
+        <CareEvent>[];
+    final remaining = <CareEvent>[];
+    for (final event in pending) {
+      try {
+        await _clinicalApi.saveCareEvent(
+          accessToken: token,
+          event: event.toJson()..remove('id'),
+        );
+      } catch (_) {
+        remaining.add(event);
+      }
+    }
+    await cache.put(
+      _careEventsOutboxKey,
+      jsonEncode(remaining.map((event) => event.toJson()).toList()),
+    );
+
+    try {
+      final today = DateTime.now();
+      final remote = await _clinicalApi.getCareEvents(
+        accessToken: token,
+        from: today.subtract(const Duration(days: 92)),
+        to: today,
+      );
+      final byKey = <String, CareEvent>{
+        for (final row in remote)
+          _careEventIdentity(CareEvent.fromJson(row)): CareEvent.fromJson(row),
+      };
+      for (final event in remaining) {
+        byKey[_careEventIdentity(event)] = event;
+      }
+      final events = byKey.values.toList()
+        ..sort((a, b) => b.eventDate.compareTo(a.eventDate));
+      await cache.put(
+        _careEventsCacheKey,
+        jsonEncode(events.map((event) => event.toJson()).toList()),
+      );
+      if (!isClosed) {
+        emit(
+          state.copyWith(
+            careEvents: events,
+            isCareEventSyncPending: remaining.isNotEmpty,
+          ),
+        );
+      }
+      return events;
+    } catch (_) {
+      if (!isClosed && remaining.isNotEmpty) {
+        emit(state.copyWith(isCareEventSyncPending: true));
+      }
+      return null;
+    }
+  }
+
+  String _careEventIdentity(CareEvent event) =>
+      '${event.eventDate}|${event.eventType}|${event.eventKey}';
+
+  Future<bool> _recordCareEvent({
+    required String eventType,
+    required String eventKey,
+    required String status,
+    int? value,
+    String severity = '',
+    List<String> symptoms = const [],
+    String note = '',
+  }) async {
+    final event = CareEvent(
+      eventDate: _localDayKey(DateTime.now()),
+      eventType: eventType,
+      eventKey: eventKey,
+      status: status,
+      value: value,
+      severity: severity,
+      symptoms: symptoms,
+      note: note,
+    );
+    final identity = _careEventIdentity(event);
+    List<CareEvent> replace(List<CareEvent> events, CareEvent item) => [
+      item,
+      ...events.where((existing) => _careEventIdentity(existing) != identity),
+    ];
+    final optimistic = replace(state.careEvents, event);
+    emit(state.copyWith(careEvents: optimistic));
+    final cache = AppLocalCache.instance;
+    await cache.put(
+      _careEventsCacheKey,
+      jsonEncode(optimistic.map((item) => item.toJson()).toList()),
+    );
+
+    final token = _sessionToken;
+    if (token == null || token.isEmpty) {
+      return event.clinicianContactRecommended;
+    }
+
+    try {
+      final response = await _clinicalApi.saveCareEvent(
+        accessToken: token,
+        event: event.toJson()..remove('id'),
+      );
+      final saved = response['item'] is Map
+          ? CareEvent.fromJson(
+              Map<String, dynamic>.from(response['item'] as Map),
+            )
+          : event;
+      final current = replace(state.careEvents, saved);
+      final outbox =
+          _readList(
+            cache.getString(_careEventsOutboxKey),
+            CareEvent.fromJson,
+          ) ??
+          <CareEvent>[];
+      final remaining = outbox
+          .where((item) => _careEventIdentity(item) != identity)
+          .toList();
+      await cache.put(
+        _careEventsOutboxKey,
+        jsonEncode(remaining.map((item) => item.toJson()).toList()),
+      );
+      await cache.put(
+        _careEventsCacheKey,
+        jsonEncode(current.map((item) => item.toJson()).toList()),
+      );
+      emit(
+        state.copyWith(
+          careEvents: current,
+          isCareEventSyncPending: remaining.isNotEmpty,
+        ),
+      );
+      if (remaining.isNotEmpty) {
+        await _syncCareEvents(token);
+      }
+      return response['clinician_contact_recommended'] == true ||
+          saved.clinicianContactRecommended;
+    } catch (_) {
+      final outbox =
+          _readList(
+            cache.getString(_careEventsOutboxKey),
+            CareEvent.fromJson,
+          ) ??
+          <CareEvent>[];
+      final updatedOutbox = replace(outbox, event);
+      await cache.put(
+        _careEventsOutboxKey,
+        jsonEncode(updatedOutbox.map((item) => item.toJson()).toList()),
+      );
+      emit(state.copyWith(isCareEventSyncPending: true));
+      return event.clinicianContactRecommended;
+    }
+  }
+
+  List<RoutineTask> _routineTasksFromSteps(
+    List<dynamic> steps,
+    List<CareEvent> events,
+    String day,
+  ) => steps
+      .asMap()
+      .entries
+      .map((entry) {
+        final value = entry.value;
+        if (value is! Map) return null;
+        final id = 'rt_${entry.key + 1}';
+        final matchingEvents = events.where(
+          (item) =>
+              item.eventDate == day &&
+              item.eventType == 'routine' &&
+              item.eventKey == id,
+        );
+        final event = matchingEvents.isEmpty ? null : matchingEvents.first;
+        return RoutineTask(
+          id: id,
+          title: value['title']?.toString() ?? '',
+          subtitle: value['subtitle']?.toString() ?? '',
+          category: value['category']?.toString() ?? 'Care',
+          timeOfDay: value['time_of_day']?.toString() ?? 'Daily',
+          isCompleted: event?.status == 'completed',
+          isSkipped: event?.status == 'skipped',
+          skipReason: event?.note ?? '',
+        );
+      })
+      .whereType<RoutineTask>()
+      .where((task) => task.title.isNotEmpty)
+      .toList();
+
+  int? _waterValueForDay(List<CareEvent> events) {
+    for (final event in events.reversed) {
+      if (event.eventType == 'water' && event.value != null) return event.value;
+    }
+    return 0;
+  }
+
+  List<String>? _routineDaysFromEvents(List<CareEvent>? events) {
+    if (events == null) return null;
+    return events
+        .where(
+          (event) =>
+              event.eventType == 'routine' &&
+              event.eventKey == 'daily_complete' &&
+              event.status == 'completed',
+        )
+        .map((event) => event.eventDate)
+        .toSet()
+        .toList()
+      ..sort();
+  }
+
+  String _dietEventKey(DietMeal meal) {
+    final raw = '${meal.type}_${meal.name}'
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
+    return 'meal_${raw.length > 155 ? raw.substring(0, 155) : raw}';
+  }
+
   Future<void> fetchPatientDietPlan([String? token]) async {
     final activeToken = token ?? _sessionToken;
     if (activeToken == null || activeToken.isEmpty) return;
@@ -266,9 +495,18 @@ class CareCubit extends Cubit<CareState> {
     try {
       final res = await _dietApi.getPatientDietPlan(activeToken);
       if (!isClosed) {
-        final List<List<DietMeal>> plans = res.meals.isNotEmpty
-            ? [res.meals]
-            : state.dietPlans;
+        final day = _localDayKey(DateTime.now());
+        final todayDietEvents = state.careEvents.where(
+          (event) => event.eventDate == day && event.eventType == 'diet',
+        );
+        final completionByKey = {
+          for (final event in todayDietEvents) event.eventKey: event,
+        };
+        final meals = res.meals.map((meal) {
+          final event = completionByKey[_dietEventKey(meal)];
+          return meal.copyWith(isCompleted: event?.status == 'completed');
+        }).toList();
+        final List<List<DietMeal>> plans = meals.isNotEmpty ? [meals] : [];
         emit(
           state.copyWith(
             dietPlans: plans,
@@ -511,9 +749,7 @@ class CareCubit extends Cubit<CareState> {
     if (isClosed) return;
     final token = sessionToken ?? _sessionToken;
     if (token != null && token.isNotEmpty) {
-      try {
-        await _progressApi.deleteCheckIn(token: token, checkInId: id);
-      } catch (_) {}
+      await _progressApi.deleteCheckIn(token: token, checkInId: id);
     }
     emit(
       state.copyWith(
@@ -524,10 +760,14 @@ class CareCubit extends Cubit<CareState> {
   }
 
   // --- ROUTINE ACTIONS ---
-  void toggleRoutineTask(String id) {
+  Future<void> toggleRoutineTask(String id) async {
     final updated = state.routineTasks.map((task) {
       if (task.id == id) {
-        return task.copyWith(isCompleted: !task.isCompleted);
+        return task.copyWith(
+          isCompleted: !task.isCompleted,
+          isSkipped: false,
+          skipReason: '',
+        );
       }
       return task;
     }).toList();
@@ -537,6 +777,52 @@ class CareCubit extends Cubit<CareState> {
     _notificationService?.saveRoutineTasks(updated);
     _saveRoutineDay();
     _recordRoutineCompletionIfDone(updated);
+    final changedTasks = updated.where((item) => item.id == id);
+    final task = changedTasks.isEmpty ? null : changedTasks.first;
+    if (task != null) {
+      await _recordCareEvent(
+        eventType: 'routine',
+        eventKey: id,
+        status: task.isCompleted ? 'completed' : 'pending',
+      );
+    }
+    await _recordCareEvent(
+      eventType: 'routine',
+      eventKey: 'daily_complete',
+      status: updated.isNotEmpty && updated.every((item) => item.isCompleted)
+          ? 'completed'
+          : 'pending',
+    );
+  }
+
+  Future<void> skipRoutineTask(String id, {String reason = ''}) async {
+    final updated = state.routineTasks
+        .map(
+          (task) => task.id == id
+              ? task.copyWith(
+                  isCompleted: false,
+                  isSkipped: true,
+                  skipReason: reason,
+                )
+              : task,
+        )
+        .toList();
+    emit(state.copyWith(routineTasks: updated));
+    _persistRoutineTasks();
+    _notificationService?.saveRoutineTasks(updated);
+    _saveRoutineDay();
+    _recordRoutineCompletionIfDone(updated);
+    await _recordCareEvent(
+      eventType: 'routine',
+      eventKey: id,
+      status: 'skipped',
+      note: reason,
+    );
+    await _recordCareEvent(
+      eventType: 'routine',
+      eventKey: 'daily_complete',
+      status: 'pending',
+    );
   }
 
   Future<bool> addCustomRoutineTask({
@@ -574,21 +860,26 @@ class CareCubit extends Cubit<CareState> {
         );
         if (serverSteps.isNotEmpty && !isClosed) {
           final completionMap = {
-            for (final t in state.routineTasks) t.title: t.isCompleted
+            for (final t in state.routineTasks) t.title: t.isCompleted,
           };
-          final refreshed = serverSteps.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final s = entry.value;
-            final tTitle = s['title']?.toString() ?? '';
-            return RoutineTask(
-              id: 'rt_${idx + 1}',
-              title: tTitle,
-              subtitle: s['subtitle']?.toString() ?? '',
-              category: s['category']?.toString() ?? 'Lifestyle',
-              timeOfDay: s['time_of_day']?.toString() ?? 'Daily',
-              isCompleted: completionMap[tTitle] ?? false,
-            );
-          }).where((t) => t.title.isNotEmpty).toList();
+          final refreshed = serverSteps
+              .asMap()
+              .entries
+              .map((entry) {
+                final idx = entry.key;
+                final s = entry.value;
+                final tTitle = s['title']?.toString() ?? '';
+                return RoutineTask(
+                  id: 'rt_${idx + 1}',
+                  title: tTitle,
+                  subtitle: s['subtitle']?.toString() ?? '',
+                  category: s['category']?.toString() ?? 'Lifestyle',
+                  timeOfDay: s['time_of_day']?.toString() ?? 'Daily',
+                  isCompleted: completionMap[tTitle] ?? false,
+                );
+              })
+              .where((t) => t.title.isNotEmpty)
+              .toList();
 
           emit(state.copyWith(routineTasks: refreshed));
           _persistRoutineTasks();
@@ -626,7 +917,7 @@ class CareCubit extends Cubit<CareState> {
     return true;
   }
 
-  void resetTodayRoutine() {
+  Future<void> resetTodayRoutine() async {
     final reset = state.routineTasks
         .map((task) => task.copyWith(isCompleted: false))
         .toList();
@@ -635,6 +926,18 @@ class CareCubit extends Cubit<CareState> {
     _notificationService?.saveRoutineTasks(reset);
     _saveRoutineDay();
     _recordRoutineCompletionIfDone(reset);
+    for (final task in reset) {
+      await _recordCareEvent(
+        eventType: 'routine',
+        eventKey: task.id,
+        status: 'pending',
+      );
+    }
+    await _recordCareEvent(
+      eventType: 'routine',
+      eventKey: 'daily_complete',
+      status: 'pending',
+    );
   }
 
   String _localDayKey(DateTime date) =>
@@ -661,14 +964,10 @@ class CareCubit extends Cubit<CareState> {
   }
 
   // --- REMINDER ACTIONS ---
-  Future<void> requestNotificationPermission({
-    bool simulateDenial = false,
-  }) async {
+  Future<void> requestNotificationPermission() async {
     final service =
         _notificationService ?? await CareNotificationService.create();
-    final status = await service.requestPermission(
-      simulateDenial: simulateDenial,
-    );
+    final status = await service.requestPermission();
     emit(state.copyWith(notificationPermissionStatus: status));
   }
 
@@ -676,6 +975,14 @@ class CareCubit extends Cubit<CareState> {
     CareReminder reminder, {
     String? sessionToken,
   }) async {
+    final token = sessionToken ?? _sessionToken;
+    if (token != null && token.isNotEmpty) {
+      await _clinicalApi.saveReminder(
+        accessToken: token,
+        reminderData: reminder.toJson(),
+      );
+    }
+
     final existingIndex = state.reminders.indexWhere(
       (r) => r.id == reminder.id,
     );
@@ -687,108 +994,66 @@ class CareCubit extends Cubit<CareState> {
       updated = [...state.reminders, reminder];
     }
     emit(state.copyWith(reminders: updated));
-    _notificationService?.saveReminders(updated);
+    await _notificationService?.saveReminders(updated);
     if (reminder.isEnabled) {
-      _notificationService?.scheduleReminder(reminder);
+      await _notificationService?.scheduleReminder(reminder);
     } else {
-      _notificationService?.cancelReminder(reminder.id);
-    }
-
-    final token = sessionToken ?? _sessionToken;
-    if (token != null && token.isNotEmpty) {
-      try {
-        await _clinicalApi.saveReminder(
-          accessToken: token,
-          reminderData: reminder.toJson(),
-        );
-      } catch (_) {
-        // Optimistic local update is already saved
-      }
+      await _notificationService?.cancelReminder(reminder.id);
     }
     return true;
   }
 
-  Future<bool> deleteReminder(
-    String id, {
-    String? sessionToken,
-  }) async {
+  Future<bool> deleteReminder(String id, {String? sessionToken}) async {
+    final token = sessionToken ?? _sessionToken;
+    if (token != null && token.isNotEmpty) {
+      final removed = await _clinicalApi.deleteReminder(
+        accessToken: token,
+        reminderId: id,
+      );
+      if (!removed) {
+        throw StateError('The reminder was not removed from your account.');
+      }
+    }
+
     final updated = state.reminders.where((r) => r.id != id).toList();
     emit(state.copyWith(reminders: updated));
-    _notificationService?.saveReminders(updated);
-    _notificationService?.cancelReminder(id);
-
-    final token = sessionToken ?? _sessionToken;
-    if (token != null && token.isNotEmpty) {
-      try {
-        await _clinicalApi.deleteReminder(
-          accessToken: token,
-          reminderId: id,
-        );
-      } catch (_) {
-        // Optimistic local update is already saved
-      }
-    }
+    await _notificationService?.saveReminders(updated);
+    await _notificationService?.cancelReminder(id);
     return true;
   }
 
-  void toggleReminder(String id, bool isEnabled) {
-    final updated = state.reminders.map((rem) {
-      if (rem.id == id) {
-        final r = rem.copyWith(isEnabled: isEnabled);
-        if (isEnabled) {
-          _notificationService?.scheduleReminder(r);
-        } else {
-          _notificationService?.cancelReminder(r.id);
-        }
-        return r;
-      }
-      return rem;
-    }).toList();
-
-    emit(state.copyWith(reminders: updated));
-    _notificationService?.saveReminders(updated);
+  Future<bool> toggleReminder(String id, bool isEnabled) async {
+    final matches = state.reminders.where((item) => item.id == id);
+    if (matches.isEmpty) return false;
+    final reminder = matches.first;
+    return saveReminder(reminder.copyWith(isEnabled: isEnabled));
   }
 
-  void updateReminderTime(String id, TimeOfDay newTime) {
-    final updated = state.reminders.map((rem) {
-      if (rem.id == id) {
-        final r = rem.copyWith(time: newTime);
-        _notificationService?.scheduleReminder(r);
-        return r;
-      }
-      return rem;
-    }).toList();
-
-    emit(state.copyWith(reminders: updated));
-    _notificationService?.saveReminders(updated);
+  Future<bool> updateReminderTime(String id, TimeOfDay newTime) async {
+    final matches = state.reminders.where((item) => item.id == id);
+    if (matches.isEmpty) return false;
+    final reminder = matches.first;
+    return saveReminder(reminder.copyWith(time: newTime));
   }
 
-  void snoozeReminder(
+  Future<bool> snoozeReminder(
     String id, {
     Duration duration = const Duration(minutes: 15),
-  }) {
+  }) async {
+    final matches = state.reminders.where((item) => item.id == id);
+    if (matches.isEmpty) return false;
+    final reminder = matches.first;
     final until = DateTime.now().add(duration);
-    final updated = state.reminders.map((rem) {
-      if (rem.id == id) {
-        return rem.copyWith(snoozedUntil: until);
-      }
-      return rem;
-    }).toList();
-
-    emit(state.copyWith(reminders: updated));
-    _notificationService?.saveReminders(updated);
+    return saveReminder(reminder.copyWith(snoozedUntil: until));
   }
 
-  void toggleReminderCompletion(String id) {
-    final updated = state.reminders.map((rem) {
-      if (rem.id == id) {
-        return rem.copyWith(isCompleted: !rem.isCompleted, clearSnooze: true);
-      }
-      return rem;
-    }).toList();
-
-    emit(state.copyWith(reminders: updated));
-    _notificationService?.saveReminders(updated);
+  Future<bool> toggleReminderCompletion(String id) async {
+    final matches = state.reminders.where((item) => item.id == id);
+    if (matches.isEmpty) return false;
+    final reminder = matches.first;
+    return saveReminder(
+      reminder.copyWith(isCompleted: !reminder.isCompleted, clearSnooze: true),
+    );
   }
 
   void addReminder({
@@ -862,7 +1127,21 @@ class CareCubit extends Cubit<CareState> {
     }
   }
 
-  Future<bool> cancelOrder(String orderId, {String? reason, String? sessionToken}) async {
+  Future<CareOrderTracking> fetchOrderTracking(
+    String orderId, {
+    String? sessionToken,
+  }) {
+    return _commerceDataSource.fetchOrderTracking(
+      token: sessionToken ?? _sessionToken,
+      orderId: orderId,
+    );
+  }
+
+  Future<bool> cancelOrder(
+    String orderId, {
+    String? reason,
+    String? sessionToken,
+  }) async {
     final token = sessionToken ?? _sessionToken;
     if (token == null || token.isEmpty) return false;
     try {
@@ -930,6 +1209,12 @@ class CareCubit extends Cubit<CareState> {
         checkIns: const [],
         routineTasks: const [],
         reminders: const [],
+        dietPlans: const [],
+        dietTreatmentName: '',
+        dietDoctorName: '',
+        waterCups: 0,
+        careEvents: const [],
+        isCareEventSyncPending: false,
         routineCompletionDays: const [],
         orders: const [],
       ),
@@ -941,6 +1226,10 @@ class CareCubit extends Cubit<CareState> {
       _ordersKey,
       'care_orders_v1',
       _routineTasksKey,
+      _careEventsCacheKey,
+      _careEventsOutboxKey,
+      'care_daily_events_v1',
+      'care_daily_events_outbox_v1',
       'care_routine_tasks_v1',
       'care_bookings_v1',
       _routineHistoryKey,
@@ -988,7 +1277,7 @@ class CareCubit extends Cubit<CareState> {
     emit(state.copyWith(currentDietDay: dayIndex));
   }
 
-  void toggleDietMeal(int dayIndex, int mealIndex) {
+  Future<void> toggleDietMeal(int dayIndex, int mealIndex) async {
     if (dayIndex >= state.dietPlans.length) return;
     final dayMeals = List<DietMeal>.from(state.dietPlans[dayIndex]);
     if (mealIndex >= dayMeals.length) return;
@@ -1001,13 +1290,49 @@ class CareCubit extends Cubit<CareState> {
     updatedPlans[dayIndex] = dayMeals;
 
     emit(state.copyWith(dietPlans: updatedPlans));
+    final meal = dayMeals[mealIndex];
+    await _recordCareEvent(
+      eventType: 'diet',
+      eventKey: _dietEventKey(meal),
+      status: meal.isCompleted ? 'completed' : 'pending',
+    );
   }
 
-  void incrementWater() {
-    emit(state.copyWith(waterCups: (state.waterCups + 1).clamp(0, 12)));
+  Future<void> incrementWater() async {
+    final value = (state.waterCups + 1).clamp(0, 12);
+    emit(state.copyWith(waterCups: value));
+    await _recordCareEvent(
+      eventType: 'water',
+      eventKey: 'daily_water',
+      status: 'logged',
+      value: value,
+    );
   }
 
-  void decrementWater() {
-    emit(state.copyWith(waterCups: (state.waterCups - 1).clamp(0, 12)));
+  Future<void> decrementWater() async {
+    final value = (state.waterCups - 1).clamp(0, 12);
+    emit(state.copyWith(waterCups: value));
+    await _recordCareEvent(
+      eventType: 'water',
+      eventKey: 'daily_water',
+      status: 'logged',
+      value: value,
+    );
+  }
+
+  Future<bool> logSymptoms({
+    required List<String> symptoms,
+    required String severity,
+    String note = '',
+  }) async {
+    final eventKey = 'symptom_${DateTime.now().millisecondsSinceEpoch}';
+    return _recordCareEvent(
+      eventType: 'symptom',
+      eventKey: eventKey,
+      status: 'logged',
+      symptoms: symptoms,
+      severity: severity,
+      note: note,
+    );
   }
 }

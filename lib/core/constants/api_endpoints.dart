@@ -43,7 +43,8 @@ class ApiEndpoints {
   static const String authSendSignupOtp = '/api/v1/auth/send-signup-otp';
   static const String authRegister = '/api/v1/auth/register';
   static const String authSocialLogin = '/api/v1/auth/social-login';
-  static const String authVerifySocialSignup = '/api/v1/auth/verify-social-signup';
+  static const String authVerifySocialSignup =
+      '/api/v1/auth/verify-social-signup';
   static const String authForgotPassword = '/api/v1/auth/forgot-password';
   static const String authResetPassword = '/api/v1/auth/reset-password';
   static const String authSession = '/api/v1/auth/session';
@@ -105,6 +106,8 @@ class ApiEndpoints {
   static const String patientOrders = '/api/v1/patient/orders';
   static String patientOrderById(String orderId) =>
       '/api/v1/patient/orders/${Uri.encodeComponent(orderId)}';
+  static String patientOrderTracking(String orderId) =>
+      '${patientOrderById(orderId)}/tracking';
   static String patientOrderCancel(String orderId) =>
       '/api/v1/patient/orders/${Uri.encodeComponent(orderId)}/cancel';
 
@@ -129,15 +132,25 @@ class ApiEndpoints {
   // 10. Hair Test & Assessment Endpoints (/api/v1/hair-tests, /api/v1/patient/assessment)
   // ---------------------------------------------------------------------------
   static const String hairTestSubmitForm = '/api/v1/hair-tests/submit_form';
-  static const String patientAssessmentDraft = '/api/v1/patient/assessment/draft';
-  static const String patientAssessmentSubmit = '/api/v1/patient/assessment/submit';
+  static String hairTestDietPlan(String referenceNo) =>
+      '/api/v1/hair-tests/${Uri.encodeComponent(referenceNo)}/diet_plan';
+  static String hairTestAiAssessmentStatus(String referenceNo) =>
+      '/api/v1/hair-tests/${Uri.encodeComponent(referenceNo)}/ai_assessment/status';
+  static String hairTestAiAssessmentRetry(String referenceNo) =>
+      '/api/v1/hair-tests/${Uri.encodeComponent(referenceNo)}/ai_assessment/retry';
+  static const String patientAssessmentDraft =
+      '/api/v1/patient/assessment/draft';
+  static const String patientAssessmentSubmit =
+      '/api/v1/patient/assessment/submit';
 
   // ---------------------------------------------------------------------------
   // 11. Care, Clinical & Diet Endpoints (/api/v1/patient)
   // ---------------------------------------------------------------------------
   static const String patientClinicalRecord = '/api/v1/patient/clinical-record';
+  static const String patientHomeSummary = '/api/v1/patient/home-summary';
   static const String patientDietPlan = '/api/v1/patient/diet-plan';
   static const String patientRoutineSteps = '/api/v1/patient/routine-steps';
+  static const String patientCareEvents = '/api/v1/patient/care-events';
   static String patientRoutineStepByIndex(int index) =>
       '/api/v1/patient/routine-steps/$index';
   static const String patientReminders = '/api/v1/patient/reminders';
@@ -164,6 +177,8 @@ class ApiEndpoints {
       '/api/v1/patient/appointments/verify-and-book';
   static const String appointmentsClosedDates =
       '/api/v1/appointments/closed-dates';
+  static const String appointmentAvailability =
+      '/api/v1/appointments/availability';
 
   // ---------------------------------------------------------------------------
   // 13. Support Endpoints (/api/v1/support)

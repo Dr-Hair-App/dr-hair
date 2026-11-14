@@ -14,7 +14,6 @@ import '../../../../core/widgets/photo_source_bottom_sheet.dart';
 import '../../../care/presentation/viewmodels/care_cubit.dart';
 import '../../../shop/data/models/product_model.dart';
 import '../../../shop/presentation/viewmodels/cart_cubit.dart';
-import '../../../shop/presentation/viewmodels/products_cubit.dart';
 import '../../domain/models/ai_assessment_model.dart';
 import '../viewmodels/hair_test_cubit.dart';
 import '../viewmodels/hair_test_state.dart';
@@ -42,21 +41,18 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
     super.initState();
     _isRequestingAi =
         widget.state.aiAssessment == null &&
-        widget.state.referenceNo?.isNotEmpty == true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (mounted) {
+        widget.state.referenceNo?.isNotEmpty == true &&
+        widget.state.aiAssessmentStatus != 'failed';
+    if (_isRequestingAi) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
         final cubit = context.read<HairTestCubit?>();
-        if (cubit != null &&
-            cubit.state.aiAssessment == null &&
-            cubit.state.referenceNo != null) {
-          setState(() => _isRequestingAi = true);
+        if (cubit != null && cubit.state.aiAssessment == null) {
           await cubit.fetchAiAssessment();
-          if (mounted) setState(() => _isRequestingAi = false);
-        } else if (_isRequestingAi) {
-          setState(() => _isRequestingAi = false);
         }
-      }
-    });
+        if (mounted) setState(() => _isRequestingAi = false);
+      });
+    }
   }
 
   Future<void> _retryAiAssessment() async {
@@ -72,7 +68,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
   }
 
   Future<void> _contactDoctorOnWhatsApp() async {
-    const phoneNumber = '918058056789';
+    const phoneNumber = '917240005000';
     const message =
         'Hello, I completed the Dr. Hair assessment and would like guidance on my next steps.';
     final uri = Uri.parse(
@@ -98,18 +94,18 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
     }
   }
 
+  String? _reviewerName(Map<String, dynamic>? plan) {
+    if (plan == null) return null;
+    for (final key in ['doctor_name', 'reviewed_by']) {
+      final value = plan[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    try {
-      if (context.read<ProductsCubit?>() != null) {
-        return _buildReportContent();
-      }
-    } catch (_) {}
-
-    return BlocProvider(
-      create: (_) => ProductsCubit()..loadProducts(limit: 100),
-      child: _buildReportContent(),
-    );
+    return _buildReportContent();
   }
 
   Widget _buildReportContent() {
@@ -118,7 +114,12 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
         final state = dynamicState.isCompleted || dynamicState.isSubmitted
             ? dynamicState
             : widget.state;
-        if (_isRequestingAi && state.aiAssessment == null) {
+        final screenWidth = MediaQuery.sizeOf(context).width;
+        final horizontalPadding = (screenWidth * 0.045)
+            .clamp(16.0, 28.0)
+            .toDouble();
+        if ((_isRequestingAi || state.isSubmitting) &&
+            state.aiAssessment == null) {
           return const AiAnalysisLoadingOverlay();
         }
         final selectedPattern = _selectedPatternIllustration(state);
@@ -127,36 +128,27 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
             ? '${trimmedName[0].toUpperCase()}${trimmedName.substring(1)}, ${state.age}'
             : 'Patient, ${state.age}';
 
-        final stageStr = (state.stage ?? state.primaryConcern ?? '')
-            .toLowerCase();
-        final bool isSevereOrPatchy =
-            stageStr.contains('stage 4') ||
-            stageStr.contains('stage 5') ||
-            stageStr.contains('patch') ||
-            stageStr.contains('extensive');
-
-        final productState = context.watch<ProductsCubit>().state;
-        final liveProducts = productState.products;
-        final aiProductCategories = state.aiAssessment?.isAvailable == true
-            ? state.aiAssessment!.recommendedRegimen.targetProducts
-                  .map((product) => product.category)
-                  .toList()
-            : const <String>[];
-        final recommendedProducts = aiProductCategories.isEmpty
-            ? const <ProductItem>[]
-            : _getRecommendedProducts(state, liveProducts, aiProductCategories);
+        final aiAssessment = state.aiAssessment;
+        final recommendedProducts =
+            aiAssessment?.availableProducts
+                .map(ProductItem.fromJson)
+                .toList() ??
+            const <ProductItem>[];
 
         final isReviewed =
             state.assessmentStatus == 'reviewed' ||
-            state.clinicalReports.isNotEmpty ||
             state.doctorCarePlan != null;
         final isUnderReview = state.assessmentStatus == 'under_review';
-        final aiUnavailable =
-            state.aiAssessment == null || !state.aiAssessment!.isAvailable;
+        final aiUnavailable = aiAssessment == null || !aiAssessment.isAvailable;
+        final hideAiAnalysis = aiUnavailable || aiAssessment.requiresClinician;
+        final aiNeedsClinician = !isReviewed && hideAiAnalysis;
         final aiRecommendsDoctor =
             !isReviewed &&
-            (state.aiAssessment?.nextStepType == 'doctor_appointment' ||
-                (aiUnavailable && isSevereOrPatchy));
+            state.aiAssessment?.nextStepType == 'doctor_appointment';
+        final List<AiRegimenStep> careRoutineSteps =
+            state.aiAssessment?.isAvailable == true
+            ? state.aiAssessment!.recommendedRegimen.dailySteps
+            : const <AiRegimenStep>[];
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -213,200 +205,235 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               },
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 1. Expert Clinical Review Status Notice
-                    _buildExpertReviewNoticeCard(
-                      context,
-                      state,
-                      isReviewed,
-                      isUnderReview,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // 2. Main Diagnosis Card
-                    _buildMainDiagnosisCard(
-                      state,
-                      selectedPattern,
-                      displayName,
-                      isReviewed,
-                      isUnderReview,
-                    ),
-
-                    // AI Clinical Trichology & Recommendations
-                    if (state.aiAssessment != null) ...[
-                      const SizedBox(height: 20),
-                      AiAssessmentCards(
-                        aiAssessment: state.aiAssessment!,
-                        onRefresh: _retryAiAssessment,
-                        isRefreshing: _isRequestingAi,
-                      ),
-                    ] else if (state.referenceNo != null &&
-                        state.referenceNo!.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  12,
+                  horizontalPadding,
+                  32,
+                ),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 880),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 1. Expert Clinical Review Status Notice
+                        _buildExpertReviewNoticeCard(
+                          context,
+                          state,
+                          isReviewed,
+                          isUnderReview,
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                LucideIcons.sparkles,
-                                color: AppColors.primary,
-                                size: 20,
+
+                        const SizedBox(height: 16),
+
+                        // 2. Main Diagnosis Card
+                        if (aiNeedsClinician)
+                          _buildClinicianOnlyNotice(
+                            showClinicContact: !aiRecommendsDoctor,
+                          )
+                        else
+                          _buildMainDiagnosisCard(
+                            state,
+                            selectedPattern,
+                            displayName,
+                          ),
+
+                        // AI Clinical Trichology & Recommendations
+                        if (state.aiAssessment != null && !hideAiAnalysis) ...[
+                          const SizedBox(height: 20),
+                          AiAssessmentCards(
+                            aiAssessment: state.aiAssessment!,
+                            assessmentReferenceNo: state.referenceNo,
+                            onRefresh: _retryAiAssessment,
+                            isRefreshing: _isRequestingAi,
+                            onGenerateDietPlan: aiRecommendsDoctor
+                                ? null
+                                : () async {
+                                    await context
+                                        .read<HairTestCubit>()
+                                        .generatePersonalizedDietPlan();
+                                  },
+                            isGeneratingDietPlan: state.isGeneratingDietPlan,
+                            dietPlanError: state.dietPlanError,
+                          ),
+                        ] else if (state.referenceNo != null &&
+                            state.referenceNo!.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: const Color(0xFFE2E8F0),
                               ),
                             ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Dr. Hair Assistant Analysis',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF0F172A),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.1,
                                     ),
+                                    shape: BoxShape.circle,
                                   ),
-                                  const SizedBox(height: 2),
-                                  const Text(
-                                    'AI screening summary, possible factors, and daily care ideas.',
-                                    style: TextStyle(
-                                      fontSize: 11.5,
-                                      color: Color(0xFF64748B),
-                                    ),
+                                  child: const Icon(
+                                    LucideIcons.sparkles,
+                                    color: AppColors.primary,
+                                    size: 20,
                                   ),
-                                ],
-                              ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Dr. Hair Assistant Analysis',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      const Text(
+                                        'AI screening summary, possible factors, and daily care ideas.',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          color: Color(0xFF64748B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _isRequestingAi
+                                    ? const SizedBox(
+                                        width: 24,
+                                        height: 24,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppColors.primary,
+                                        ),
+                                      )
+                                    : ElevatedButton(
+                                        onPressed: _retryAiAssessment,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 8,
+                                          ),
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Analyze',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            _isRequestingAi
-                                ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: AppColors.primary,
-                                    ),
-                                  )
-                                : ElevatedButton(
-                                    onPressed: _retryAiAssessment,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.primary,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ),
-                                    child: const Text(
-                                      'Analyze',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                          ],
+                          ),
+                        ],
+
+                        // 3. Doctor's Prescribed Regimen (if reviewed by doctor)
+                        if (state.doctorCarePlan != null) ...[
+                          const SizedBox(height: 20),
+                          _buildDoctorPrescribedCarePlanCard(
+                            context,
+                            state.doctorCarePlan!,
+                          ),
+                        ],
+
+                        // 4. Doctor's Clinical Report Section (if available)
+                        if (state.clinicalReports.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          _buildDoctorClinicalReportsSection(
+                            context,
+                            state.clinicalReports,
+                          ),
+                        ],
+
+                        const SizedBox(height: 20),
+                        _buildScalpPhotosSection(context, state),
+
+                        // Keep clinician guidance and daily care ahead of optional products.
+                        if (aiRecommendsDoctor) ...[
+                          const SizedBox(height: 20),
+                          _buildDoctorAppointmentCard(
+                            context,
+                            isHero: true,
+                            reason: state.aiAssessment?.nextStepReason,
+                          ),
+                        ],
+
+                        const SizedBox(height: 20),
+
+                        // 8. Summary Card
+                        _buildSummaryCard(state),
+
+                        const SizedBox(height: 16),
+
+                        // 9. Medical Disclaimer Box
+                        _buildDisclaimerBox(),
+
+                        const SizedBox(height: 24),
+
+                        // 10. Next steps & routine setup
+                        if (!aiNeedsClinician)
+                          _buildPostAssessmentNextSteps(context, state),
+
+                        // Products are optional support, shown after the care plan.
+                        if (!aiNeedsClinician &&
+                            state.aiAssessment?.isAvailable == true) ...[
+                          const SizedBox(height: 20),
+                          _buildRecommendedProductsSection(
+                            context,
+                            recommendedProducts,
+                            isCheckingAvailability: false,
+                            availabilityError:
+                                aiAssessment?.productAvailabilityStatus ==
+                                'unavailable',
+                            shopEnabled: aiAssessment?.shopEnabled == true,
+                          ),
+                        ],
+
+                        const SizedBox(height: 20),
+
+                        // 11. Return to Home
+                        AppButton(
+                          height: 48,
+                          text: 'Done',
+                          variant: AppButtonVariant.outlined,
+                          size: AppButtonSize.large,
+                          width: double.infinity,
+                          onPressed: () {
+                            context.read<HairTestCubit>().dismissReport();
+                            if (Navigator.of(context).canPop()) {
+                              Navigator.of(context).pop();
+                            } else {
+                              context.go(RouteNames.mainShell);
+                            }
+                          },
                         ),
-                      ),
-                    ],
-
-                    // 3. Doctor's Prescribed Regimen (if reviewed by doctor)
-                    if (state.doctorCarePlan != null) ...[
-                      const SizedBox(height: 20),
-                      _buildDoctorPrescribedCarePlanCard(
-                        context,
-                        state.doctorCarePlan!,
-                      ),
-                    ],
-
-                    // 4. Doctor's Clinical Report Section (if available)
-                    if (state.clinicalReports.isNotEmpty) ...[
-                      const SizedBox(height: 20),
-                      _buildDoctorClinicalReportsSection(
-                        context,
-                        state.clinicalReports,
-                      ),
-                    ],
-
-                    const SizedBox(height: 20),
-                    _buildScalpPhotosSection(context, state),
-
-                    // Keep clinician guidance and daily care ahead of optional products.
-                    if (aiRecommendsDoctor) ...[
-                      const SizedBox(height: 20),
-                      _buildDoctorAppointmentCard(
-                        context,
-                        isHero: true,
-                        reason: state.aiAssessment?.nextStepReason,
-                      ),
-                    ],
-
-                    const SizedBox(height: 20),
-
-                    // 8. Summary Card
-                    _buildSummaryCard(state),
-
-                    const SizedBox(height: 16),
-
-                    // 9. Medical Disclaimer Box
-                    _buildDisclaimerBox(),
-
-                    const SizedBox(height: 24),
-
-                    // 10. Next steps & routine setup
-                    _buildPostAssessmentNextSteps(context, state),
-
-                    // Products are optional support, shown after the care plan.
-                    if (!aiRecommendsDoctor &&
-                        state.aiAssessment?.isAvailable == true) ...[
-                      const SizedBox(height: 20),
-                      _buildRecommendedProductsSection(
-                        context,
-                        recommendedProducts,
-                        isCheckingAvailability: productState.isLoading,
-                        availabilityError: productState.errorMessage != null,
-                      ),
-                    ],
-
-                    const SizedBox(height: 20),
-
-                    // 11. Return to Home
-                    AppButton(
-                      height: 48,
-                      text: 'Done',
-                      variant: AppButtonVariant.outlined,
-                      size: AppButtonSize.large,
-                      width: double.infinity,
-                      onPressed: () {
-                        context.read<HairTestCubit>().dismissReport();
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        } else {
-                          context.go(RouteNames.mainShell);
-                        }
-                      },
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -428,8 +455,11 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
             ),
             child: SafeArea(
               top: false,
-              child: aiRecommendsDoctor
-                  ? AppButton(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (aiRecommendsDoctor || aiUnavailable)
+                    AppButton(
                       height: 48,
                       text: 'Contact doctor on WhatsApp',
                       variant: AppButtonVariant.filled,
@@ -442,62 +472,66 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                       ),
                       onPressed: _contactDoctorOnWhatsApp,
                     )
-                  : state.aiAssessment?.isAvailable == true
-                  ? productState.isLoading
-                        ? const AppButton(
-                            height: 48,
-                            text: 'Checking product availability…',
-                            variant: AppButtonVariant.outlined,
-                            onPressed: null,
-                          )
-                        : recommendedProducts.isNotEmpty
-                        ? AppButton(
-                            height: 48,
-                            text: 'Open daily care routine',
-                            variant: AppButtonVariant.filled,
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            icon: const Icon(
-                              LucideIcons.listChecks,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                            onPressed: () => _saveAssessmentRoutine(
+                  else
+                    AppButton(
+                      height: 48,
+                      text: _isAddingRoutine
+                          ? 'Adding care plan…'
+                          : 'Open daily care routine',
+                      variant: AppButtonVariant.filled,
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      icon: const Icon(
+                        LucideIcons.listChecks,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      onPressed: _isAddingRoutine
+                          ? null
+                          : () => _saveAssessmentRoutine(
                               context,
-                              state.aiAssessment!.recommendedRegimen.dailySteps
-                                  .where(
-                                    (step) => !RegExp(
-                                      r'\b(tablet|supplement|medicine|medication|prescription|dosage|mg|ml|minoxidil|capsule)\b',
-                                      caseSensitive: false,
-                                    ).hasMatch(step.instruction),
-                                  )
-                                  .toList(),
+                              careRoutineSteps,
                             ),
-                          )
-                        : AppButton(
-                            height: 48,
-                            text: 'Contact doctor on WhatsApp',
-                            variant: AppButtonVariant.filled,
-                            backgroundColor: AppColors.whatsapp,
-                            foregroundColor: Colors.white,
+                    ),
+                  if (!aiRecommendsDoctor &&
+                      state.aiAssessment?.isAvailable == true) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton.icon(
+                            onPressed: _contactDoctorOnWhatsApp,
                             icon: const Icon(
                               LucideIcons.messageCircle,
-                              size: 16,
-                              color: Colors.white,
+                              size: 15,
                             ),
-                            onPressed: _contactDoctorOnWhatsApp,
-                          )
-                  : AppButton(
-                      height: 48,
-                      text: _isRequestingAi
-                          ? 'Preparing AI assessment…'
-                          : 'Contact doctor on WhatsApp',
-                      variant: AppButtonVariant.outlined,
-                      icon: const Icon(LucideIcons.messageCircle, size: 16),
-                      onPressed: _isRequestingAi
-                          ? null
-                          : _contactDoctorOnWhatsApp,
+                            label: const Text(
+                              'WhatsApp doctor',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: TextButton.icon(
+                            onPressed: () =>
+                                context.push(RouteNames.clinicAppointment),
+                            icon: const Icon(
+                              LucideIcons.calendarCheck2,
+                              size: 15,
+                            ),
+                            label: const Text(
+                              'Book consultation',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                  ],
+                ],
+              ),
             ),
           ),
         );
@@ -525,28 +559,36 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
       borderCol = const Color(0xFFBBF7D0);
       iconCol = const Color(0xFF16A34A);
       iconData = LucideIcons.badgeCheck;
-      badgeText = 'Expert Clinical Review Completed';
-      title = 'Prescribed by Dr. Jai Bansal';
-      subtitle = 'Verified Trichologist & Clinic Head';
-      description = 'Dr. Jai Bansal has reviewed your scalp assessment and photos. Your verified treatment regimen and clinical instructions are active below.';
+      badgeText = 'Clinical Review Completed';
+      title = 'Clinical review is complete';
+      final reviewer = _reviewerName(state.doctorCarePlan);
+      subtitle = reviewer == null ? '' : 'Reviewed by $reviewer';
+      description = state.doctorCarePlan != null
+          ? 'A clinician care plan has been added to this assessment.'
+          : 'A clinical review has been recorded for this assessment.';
     } else if (isUnderReview) {
       cardBg = const Color(0xFFEFF6FF);
       borderCol = const Color(0xFFBFDBFE);
       iconCol = const Color(0xFF2563EB);
       iconData = LucideIcons.hourglass;
       badgeText = 'Scalp Photos Under Review';
-      title = 'Under Review by Expert Clinic Team';
-      subtitle = 'Assigned to Dr. Jai Bansal';
-      description = 'Dr. Jai Bansal and our clinical team are currently analyzing your hair loss patterns and scalp photos. Your personalized care regimen will be published here shortly.';
+      title = 'Clinical review in progress';
+      subtitle = '';
+      description = 'Your assessment is with the clinical team. We will show their review here when it is ready.';
     } else {
       cardBg = const Color(0xFFFFFBEB);
       borderCol = const Color(0xFFFDE68A);
       iconCol = const Color(0xFFD97706);
       iconData = LucideIcons.clock;
-      badgeText = 'Submitted · Awaiting Doctor Review';
-      title = 'Report Sent to Expert Clinic Team';
-      subtitle = 'Assigned to Dr. Jai Bansal';
-      description = 'Your report has been sent to our expert clinic team (Dr. Jai Bansal). Please wait for review. After the expert analyzes your report and scalp photos, they will provide clinical feedback, personalized care regimen, and verified assessment soon.';
+      badgeText = 'Assessment Submitted';
+      title = 'Your assessment is ready';
+      subtitle = '';
+      description =
+          state.aiAssessment == null ||
+              !state.aiAssessment!.isAvailable ||
+              state.aiAssessment!.requiresClinician
+          ? 'A clinician review is needed before care suggestions are shown.'
+          : 'Your assessment summary and available next steps are shown below.';
     }
 
     return Container(
@@ -611,14 +653,15 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                         color: AppColors.primaryDark,
                       ),
                     ),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.secondaryDark,
+                    if (subtitle.isNotEmpty)
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.secondaryDark,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -746,8 +789,6 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
     HairTestState state,
     ({String label, String asset})? selectedPattern,
     String displayName,
-    bool isReviewed,
-    bool isUnderReview,
   ) {
     return Container(
       width: double.infinity,
@@ -773,50 +814,13 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
             spacing: 8,
             runSpacing: 6,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: isReviewed
-                      ? const Color(0xFFEAF8EE)
-                      : const Color(0xFFEFF6FF),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isReviewed
-                        ? const Color(0xFFBBF7D0)
-                        : const Color(0xFFBFDBFE),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isReviewed
-                          ? LucideIcons.badgeCheck
-                          : LucideIcons.clipboardCheck,
-                      color: isReviewed
-                          ? const Color(0xFF1B6A47)
-                          : const Color(0xFF1D4ED8),
-                      size: 14,
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        isReviewed ? 'Clinically Verified' : 'Intake Recorded',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                          color: isReviewed
-                              ? const Color(0xFF1B6A47)
-                              : const Color(0xFF1D4ED8),
-                        ),
-                      ),
-                    ),
-                  ],
+              const Text(
+                'ASSESSMENT OVERVIEW',
+                style: TextStyle(
+                  color: AppColors.secondaryDark,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.7,
                 ),
               ),
               if (state.referenceNo != null && state.referenceNo!.isNotEmpty)
@@ -895,7 +899,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'What this may mean',
+                  'Your reported concern',
                   style: TextStyle(
                     color: AppColors.primaryDark,
                     fontSize: 12,
@@ -915,6 +919,48 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClinicianOnlyNotice({required bool showClinicContact}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(LucideIcons.stethoscope, color: Color(0xFF1D4ED8), size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'The Assistant cannot safely prepare guidance for this assessment. Please contact the clinic for your next step.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: Color(0xFF1E3A8A),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (showClinicContact) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _contactDoctorOnWhatsApp,
+              icon: const Icon(LucideIcons.messageCircle, size: 16),
+              label: const Text('Contact the clinic'),
+            ),
+          ],
         ],
       ),
     );
@@ -963,27 +1009,29 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      "Doctor's Verified Care Plan",
+                    const Text(
+                      'Clinical care plan',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                         color: Color(0xFF14532D),
                       ),
                     ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Prescribed by Dr. Jai Bansal',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF15803D),
-                        fontWeight: FontWeight.w600,
+                    if (_reviewerName(plan) != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Prepared by ${_reviewerName(plan)}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF15803D),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -1447,6 +1495,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
     List<ProductItem> products, {
     required bool isCheckingAvailability,
     required bool availabilityError,
+    required bool shopEnabled,
   }) {
     const stageTitle = 'Optional products';
     const stageSubtitle =
@@ -1548,9 +1597,11 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               ),
             )
           else if (products.isEmpty)
-            const Text(
-              'No matching in-stock products are available right now. Contact the clinic for guidance.',
-              style: TextStyle(
+            Text(
+              shopEnabled
+                  ? 'No matching in-stock products are available right now. Your care steps remain available above.'
+                  : 'Product suggestions are currently turned off. Your care steps remain available above.',
+              style: const TextStyle(
                 fontSize: 12,
                 height: 1.4,
                 color: AppColors.secondaryDark,
@@ -1563,25 +1614,37 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               const SizedBox(height: 12),
             ],
           ],
-          const SizedBox(height: 4),
-          Center(
-            child: TextButton.icon(
-              onPressed: () => context.push(RouteNames.products),
-              icon: const Icon(
-                LucideIcons.shoppingBag,
-                size: 14,
-                color: AppColors.primary,
+          if (!shopEnabled || availabilityError || products.isEmpty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _contactDoctorOnWhatsApp,
+                icon: const Icon(LucideIcons.messageCircle, size: 16),
+                label: const Text('Ask the clinic for guidance'),
               ),
-              label: const Text(
-                'Browse the catalog',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+            ),
+          ] else ...[
+            const SizedBox(height: 4),
+            Center(
+              child: TextButton.icon(
+                onPressed: () => context.push(RouteNames.products),
+                icon: const Icon(
+                  LucideIcons.shoppingBag,
+                  size: 14,
                   color: AppColors.primary,
+                ),
+                label: const Text(
+                  'Browse the catalog',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -1817,7 +1880,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                     ),
                     const SizedBox(height: 2),
                     const Text(
-                      'Consult Dr. Jai Bansal (Dermatologist & Hair Specialist)',
+                      'Contact the clinic team for an in-person review',
                       style: TextStyle(
                         fontSize: 10,
                         color: Color(0xFF2563EB),
@@ -1905,7 +1968,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Doctor's Clinical Report",
+                      'Clinical documents',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
@@ -1914,7 +1977,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Verified by Dr. Jai Bansal',
+                      'Shared with your care team',
                       style: TextStyle(
                         fontSize: 11,
                         color: Color(0xFF15803D),
@@ -1928,7 +1991,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Your scalp assessment has been reviewed by Dr. Jai Bansal. An official clinical diagnosis report is available below.',
+            'Documents shared with you by the clinic are available below.',
             style: TextStyle(
               fontSize: 12,
               height: 1.45,
@@ -2110,13 +2173,6 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
         hairState.isCompleted && !hairState.isRetesting;
     final routineSteps = assessmentState.aiAssessment?.isAvailable == true
         ? assessmentState.aiAssessment!.recommendedRegimen.dailySteps
-              .where(
-                (step) => !RegExp(
-                  r'\b(tablet|supplement|medicine|medication|prescription|dosage|mg|ml|minoxidil|capsule)\b',
-                  caseSensitive: false,
-                ).hasMatch(step.instruction),
-              )
-              .toList()
         : <AiRegimenStep>[];
 
     if (!hasCompletedAssessment) {
@@ -2405,231 +2461,6 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
       ],
     );
   }
-}
-
-List<ProductItem> _getRecommendedProducts(
-  HairTestState state, [
-  List<ProductItem>? liveProducts,
-  List<String>? aiCategories,
-]) {
-  final catalog = (liveProducts ?? const <ProductItem>[])
-      .where((product) => product.id.isNotEmpty && product.inStock)
-      .toList();
-
-  final list = <ProductItem>[];
-  final stageStr = (state.stage ?? state.primaryConcern ?? '').toLowerCase();
-  final dandruff = (state.dandruff ?? '').toLowerCase();
-  final gut = (state.gutHealth ?? '').toLowerCase();
-  final stress = (state.stressLevel ?? '').toLowerCase();
-
-  ProductItem? findInCatalog(bool Function(ProductItem p) predicate) {
-    try {
-      return catalog.firstWhere(predicate);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  if (aiCategories != null && aiCategories.isNotEmpty) {
-    for (final category in aiCategories.take(3)) {
-      final normalized = category.toLowerCase().trim();
-      if (normalized.isEmpty) continue;
-      final match = findInCatalog((product) {
-        final productCategory = product.category.toLowerCase().trim();
-        final productName = product.name.toLowerCase().trim();
-        if (productCategory.isNotEmpty &&
-            (productCategory.contains(normalized) ||
-                normalized.contains(productCategory))) {
-          return true;
-        }
-        if (normalized.contains('serum')) return productName.contains('serum');
-        if (normalized.contains('hair care')) {
-          return productCategory.contains('hair') ||
-              productName.contains('shampoo') ||
-              productName.contains('cleanser') ||
-              productName.contains('hair care');
-        }
-        if (normalized.contains('supplement')) {
-          return productCategory.contains('supplement') ||
-              productName.contains('supplement');
-        }
-        return productName.contains(normalized);
-      });
-      if (match != null && !list.contains(match)) list.add(match);
-    }
-    return list;
-  }
-
-  // 1. Stage-specific Core Formulations
-  if (stageStr.contains('stage 1')) {
-    // Stage 1: Preventative - Root Nourishing Serum + Gentle Shampoo + Biotin/Supplements
-    final serum =
-        findInCatalog(
-          (p) =>
-              p.name.toLowerCase().contains('root') ||
-              p.name.toLowerCase().contains('boost') ||
-              p.name.toLowerCase().contains('serum'),
-        ) ??
-        findInCatalog((p) => p.category.toLowerCase().contains('serum'));
-    if (serum != null && !list.contains(serum)) {
-      list.add(serum);
-    }
-
-    final shampoo =
-        findInCatalog(
-          (p) =>
-              p.name.toLowerCase().contains('gentle') ||
-              p.name.toLowerCase().contains('cleans') ||
-              p.category.toLowerCase().contains('shampoo'),
-        ) ??
-        findInCatalog((p) => p.category.toLowerCase().contains('shampoo'));
-    if (shampoo != null && !list.contains(shampoo)) {
-      list.add(shampoo);
-    }
-
-    final supplement =
-        findInCatalog(
-          (p) =>
-              p.name.toLowerCase().contains('biotin') ||
-              p.name.toLowerCase().contains('nutrition') ||
-              p.category.toLowerCase().contains('supplement'),
-        ) ??
-        findInCatalog((p) => p.category.toLowerCase().contains('supplement'));
-    if (supplement != null && !list.contains(supplement)) {
-      list.add(supplement);
-    }
-  } else if (stageStr.contains('stage 2')) {
-    // Stage 2: Targeted Regrowth - 5% Minoxidil / Regrowth Serum + Anti-DHT Shampoo + Roller / Nutrition
-    final regrowthSerum =
-        findInCatalog(
-          (p) =>
-              p.name.toLowerCase().contains('minoxidil') ||
-              p.name.toLowerCase().contains('regrowth') ||
-              p.category.toLowerCase().contains('serum'),
-        ) ??
-        findInCatalog((p) => p.category.toLowerCase().contains('serum'));
-    if (regrowthSerum != null && !list.contains(regrowthSerum)) {
-      list.add(regrowthSerum);
-    }
-
-    final dhtShampoo =
-        findInCatalog(
-          (p) =>
-              p.name.toLowerCase().contains('dht') ||
-              p.name.toLowerCase().contains('fall') ||
-              p.category.toLowerCase().contains('shampoo'),
-        ) ??
-        findInCatalog((p) => p.category.toLowerCase().contains('shampoo'));
-    if (dhtShampoo != null && !list.contains(dhtShampoo)) {
-      list.add(dhtShampoo);
-    }
-
-    final rollerOrNutrition =
-        findInCatalog(
-          (p) =>
-              p.name.toLowerCase().contains('roller') ||
-              p.name.toLowerCase().contains('vital') ||
-              p.category.toLowerCase().contains('kit'),
-        ) ??
-        findInCatalog((p) => p.category.toLowerCase().contains('supplement'));
-    if (rollerOrNutrition != null && !list.contains(rollerOrNutrition)) {
-      list.add(rollerOrNutrition);
-    }
-  } else if (stageStr.contains('stage 3')) {
-    // Stage 3: Intensive Clinical Kit - Intensive Regrowth Serum + Hair Vitalizer/Supplements + Exfoliating/DHT Shampoo
-    final intensiveSerum =
-        findInCatalog(
-          (p) =>
-              p.name.toLowerCase().contains('regrowth') ||
-              p.name.toLowerCase().contains('peptide') ||
-              p.name.toLowerCase().contains('intensive'),
-        ) ??
-        findInCatalog((p) => p.category.toLowerCase().contains('serum'));
-    if (intensiveSerum != null && !list.contains(intensiveSerum)) {
-      list.add(intensiveSerum);
-    }
-
-    final hairSupp =
-        findInCatalog(
-          (p) =>
-              p.name.toLowerCase().contains('tablet') ||
-              p.name.toLowerCase().contains('multivitamin') ||
-              p.name.toLowerCase().contains('nutrition') ||
-              p.category.toLowerCase().contains('supplement'),
-        ) ??
-        findInCatalog((p) => p.category.toLowerCase().contains('supplement'));
-    if (hairSupp != null && !list.contains(hairSupp)) {
-      list.add(hairSupp);
-    }
-
-    final shampoo =
-        findInCatalog(
-          (p) =>
-              p.name.toLowerCase().contains('dht') ||
-              p.name.toLowerCase().contains('shampoo'),
-        ) ??
-        findInCatalog((p) => p.category.toLowerCase().contains('shampoo'));
-    if (shampoo != null && !list.contains(shampoo)) {
-      list.add(shampoo);
-    }
-  }
-
-  // 2. Dandruff / Scalp condition
-  if (dandruff.contains('flake') ||
-      dandruff.contains('itch') ||
-      dandruff.contains('dandruff')) {
-    final match = findInCatalog(
-      (p) =>
-          p.id.contains('dandruff') ||
-          p.name.toLowerCase().contains('dandruff') ||
-          p.category.toLowerCase().contains('dandruff'),
-    );
-    if (match != null && !list.contains(match)) {
-      list.add(match);
-    }
-  }
-
-  // 3. Gut health
-  if (gut.contains('sometimes') ||
-      gut.contains('often') ||
-      gut.contains('yes')) {
-    final gutMatch = findInCatalog(
-      (p) =>
-          p.id.contains('gut') ||
-          p.name.toLowerCase().contains('gut') ||
-          p.category.toLowerCase().contains('gut'),
-    );
-    if (gutMatch != null && !list.contains(gutMatch)) {
-      list.add(gutMatch);
-    }
-  }
-
-  // 4. Stress
-  if (stress.contains('high') ||
-      stress.contains('extreme') ||
-      stress.contains('moderate')) {
-    final stressMatch = findInCatalog(
-      (p) =>
-          p.id.contains('stress') ||
-          p.name.toLowerCase().contains('stress') ||
-          p.category.toLowerCase().contains('stress'),
-    );
-    if (stressMatch != null && !list.contains(stressMatch)) {
-      list.add(stressMatch);
-    }
-  }
-
-  // Fallback to ensure at least 3 relevant products
-  if (list.length < 3) {
-    for (final p in catalog) {
-      if (!list.contains(p)) {
-        list.add(p);
-      }
-      if (list.length >= 3) break;
-    }
-  }
-
-  return list.take(4).toList();
 }
 
 ({String label, String asset})? _selectedPatternIllustration(

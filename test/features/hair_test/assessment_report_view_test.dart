@@ -11,12 +11,16 @@ import 'package:dr_hair/features/shop/presentation/viewmodels/products_state.dar
 Widget _reportApp(
   HairTestCubit cubit, {
   List<ProductItem> products = const [],
+  bool productsLoading = false,
 }) => MultiBlocProvider(
   providers: [
     BlocProvider<HairTestCubit>.value(value: cubit),
     BlocProvider<ProductsCubit>(
       create: (_) => ProductsCubit(
-        initialState: ProductsState(products: products, isLoading: false),
+        initialState: ProductsState(
+          products: products,
+          isLoading: productsLoading,
+        ),
       ),
     ),
   ],
@@ -44,15 +48,14 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
-        // Reassurance card
-        expect(find.text('Report Sent to Expert Clinic Team'), findsOneWidget);
-        expect(find.text('Assigned to Dr. Jai Bansal'), findsOneWidget);
+        // Status copy stays factual until a clinician review is recorded.
+        expect(find.text('Your assessment is ready'), findsOneWidget);
+        expect(find.text('Assessment Submitted'), findsOneWidget);
         expect(
-          find.textContaining(
-            'Your report has been sent to our expert clinic team (Dr. Jai Bansal)',
-          ),
+          find.textContaining('A clinician review is needed'),
           findsOneWidget,
         );
+        expect(find.textContaining('Dr. Jai Bansal'), findsNothing);
 
         // 3-step timeline
         expect(find.text('Intake Sent'), findsOneWidget);
@@ -101,6 +104,12 @@ void main() {
             name: 'Vikram Mehta',
             age: '42',
             stage: 'Stage 5 - Advanced Crown Thinning',
+            aiAssessment: const AiAssessmentModel(
+              isAvailable: false,
+              requiresClinician: true,
+              nextStepType: 'doctor_appointment',
+              nextStepReason: 'An in-person clinician review is recommended.',
+            ),
           ),
         );
 
@@ -151,8 +160,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text("Doctor's Verified Care Plan"), findsOneWidget);
-      expect(find.text('Prescribed by Dr. Jai Bansal'), findsWidgets);
+      expect(find.text('Clinical care plan'), findsOneWidget);
+      expect(find.textContaining('Prepared by'), findsNothing);
       expect(
         find.text('Apply 1ml solution nightly. Use shampoo twice weekly.'),
         findsOneWidget,
@@ -167,12 +176,14 @@ void main() {
       (tester) async {
         final cubit = HairTestCubit();
         final liveProduct = ProductItem.demoCatalog.first;
-        const ai = AiAssessmentModel(
+        final ai = AiAssessmentModel(
           isAvailable: true,
           scalpHealthScore: 74,
           stageClassification: 'Reported pattern',
           summary: 'Screening summary from answers.',
           nextStepType: 'products',
+          shopEnabled: true,
+          availableProducts: [liveProduct.toJson()],
           recommendedRegimen: AiRecommendedRegimen(
             targetProducts: [
               AiTargetProduct(
@@ -199,7 +210,46 @@ void main() {
 
         expect(find.text(liveProduct.name), findsWidgets);
         expect(find.text('Open daily care routine'), findsOneWidget);
-        expect(find.text('Contact doctor on WhatsApp'), findsNothing);
+        expect(find.text('WhatsApp doctor'), findsOneWidget);
+        expect(find.text('Book consultation'), findsOneWidget);
+        await cubit.close();
+      },
+    );
+
+    testWidgets(
+      'care and clinician actions stay available when stock cannot be confirmed',
+      (tester) async {
+        final cubit = HairTestCubit();
+        const ai = AiAssessmentModel(
+          isAvailable: true,
+          scalpHealthScore: 74,
+          stageClassification: 'Reported pattern',
+          summary: 'Screening summary from answers.',
+          nextStepType: 'products',
+          productAvailabilityStatus: 'unavailable',
+          shopEnabled: true,
+        );
+        cubit.emit(
+          cubit.state.copyWith(
+            isCompleted: true,
+            isSubmitted: true,
+            assessmentStatus: 'submitted',
+            stage: 'Stage 2 - Receding Hairline',
+            aiAssessment: ai,
+          ),
+        );
+
+        await tester.pumpWidget(_reportApp(cubit));
+        await tester.pump();
+
+        expect(
+          find.textContaining('couldn’t confirm current stock'),
+          findsOneWidget,
+        );
+        expect(find.text('Open daily care routine'), findsOneWidget);
+        expect(find.text('WhatsApp doctor'), findsOneWidget);
+        expect(find.text('Book consultation'), findsOneWidget);
+
         await cubit.close();
       },
     );
@@ -221,6 +271,7 @@ void main() {
         stageClassification: 'Reported pattern',
         summary: 'Screening summary from answers.',
         nextStepType: 'products',
+        shopEnabled: true,
         recommendedRegimen: AiRecommendedRegimen(
           targetProducts: [
             AiTargetProduct(
@@ -247,12 +298,12 @@ void main() {
 
       expect(find.text('Sold Out Serum'), findsNothing);
       expect(
-        find.text(
-          'No matching in-stock products are available right now. Contact the clinic for guidance.',
+        find.textContaining(
+          'No matching in-stock products are available right now.',
         ),
         findsOneWidget,
       );
-      expect(find.text('Contact doctor on WhatsApp'), findsOneWidget);
+      expect(find.text('WhatsApp doctor'), findsOneWidget);
       await cubit.close();
     });
   });

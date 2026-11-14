@@ -1116,7 +1116,8 @@ class _ProductGridCard extends StatelessWidget {
     final isNarrow = MediaQuery.sizeOf(context).width < 360;
 
     return Semantics(
-      label: '${product.name}, $price, ${product.rating} stars',
+      label:
+          '${product.name}, $price${product.rating > 0 && product.reviewsCount > 0 ? ', ${product.rating} stars from ${product.reviewsCount} reviews' : ''}',
       button: true,
       child: Container(
         decoration: BoxDecoration(
@@ -1226,40 +1227,41 @@ class _ProductGridCard extends StatelessWidget {
                           ),
                         ),
 
-                      // Rating badge (Bottom-Right)
-                      Positioned(
-                        bottom: 6,
-                        right: 6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.65),
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.star_rounded,
-                                size: 11,
-                                color: AppColors.starGold,
-                              ),
-                              const SizedBox(width: 2),
-                              Text(
-                                product.rating.toStringAsFixed(1),
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
+                      // Show ratings only when reviews are available.
+                      if (product.rating > 0 && product.reviewsCount > 0)
+                        Positioned(
+                          bottom: 6,
+                          right: 6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.65),
+                              borderRadius: BorderRadius.circular(7),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.star_rounded,
+                                  size: 11,
+                                  color: AppColors.starGold,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 2),
+                                Text(
+                                  product.rating.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
 

@@ -482,44 +482,46 @@ class _ProductDetailsContentState extends State<_ProductDetailsContent>
                             runSpacing: 8,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary5,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      LucideIcons.star,
-                                      color: AppColors.starGold,
-                                      size: 14,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${product.rating}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                        color: AppColors.primaryDark,
+                              if (product.rating > 0 &&
+                                  product.reviewsCount > 0)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary5,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        LucideIcons.star,
+                                        color: AppColors.starGold,
+                                        size: 14,
                                       ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '(${product.reviewsCount} reviews)',
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w500,
-                                        color: AppColors.textSecondary,
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${product.rating}',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.primaryDark,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '(${product.reviewsCount} reviews)',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 10,
@@ -1634,24 +1636,25 @@ class _SuggestedProductCard extends StatelessWidget {
                       color: AppColors.primary,
                     ),
                   ),
-                  Row(
-                    children: [
-                      const Icon(
-                        LucideIcons.star,
-                        size: 11,
-                        color: AppColors.starGold,
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        '${product.rating}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primaryDark,
+                  if (product.rating > 0 && product.reviewsCount > 0)
+                    Row(
+                      children: [
+                        const Icon(
+                          LucideIcons.star,
+                          size: 11,
+                          color: AppColors.starGold,
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${product.rating}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primaryDark,
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ],

@@ -165,10 +165,7 @@ class AppRouter {
         builder: (context, state) {
           final id = state.pathParameters['productId'];
           final product = ProductItem.findById(id);
-          return ProductDetailsView(
-            productId: id,
-            initialProduct: product,
-          );
+          return ProductDetailsView(productId: id, initialProduct: product);
         },
       ),
       GoRoute(
@@ -196,7 +193,9 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.contact,
-        builder: (context, state) => const ContactView(),
+        builder: (context, state) => ContactView(
+          initialMessage: state.extra is String ? state.extra as String : null,
+        ),
       ),
       GoRoute(
         path: RouteNames.routine,
@@ -248,9 +247,7 @@ class AppRouter {
         path: RouteNames.orderTracking,
         builder: (context, state) => AuthRequiredRoute(
           routePath: RouteNames.orderTracking,
-          child: OrderTrackingView(
-            initialOrderId: state.extra as String?,
-          ),
+          child: OrderTrackingView(initialOrderId: state.extra as String?),
         ),
       ),
       GoRoute(

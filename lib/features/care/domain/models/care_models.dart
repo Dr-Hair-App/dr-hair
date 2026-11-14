@@ -118,6 +118,8 @@ class RoutineTask {
   final String category;
   final String timeOfDay;
   final bool isCompleted;
+  final bool isSkipped;
+  final String skipReason;
 
   const RoutineTask({
     required this.id,
@@ -126,6 +128,8 @@ class RoutineTask {
     required this.category,
     required this.timeOfDay,
     this.isCompleted = false,
+    this.isSkipped = false,
+    this.skipReason = '',
   });
 
   RoutineTask copyWith({
@@ -135,6 +139,8 @@ class RoutineTask {
     String? category,
     String? timeOfDay,
     bool? isCompleted,
+    bool? isSkipped,
+    String? skipReason,
   }) {
     return RoutineTask(
       id: id ?? this.id,
@@ -143,6 +149,8 @@ class RoutineTask {
       category: category ?? this.category,
       timeOfDay: timeOfDay ?? this.timeOfDay,
       isCompleted: isCompleted ?? this.isCompleted,
+      isSkipped: isSkipped ?? this.isSkipped,
+      skipReason: skipReason ?? this.skipReason,
     );
   }
 
@@ -154,6 +162,8 @@ class RoutineTask {
       'category': category,
       'timeOfDay': timeOfDay,
       'isCompleted': isCompleted,
+      'isSkipped': isSkipped,
+      'skipReason': skipReason,
     };
   }
 
@@ -165,8 +175,67 @@ class RoutineTask {
       category: json['category'] as String? ?? '',
       timeOfDay: json['timeOfDay'] as String? ?? '',
       isCompleted: json['isCompleted'] as bool? ?? false,
+      isSkipped: json['isSkipped'] as bool? ?? false,
+      skipReason: json['skipReason'] as String? ?? '',
     );
   }
+}
+
+class CareEvent {
+  final String id;
+  final String eventDate;
+  final String eventType;
+  final String eventKey;
+  final String status;
+  final int? value;
+  final String severity;
+  final List<String> symptoms;
+  final String note;
+
+  const CareEvent({
+    this.id = '',
+    required this.eventDate,
+    required this.eventType,
+    required this.eventKey,
+    required this.status,
+    this.value,
+    this.severity = '',
+    this.symptoms = const [],
+    this.note = '',
+  });
+
+  bool get clinicianContactRecommended =>
+      eventType == 'symptom' &&
+      (severity == 'severe' ||
+          symptoms.any(
+            (item) => const {'pain', 'burning', 'sores'}.contains(item),
+          ));
+
+  factory CareEvent.fromJson(Map<String, dynamic> json) => CareEvent(
+    id: json['id']?.toString() ?? '',
+    eventDate: json['event_date']?.toString() ?? '',
+    eventType: json['event_type']?.toString() ?? '',
+    eventKey: json['event_key']?.toString() ?? '',
+    status: json['status']?.toString() ?? '',
+    value: (json['value'] as num?)?.toInt(),
+    severity: json['severity']?.toString() ?? '',
+    symptoms: (json['symptoms'] as List? ?? const [])
+        .map((item) => item.toString())
+        .toList(),
+    note: json['note']?.toString() ?? '',
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'event_date': eventDate,
+    'event_type': eventType,
+    'event_key': eventKey,
+    'status': status,
+    'value': value,
+    'severity': severity,
+    'symptoms': symptoms,
+    'note': note,
+  };
 }
 
 /// Represents a scheduled notification reminder.
@@ -377,6 +446,7 @@ class CareOrder {
   final int currentStep;
   final String courierName;
   final String trackingNumber;
+  final String shiprocketShipmentId;
   final String deliveryAddress;
   final List<String> items;
   final int totalAmount;
@@ -389,6 +459,7 @@ class CareOrder {
     required this.currentStep,
     required this.courierName,
     required this.trackingNumber,
+    this.shiprocketShipmentId = '',
     required this.deliveryAddress,
     required this.items,
     required this.totalAmount,
@@ -402,6 +473,7 @@ class CareOrder {
     'currentStep': currentStep,
     'courierName': courierName,
     'trackingNumber': trackingNumber,
+    'shiprocketShipmentId': shiprocketShipmentId,
     'deliveryAddress': deliveryAddress,
     'items': items,
     'totalAmount': totalAmount,
@@ -423,10 +495,14 @@ class CareOrder {
     }
 
     final pricing = json['pricing'] is Map ? json['pricing'] as Map : null;
-    final total = (pricing?['total'] ?? json['totalAmount'] ?? json['total'] ?? 0) as num;
+    final total =
+        (pricing?['total'] ?? json['totalAmount'] ?? json['total'] ?? 0) as num;
 
-    final fulfillment = json['fulfillment'] is Map ? json['fulfillment'] as Map : null;
-    final statusStr = (fulfillment?['status'] ?? json['status'] ?? 'New').toString();
+    final fulfillment = json['fulfillment'] is Map
+        ? json['fulfillment'] as Map
+        : null;
+    final statusStr = (fulfillment?['status'] ?? json['status'] ?? 'New')
+        .toString();
 
     int step = 0;
     if (statusStr == 'Preparing') {
@@ -442,21 +518,102 @@ class CareOrder {
     if (addr is String) {
       formattedAddr = addr;
     } else if (addr is Map) {
-      formattedAddr = addr['formattedAddress'] as String? ??
+      formattedAddr =
+          addr['formattedAddress'] as String? ??
           '${addr['name'] ?? ''}, ${addr['house_number'] ?? ''}, ${addr['street'] ?? ''}, ${addr['city'] ?? ''}';
     }
 
     return CareOrder(
       orderId: json['order_id'] as String? ?? json['orderId'] as String? ?? '',
-      orderDate: json['created_at'] as String? ?? json['orderDate'] as String? ?? '',
-      estimatedDelivery: json['estimatedDelivery'] as String? ?? '3-5 business days',
+      orderDate:
+          json['created_at'] as String? ?? json['orderDate'] as String? ?? '',
+      estimatedDelivery:
+          json['estimatedDelivery'] as String? ?? '3-5 business days',
       status: statusStr,
       currentStep: (json['currentStep'] as num?)?.toInt() ?? step,
-      courierName: (fulfillment?['courier'] ?? json['courierName'] ?? '').toString(),
-      trackingNumber: (fulfillment?['tracking_number'] ?? json['trackingNumber'] ?? '').toString(),
+      courierName: (fulfillment?['courier'] ?? json['courierName'] ?? '')
+          .toString(),
+      trackingNumber:
+          (fulfillment?['tracking_number'] ?? json['trackingNumber'] ?? '')
+              .toString(),
+      shiprocketShipmentId:
+          (fulfillment?['shiprocket_shipment_id'] ??
+                  json['shiprocketShipmentId'] ??
+                  '')
+              .toString(),
       deliveryAddress: formattedAddr,
       items: parsedItems,
       totalAmount: total.toInt(),
+    );
+  }
+}
+
+class CareTrackingEvent {
+  final String date;
+  final String status;
+  final String activity;
+  final String location;
+
+  const CareTrackingEvent({
+    required this.date,
+    required this.status,
+    required this.activity,
+    required this.location,
+  });
+
+  factory CareTrackingEvent.fromJson(Map<String, dynamic> json) =>
+      CareTrackingEvent(
+        date: json['date']?.toString() ?? '',
+        status: json['status']?.toString() ?? '',
+        activity: json['activity']?.toString() ?? '',
+        location: json['location']?.toString() ?? '',
+      );
+}
+
+class CareOrderTracking {
+  final String awbCode;
+  final String courier;
+  final String currentStatus;
+  final String estimatedDelivery;
+  final String origin;
+  final String destination;
+  final String trackUrl;
+  final String updatedAt;
+  final List<CareTrackingEvent> events;
+
+  const CareOrderTracking({
+    required this.awbCode,
+    required this.courier,
+    required this.currentStatus,
+    required this.estimatedDelivery,
+    required this.origin,
+    required this.destination,
+    required this.trackUrl,
+    required this.updatedAt,
+    required this.events,
+  });
+
+  factory CareOrderTracking.fromJson(Map<String, dynamic> json) {
+    final rawEvents = json['events'];
+    return CareOrderTracking(
+      awbCode: json['awb_code']?.toString() ?? '',
+      courier: json['courier']?.toString() ?? '',
+      currentStatus: json['current_status']?.toString() ?? '',
+      estimatedDelivery: json['estimated_delivery']?.toString() ?? '',
+      origin: json['origin']?.toString() ?? '',
+      destination: json['destination']?.toString() ?? '',
+      trackUrl: json['track_url']?.toString() ?? '',
+      updatedAt: json['updated_at']?.toString() ?? '',
+      events: rawEvents is List
+          ? rawEvents
+                .whereType<Map>()
+                .map(
+                  (event) => CareTrackingEvent.fromJson(
+                    Map<String, dynamic>.from(event),
+                  ),
+                )
+                .toList()
+          : const [],
     );
   }
 }

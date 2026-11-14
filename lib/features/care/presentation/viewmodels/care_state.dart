@@ -15,6 +15,8 @@ class CareState {
   final List<CareOrder> orders;
   final NotificationPermissionStatus notificationPermissionStatus;
   final bool isLoadingReminders;
+  final List<CareEvent> careEvents;
+  final bool isCareEventSyncPending;
 
   const CareState({
     this.checkIns = const [],
@@ -22,15 +24,17 @@ class CareState {
     this.reminders = const [],
     this.dietPlans = const [],
     this.currentDietDay = 0,
-    this.dietTreatmentName = 'Personalized Nutrition Plan',
-    this.dietDoctorName = 'Dr. Hair Clinical Team',
+    this.dietTreatmentName = '',
+    this.dietDoctorName = '',
     this.isLoadingDiet = false,
-    this.waterCups = 6,
+    this.waterCups = 0,
     this.routineCompletionDays = const [],
     this.orders = const [],
     this.notificationPermissionStatus =
         NotificationPermissionStatus.notDetermined,
     this.isLoadingReminders = false,
+    this.careEvents = const [],
+    this.isCareEventSyncPending = false,
   });
 
   int get completedRoutineCount =>
@@ -67,6 +71,8 @@ class CareState {
     List<CareOrder>? orders,
     NotificationPermissionStatus? notificationPermissionStatus,
     bool? isLoadingReminders,
+    List<CareEvent>? careEvents,
+    bool? isCareEventSyncPending,
   }) {
     return CareState(
       checkIns: checkIns ?? this.checkIns,
@@ -84,6 +90,9 @@ class CareState {
       notificationPermissionStatus:
           notificationPermissionStatus ?? this.notificationPermissionStatus,
       isLoadingReminders: isLoadingReminders ?? this.isLoadingReminders,
+      careEvents: careEvents ?? this.careEvents,
+      isCareEventSyncPending:
+          isCareEventSyncPending ?? this.isCareEventSyncPending,
     );
   }
 }
