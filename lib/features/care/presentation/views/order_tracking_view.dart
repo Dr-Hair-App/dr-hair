@@ -217,7 +217,10 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
         final isCancellable =
             order != null &&
             !isPreviewOrder &&
-            (order.status == 'New' || order.status == 'Preparing');
+            (order.status == 'New' ||
+                (order.status == 'Preparing' &&
+                    order.shiprocketShipmentId.isEmpty &&
+                    order.trackingNumber.isEmpty));
 
         return CarePageScaffold(
           title: 'Track Order',
@@ -389,6 +392,9 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
                               child: Text(
                                 _liveTracking?.currentStatus.isNotEmpty == true
                                     ? _liveTracking!.currentStatus
+                                    : order.shiprocketShipmentId.isNotEmpty &&
+                                          order.status == 'Preparing'
+                                    ? 'Shipment created · waiting for courier pickup'
                                     : order.status == 'Shipped'
                                     ? 'Waiting for the courier’s first scan'
                                     : 'Live courier tracking starts after dispatch',

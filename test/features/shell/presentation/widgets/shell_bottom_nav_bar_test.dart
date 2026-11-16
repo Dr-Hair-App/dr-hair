@@ -27,7 +27,7 @@ void main() {
     expect(selectedIndex, 2);
 
     // Tap AI Action button on the right
-    await tester.tap(find.byTooltip('AI Hair Analysis'));
+    await tester.tap(find.byTooltip('AI Hair Assistant'));
     expect(actionPressed, true);
   });
 
@@ -83,7 +83,7 @@ void main() {
     expect(find.byKey(const ValueKey('cart-summary')), findsNothing);
     expect(find.byKey(const ValueKey('cart-summary-hidden')), findsOneWidget);
   });
-  testWidgets('uses a medicine icon for the Products action after assessment', (
+  testWidgets('shows the AI Assistant action regardless of assessment state', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -91,7 +91,6 @@ void main() {
         home: Scaffold(
           body: ShellBottomNavBar(
             currentIndex: 0,
-            isTestCompleted: true,
             onTabSelected: (_) {},
             onActionPressed: () {},
           ),
@@ -99,54 +98,70 @@ void main() {
       ),
     );
 
-    expect(find.byIcon(LucideIcons.pill), findsOneWidget);
-    expect(find.byTooltip('Products'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Image &&
+            widget.image is AssetImage &&
+            (widget.image as AssetImage).assetName ==
+                'assets/images/WhiteLogo.png',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('AI Hair Assistant'), findsOneWidget);
   });
 
-  testWidgets('hides circular action button and centers pill when showActionButton is false', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ShellBottomNavBar(
-            currentIndex: 0,
-            showActionButton: false,
-            onTabSelected: (_) {},
+  testWidgets(
+    'hides circular action button and centers pill when showActionButton is false',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ShellBottomNavBar(
+              currentIndex: 0,
+              showActionButton: false,
+              onTabSelected: (_) {},
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(find.byTooltip('Products'), findsNothing);
-    expect(find.byTooltip('AI Hair Analysis'), findsNothing);
+      expect(find.byTooltip('AI Hair Assistant'), findsNothing);
 
-    // Verify it is centered and constrained (not expanding to full screen width)
-    final constrainedBoxFinder = find.byWidgetPredicate(
-      (w) => w is ConstrainedBox && w.constraints.maxWidth == 300,
-    );
-    expect(constrainedBoxFinder, findsOneWidget);
-    expect(find.ancestor(of: constrainedBoxFinder, matching: find.byType(Center)), findsOneWidget);
-  });
+      // Verify it is centered and constrained (not expanding to full screen width)
+      final constrainedBoxFinder = find.byWidgetPredicate(
+        (w) => w is ConstrainedBox && w.constraints.maxWidth == 300,
+      );
+      expect(constrainedBoxFinder, findsOneWidget);
+      expect(
+        find.ancestor(of: constrainedBoxFinder, matching: find.byType(Center)),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('does not show Products action when isProductEnabled is false', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: ShellBottomNavBar(
-            currentIndex: 0,
-            isTestCompleted: true,
-            isProductEnabled: false,
-            onTabSelected: (_) {},
+  testWidgets(
+    'AI Assistant action remains available when products are disabled',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ShellBottomNavBar(currentIndex: 0, onTabSelected: (_) {}),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(find.byIcon(LucideIcons.pill), findsNothing);
-    expect(find.byTooltip('Products'), findsNothing);
-    expect(find.byTooltip('AI Hair Analysis'), findsOneWidget);
-  });
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Image &&
+              widget.image is AssetImage &&
+              (widget.image as AssetImage).assetName ==
+                  'assets/images/WhiteLogo.png',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('AI Hair Assistant'), findsOneWidget);
+    },
+  );
 }

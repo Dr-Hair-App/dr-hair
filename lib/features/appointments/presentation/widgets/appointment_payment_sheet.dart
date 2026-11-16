@@ -1,6 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 import '../../../../core/config/razorpay_config.dart';
@@ -29,6 +32,7 @@ class AppointmentPaymentSheet extends StatefulWidget {
   final DateTime startsAt;
   final String reason;
   final String doctorName;
+  final String timezone;
   final int fee;
   final bool paymentRequired;
   final String? patientToken;
@@ -40,8 +44,9 @@ class AppointmentPaymentSheet extends StatefulWidget {
     super.key,
     required this.startsAt,
     this.reason = '',
-    this.doctorName = 'Dr. Jai Bansal',
-    this.fee = 500,
+    this.doctorName = '',
+    this.timezone = '',
+    required this.fee,
     this.paymentRequired = true,
     this.patientToken,
     this.patientPhone,
@@ -53,8 +58,9 @@ class AppointmentPaymentSheet extends StatefulWidget {
     BuildContext context, {
     required DateTime startsAt,
     String reason = '',
-    String doctorName = 'Dr. Jai Bansal',
-    int fee = 500,
+    String doctorName = '',
+    String timezone = '',
+    required int fee,
     bool paymentRequired = true,
     String? patientToken,
     String? patientPhone,
@@ -69,6 +75,7 @@ class AppointmentPaymentSheet extends StatefulWidget {
         startsAt: startsAt,
         reason: reason,
         doctorName: doctorName,
+        timezone: timezone,
         fee: fee,
         paymentRequired: paymentRequired,
         patientToken: patientToken,
@@ -94,6 +101,7 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
   @override
   void initState() {
     super.initState();
+    tz_data.initializeTimeZones();
     _selectedMethod = (widget.paymentRequired && widget.fee > 0)
         ? 'UPI'
         : (widget.fee <= 0 ? 'Free Consultation' : 'Cash at Clinic');
@@ -161,9 +169,18 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final timeStr = TimeOfDay.fromDateTime(widget.startsAt).format(context);
+    DateTime clinicStart;
+    try {
+      clinicStart = tz.TZDateTime.from(
+        widget.startsAt,
+        tz.getLocation(widget.timezone),
+      );
+    } catch (_) {
+      clinicStart = widget.startsAt;
+    }
+    final timeStr = TimeOfDay.fromDateTime(clinicStart).format(context);
     final dateStr =
-        '${widget.startsAt.day}/${widget.startsAt.month}/${widget.startsAt.year}';
+        '${clinicStart.day}/${clinicStart.month}/${clinicStart.year}';
 
     return Container(
       decoration: const BoxDecoration(
@@ -393,12 +410,8 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
                   children: [
                     _buildFeeRow(
                       'In-Clinic Consultation Fee',
-                      widget.fee <= 0 ? '₹500 (100% FREE)' : '₹${widget.fee}',
+                      widget.fee <= 0 ? '₹0 · Complimentary' : '₹${widget.fee}',
                     ),
-                    const SizedBox(height: 6),
-                    _buildFeeRow('Trichoscopy & Scalp Examination', 'INCLUDED'),
-                    const SizedBox(height: 6),
-                    _buildFeeRow('OPD Registration & Token Fee', 'FREE'),
                     const Divider(color: AppColors.border, height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -441,10 +454,10 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
                   Expanded(
                     child: Text(
                       widget.fee <= 0
-                          ? '100% complimentary in-clinic doctor visit with Dr. Jai Bansal.'
+                          ? 'No payment is due for this appointment.'
                           : widget.paymentRequired
-                          ? '100% refundable if cancelled up to 2 hours prior to slot.'
-                          : 'Cancel anytime up to 2 hours prior to appointment slot.',
+                          ? 'Payment is securely processed through the configured payment provider.'
+                          : 'You can request changes from your appointments screen.',
                       style: TextStyle(
                         fontSize: 10.5,
                         color: Colors.grey.shade600,
@@ -597,10 +610,10 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
       _errorMessage = null;
     });
 
-    final isCash = _selectedMethod == 'Cash at Clinic' || (!widget.paymentRequired && widget.fee > 0);
-    final isFree =
-        widget.fee <= 0 ||
-        _selectedMethod == 'Free Consultation';
+    final isCash =
+        _selectedMethod == 'Cash at Clinic' ||
+        (!widget.paymentRequired && widget.fee > 0);
+    final isFree = widget.fee <= 0 || _selectedMethod == 'Free Consultation';
 
     // 1. Free appointment: confirm immediately with ₹0 fee
     if (isFree) {
@@ -686,7 +699,7 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
 
     if (activeKeyId.isEmpty) {
       // In Flutter test harness or headless mock runs without RAZORPAY_KEY_ID:
-      if (token == null || token == 'test-token') {
+      if (kDebugMode && (token == null || token == 'test-token')) {
         await Future.delayed(const Duration(milliseconds: 100));
         if (!mounted) return;
         Navigator.pop(
@@ -734,9 +747,10 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
     } catch (e) {
       if (!mounted) return;
       // In automated flutter test / headless runner without native plugin channel:
-      if (token == 'test-token' ||
-          widget.patientPhone == 'test-phone' ||
-          token == null) {
+      if (kDebugMode &&
+          (token == 'test-token' ||
+              widget.patientPhone == 'test-phone' ||
+              token == null)) {
         Navigator.pop(
           context,
           AppointmentPaymentResult(

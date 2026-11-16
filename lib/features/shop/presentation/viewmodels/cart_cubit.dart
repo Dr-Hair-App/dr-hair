@@ -39,11 +39,11 @@ class CartCubit extends Cubit<CartState> {
     AppLocalCache? cache,
     CartRemoteDataSource? remoteDataSource,
     bool syncWithBackend = true,
-  })  : _cache = cache ?? AppLocalCache.instance,
-        _remoteDataSource = remoteDataSource is CartRemoteDataSource
-            ? remoteDataSource
-            : null,
-        super(const CartState()) {
+  }) : _cache = cache ?? AppLocalCache.instance,
+       _remoteDataSource = remoteDataSource is CartRemoteDataSource
+           ? remoteDataSource
+           : null,
+       super(const CartState()) {
     _restore();
     if (syncWithBackend && _remoteDataSource != null) {
       _syncFromBackend();
@@ -66,9 +66,14 @@ class CartCubit extends Cubit<CartState> {
           )
           .map((item) {
             final safeItem = Map<String, dynamic>.from(item);
-            safeItem['price'] = (item['price'] as num).toInt().clamp(0, 10000000);
-            safeItem['quantity'] =
-                (item['quantity'] as num).toInt().clamp(1, 10);
+            safeItem['price'] = (item['price'] as num).toInt().clamp(
+              0,
+              10000000,
+            );
+            safeItem['quantity'] = (item['quantity'] as num).toInt().clamp(
+              1,
+              10,
+            );
             return safeItem;
           })
           .toList(growable: false);

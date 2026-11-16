@@ -23,6 +23,7 @@ import '../../../videos/domain/models/video_story_model.dart';
 import '../../../videos/domain/repositories/video_repository.dart';
 import '../../data/content_api.dart';
 import '../../../app_config/presentation/viewmodels/app_config_cubit.dart';
+import '../../../assistant_chat/presentation/views/assistant_chat_view.dart';
 import '../../../auth/presentation/viewmodels/auth_cubit.dart';
 import '../../../reviews/data/datasources/review_remote_data_source.dart';
 import '../../../reviews/data/models/review_model.dart';
@@ -251,6 +252,9 @@ class _HomeViewState extends State<HomeView>
               children: [
                 _revealSection(0, _buildHeroSection(context)),
 
+                const SizedBox(height: 16),
+                _revealSection(9, _buildAssistantChatCard(context)),
+
                 // DYNAMIC CARE DASHBOARD: Priorities 1-6 (Urgent care, Pending action, Shared report, Care plan, Products, Appointments)
                 const SizedBox(height: 16),
                 _revealSection(
@@ -314,6 +318,78 @@ class _HomeViewState extends State<HomeView>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildAssistantChatCard(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: () => showAssistantChatSheet(context),
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.primary100),
+              gradient: const LinearGradient(
+                colors: [Colors.white, Color(0xFFF4F8FF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: const Icon(
+                    LucideIcons.messageCircleMore,
+                    color: Colors.white,
+                    size: 21,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Ask the Dr. Hair Assistant',
+                        style: TextStyle(
+                          color: AppColors.primaryDark,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Get instant answers about hair and scalp care',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  LucideIcons.arrowUpRight,
+                  color: AppColors.primary,
+                  size: 19,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

@@ -21,7 +21,7 @@ void main() {
     }
 
     testWidgets(
-    'renders the assessment summary and clear screening note when submitted',
+      'renders the assessment summary and clear screening note when submitted',
       (tester) async {
         // Set completed answers directly on cubit
         cubit.selectGender('Male');
@@ -42,25 +42,19 @@ void main() {
         await tester.pumpAndSettle();
 
         // Completion screen checks
-        expect(find.text('Assessment complete'), findsOneWidget);
+        expect(find.text('Assessment Report'), findsOneWidget);
         expect(find.text('WHAT YOU SHARED'), findsOneWidget);
         expect(find.text('Receding Hairline (Temples)'), findsWidgets);
         expect(find.text('6 - 12 months'), findsOneWidget);
         expect(find.text('Moderate'), findsOneWidget);
 
         // Honest clinical disclaimer checks
-        expect(
-          find.text('How to use this result'),
-          findsOneWidget,
-        );
+        expect(find.text('How to use this result'), findsOneWidget);
         expect(
           find.textContaining('is not a medical diagnosis'),
           findsOneWidget,
         );
-        expect(
-          find.textContaining('/api/v1/assessment/submit'),
-          findsNothing,
-        );
+        expect(find.textContaining('/api/v1/assessment/submit'), findsNothing);
 
         // Reset on Done
         expect(find.text('Done'), findsOneWidget);

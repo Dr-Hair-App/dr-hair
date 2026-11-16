@@ -184,7 +184,10 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                       }
 
                       if (notifCubit != null) {
-                        return BlocBuilder<NotificationsCubit, NotificationsState>(
+                        return BlocBuilder<
+                          NotificationsCubit,
+                          NotificationsState
+                        >(
                           bloc: notifCubit,
                           builder: (context, notifState) {
                             return _buildNotificationBell(
@@ -208,11 +211,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
-  Widget _buildNotificationBell(
-    BuildContext context,
-    bool isDark,
-    int unread,
-  ) {
+  Widget _buildNotificationBell(BuildContext context, bool isDark, int unread) {
     return Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.center,
@@ -237,7 +236,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
             child: IgnorePointer(
               child: Container(
                 padding: EdgeInsets.symmetric(
-                  horizontal: unread > 9 ? 4.5 : 5,
+                  horizontal: unread > 9 ? 2 : 4,
                   vertical: 2,
                 ),
                 decoration: BoxDecoration(
@@ -247,18 +246,8 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                     color: isDark ? AppColors.primaryDark : Colors.white,
                     width: 1.5,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.danger.withValues(alpha: 0.45),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
                 ),
-                constraints: const BoxConstraints(
-                  minWidth: 16,
-                  minHeight: 16,
-                ),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                 child: Center(
                   child: Text(
                     unread > 99 ? '99+' : '$unread',

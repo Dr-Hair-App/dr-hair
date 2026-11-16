@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dr_hair/core/session/session_coordinator.dart';
 import 'package:dr_hair/core/storage/app_local_cache.dart';
 import 'package:dr_hair/features/appointments/presentation/clinic_appointment_cubit.dart';
@@ -22,7 +21,6 @@ void main() {
     late SessionCoordinator coordinator;
 
     setUp(() async {
-      SharedPreferences.setMockInitialValues({});
       await AppLocalCache.instance.clearAll();
 
       authCubit = AuthCubit();

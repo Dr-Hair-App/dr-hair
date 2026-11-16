@@ -13,15 +13,15 @@ class ProductDetailsCubit extends Cubit<ProductDetailsState> {
     String? productId,
     ProductRepository? repository,
     ProductDetailsState? initialState,
-  })  : _repository = repository ?? ProductRepositoryImpl(),
-        _initialProductId = productId ?? initialProduct?.id,
-        super(
-          initialState ??
-              ProductDetailsState.initial(
-                product: initialProduct,
-                isLoading: initialProduct == null && productId != null,
-              ),
-        ) {
+  }) : _repository = repository ?? ProductRepositoryImpl(),
+       _initialProductId = productId ?? initialProduct?.id,
+       super(
+         initialState ??
+             ProductDetailsState.initial(
+               product: initialProduct,
+               isLoading: initialProduct == null && productId != null,
+             ),
+       ) {
     if (initialProduct == null && productId != null && productId.isNotEmpty) {
       loadProduct(productId);
     }
@@ -29,17 +29,17 @@ class ProductDetailsCubit extends Cubit<ProductDetailsState> {
 
   /// Pull-to-refresh / slide-to-refresh handler for product details.
   Future<void> refreshProduct() async {
-    final targetId = state.product.id.isNotEmpty ? state.product.id : _initialProductId;
+    final targetId = state.product.id.isNotEmpty
+        ? state.product.id
+        : _initialProductId;
     if (targetId == null || targetId.isEmpty) return;
     try {
       final product = await _repository.getProductById(targetId);
       if (product != null) {
         ProductItem.cacheProducts([product]);
-        emit(state.copyWith(
-          product: product,
-          isLoading: false,
-          isNotFound: false,
-        ));
+        emit(
+          state.copyWith(product: product, isLoading: false, isNotFound: false),
+        );
       }
     } catch (_) {
       // Gracefully preserve existing loaded state on network hiccups
@@ -52,12 +52,14 @@ class ProductDetailsCubit extends Cubit<ProductDetailsState> {
       final product = await _repository.getProductById(productId);
       if (product != null) {
         ProductItem.cacheProducts([product]);
-        emit(state.copyWith(
-          product: product,
-          isLoading: false,
-          isNotFound: false,
-          selectedSupplyIndex: product.supplyPlans.length > 1 ? 1 : 0,
-        ));
+        emit(
+          state.copyWith(
+            product: product,
+            isLoading: false,
+            isNotFound: false,
+            selectedSupplyIndex: product.supplyPlans.length > 1 ? 1 : 0,
+          ),
+        );
       } else {
         emit(state.copyWith(isLoading: false, isNotFound: true));
       }

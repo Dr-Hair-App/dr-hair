@@ -16,6 +16,7 @@ import '../../../auth/presentation/viewmodels/auth_cubit.dart';
 import '../../../care/domain/models/care_models.dart';
 import '../../data/datasources/commerce_remote_data_source.dart';
 import '../../data/models/delivery_address_model.dart';
+import '../../data/repositories/checkout_recovery_store.dart';
 import '../widgets/delivery_address_bottom_sheet.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -44,6 +45,14 @@ class _CheckoutViewState extends State<CheckoutView> {
   String? _pendingPaymentId;
   String? _pendingPaymentSignature;
   String? _pendingPaymentError;
+  String? _checkoutAttemptKey;
+  String? _checkoutAttemptFingerprint;
+  bool _restoreStarted = false;
+  Map<String, dynamic>? _shippingQuote;
+  String? _shippingQuoteError;
+  bool _isLoadingQuote = false;
+  String? _shippingQuoteInputKey;
+  int _shippingQuoteRequestId = 0;
   late final CommerceRemoteDataSource _commerceDataSource =
       CommerceRemoteDataSource();
 
@@ -53,6 +62,7 @@ class _CheckoutViewState extends State<CheckoutView> {
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+    _restorePendingCheckout();
     if (widget.initialAddresses != null &&
         widget.initialAddresses!.isNotEmpty) {
       _addresses = widget.initialAddresses!;
@@ -60,6 +70,7 @@ class _CheckoutViewState extends State<CheckoutView> {
         (a) => a.isDefault,
         orElse: () => _addresses.first,
       );
+      _refreshShippingQuote();
     } else {
       _loadAddresses();
     }
@@ -71,7 +82,7 @@ class _CheckoutViewState extends State<CheckoutView> {
     super.dispose();
   }
 
-  void _handlePaymentSuccess(PaymentSuccessResponse response) {
+  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
     final paymentId = response.paymentId;
     final signature = response.signature;
     if (paymentId == null || signature == null) {
@@ -83,6 +94,7 @@ class _CheckoutViewState extends State<CheckoutView> {
     }
     _pendingPaymentId = paymentId;
     _pendingPaymentSignature = signature;
+    await _persistCheckoutRecovery();
     _verifyPendingPayment();
   }
 
@@ -146,15 +158,23 @@ class _CheckoutViewState extends State<CheckoutView> {
   Future<void> _verifyPendingPayment() async {
     final order = _pendingPaymentOrder?['order'];
     final orderId = order is Map ? order['order_id']?.toString() : null;
-    final token = _pendingPaymentToken;
+    var token = _pendingPaymentToken;
     final paymentId = _pendingPaymentId;
     final signature = _pendingPaymentSignature;
-    if (orderId == null ||
-        token == null ||
-        paymentId == null ||
-        signature == null) {
+    if (orderId == null || paymentId == null || signature == null) {
       return;
     }
+    token ??= await SecureSessionStore().readToken();
+    if (token == null || token.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _pendingPaymentError = 'Sign in again to safely verify this payment. Your pending order is saved.';
+        });
+      }
+      return;
+    }
+    _pendingPaymentToken = token;
     if (mounted) setState(() => _isSubmitting = true);
     try {
       final verified = await _commerceDataSource.verifyPayment(
@@ -164,6 +184,7 @@ class _CheckoutViewState extends State<CheckoutView> {
         paymentSignature: signature,
       );
       final paidOrder = CareOrder.fromJson(verified);
+      await _clearCheckoutRecovery();
       if (mounted) {
         context.read<CareCubit>().addOrder(paidOrder);
         context.read<CartCubit?>()?.clear();
@@ -171,6 +192,8 @@ class _CheckoutViewState extends State<CheckoutView> {
         _pendingPaymentToken = null;
         _pendingPaymentId = null;
         _pendingPaymentSignature = null;
+        _checkoutAttemptKey = null;
+        _checkoutAttemptFingerprint = null;
         context.push(RouteNames.orders);
       }
     } catch (_) {
@@ -179,8 +202,160 @@ class _CheckoutViewState extends State<CheckoutView> {
           _isSubmitting = false;
           _pendingPaymentError = 'Payment was submitted, but confirmation is still pending. Tap Retry Payment to verify it; do not pay again.';
         });
+        _refreshShippingQuote();
       }
     }
+  }
+
+  Future<void> _resumePendingCheckout() async {
+    final order = _pendingPaymentOrder?['order'];
+    final orderId = order is Map ? order['order_id']?.toString() : null;
+    var token = _pendingPaymentToken;
+    token ??= await SecureSessionStore().readToken();
+    if (orderId == null || token == null || token.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _pendingPaymentError = 'Sign in again to check this saved payment. Do not start another payment yet.';
+        });
+      }
+      return;
+    }
+
+    if (mounted) setState(() => _isSubmitting = true);
+    _pendingPaymentToken = token;
+    try {
+      final result = await _commerceDataSource.reconcilePayment(
+        token: token,
+        orderId: orderId,
+      );
+      final rawOrder = result['order'];
+      final payment = rawOrder is Map ? rawOrder['payment'] : null;
+      final fulfillment = rawOrder is Map ? rawOrder['fulfillment'] : null;
+      final resolved =
+          result['paid'] == true ||
+          result['resolved'] == true ||
+          (payment is Map &&
+              ['Paid', 'Refunded'].contains(payment['payment_status']));
+      if (resolved) {
+        if (payment is Map &&
+            payment['payment_status'] == 'Paid' &&
+            fulfillment is Map &&
+            fulfillment['status'] != 'Cancelled' &&
+            fulfillment['status'] != 'Refunded') {
+          final paidOrder = CareOrder.fromJson(
+            Map<String, dynamic>.from(rawOrder as Map),
+          );
+          if (mounted) {
+            context.read<CareCubit>().addOrder(paidOrder);
+            context.read<CartCubit?>()?.clear();
+          }
+        }
+        await _clearCheckoutRecovery();
+        if (!mounted) return;
+        _pendingPaymentOrder = null;
+        _pendingPaymentToken = null;
+        _pendingPaymentId = null;
+        _pendingPaymentSignature = null;
+        _checkoutAttemptKey = null;
+        _checkoutAttemptFingerprint = null;
+        if (result['paid'] == true) {
+          context.push(RouteNames.orders);
+        } else {
+          _showPaymentMessage(
+            'This order is closed. Any captured payment is being refunded; check the order history for its status.',
+          );
+          context.push(RouteNames.orders);
+        }
+        return;
+      }
+
+      if (result['can_retry'] == true) {
+        _pendingPaymentId = null;
+        _pendingPaymentSignature = null;
+        _pendingPaymentError = null;
+        await _persistCheckoutRecovery();
+        if (mounted) {
+          setState(() => _isSubmitting = true);
+          _openPendingRazorpayPayment();
+        }
+        return;
+      }
+
+      if (_pendingPaymentId != null && _pendingPaymentSignature != null) {
+        await _verifyPendingPayment();
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _pendingPaymentError = 'A payment attempt is still processing. Check again shortly; do not pay again yet.';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+          _pendingPaymentError = 'Payment status could not be checked. Your order is saved; try again before making another payment.';
+        });
+      }
+    }
+  }
+
+  Future<void> _restorePendingCheckout() async {
+    if (_restoreStarted) return;
+    _restoreStarted = true;
+    try {
+      final sessionStore = SecureSessionStore();
+      final login = (await sessionStore.readLogin())?.trim().toLowerCase();
+      if (login == null || login.isEmpty) return;
+      final decoded = await CheckoutRecoveryStore(sessionStore: sessionStore)
+          .loadForLogin(login);
+      if (decoded == null) return;
+      final checkout = decoded['checkout'];
+      final restoredCheckout = checkout is Map
+          ? Map<String, dynamic>.from(checkout)
+          : null;
+      final token = await sessionStore.readToken();
+      if (!mounted) return;
+      setState(() {
+        _checkoutAttemptKey = decoded['idempotency_key']?.toString();
+        _checkoutAttemptFingerprint = decoded['fingerprint']?.toString();
+        if (restoredCheckout != null &&
+            restoredCheckout['paymentIntent'] is Map) {
+          _pendingPaymentOrder = restoredCheckout;
+          _pendingPaymentToken = token;
+          _pendingPaymentId = decoded['payment_id']?.toString();
+          _pendingPaymentSignature = decoded['payment_signature']?.toString();
+          _selectedPaymentGateway = 'razorpay';
+        }
+      });
+    } catch (_) {
+      // A corrupt local recovery record must not prevent the user from checking out again.
+    }
+  }
+
+  Future<void> _persistCheckoutRecovery() async {
+    try {
+      final sessionStore = SecureSessionStore();
+      final login = (await sessionStore.readLogin())?.trim();
+      if (login == null || login.isEmpty) return;
+      await CheckoutRecoveryStore(sessionStore: sessionStore).save(
+        ownerLogin: login,
+        idempotencyKey: _checkoutAttemptKey,
+        fingerprint: _checkoutAttemptFingerprint,
+        checkout: _pendingPaymentOrder,
+        paymentId: _pendingPaymentId,
+        paymentSignature: _pendingPaymentSignature,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _clearCheckoutRecovery() async {
+    try {
+      await CheckoutRecoveryStore().clear();
+    } catch (_) {}
   }
 
   Future<void> _loadAddresses() async {
@@ -206,13 +381,17 @@ class _CheckoutViewState extends State<CheckoutView> {
       onAddressSelected: (address) {
         setState(() {
           _selectedAddress = address;
+          _shippingQuote = null;
         });
+        _refreshShippingQuote();
       },
       onAddressesUpdated: (updatedList, activeAddress) async {
         setState(() {
           _addresses = updatedList;
           _selectedAddress = activeAddress;
+          _shippingQuote = null;
         });
+        _refreshShippingQuote();
         try {
           await _commerceDataSource.createAddress(address: activeAddress);
         } catch (_) {}
@@ -220,15 +399,86 @@ class _CheckoutViewState extends State<CheckoutView> {
     );
   }
 
+  List<Map<String, dynamic>> _checkoutItemsFromCart(
+    List<dynamic> items,
+  ) => items.map((item) {
+    final rawId = (item['productId'] ?? item['product_id'] ?? item['id'] ?? '')
+        .toString();
+    final productId = rawId.contains('::') ? rawId.split('::').first : rawId;
+    return <String, dynamic>{
+      'productId': productId,
+      'plan': item['plan']?.toString() ?? 'Standard',
+      'quantity': (item['quantity'] as num?)?.toInt() ?? 1,
+    };
+  }).toList();
+
+  Future<Map<String, dynamic>?> _refreshShippingQuote({String? token}) async {
+    final address = _selectedAddress;
+    final items = context.read<CartCubit?>()?.state.items ?? [];
+    if (address == null ||
+        items.isEmpty ||
+        !RegExp(r'^[1-9][0-9]{5}$').hasMatch(address.pinCode)) {
+      return null;
+    }
+    final requestId = ++_shippingQuoteRequestId;
+    _shippingQuoteInputKey = _quoteInputKey(items, address);
+    final authState = context.read<AuthCubit?>()?.state;
+    final activeToken =
+        token ??
+        authState?.sessionToken ??
+        await SecureSessionStore().readToken();
+    if (mounted) {
+      setState(() {
+        _isLoadingQuote = true;
+        _shippingQuoteError = null;
+      });
+    }
+    try {
+      final quote = await _commerceDataSource.getShippingQuote(
+        token: activeToken,
+        addressId:
+            activeToken != null &&
+                activeToken.isNotEmpty &&
+                !address.id.startsWith('addr_')
+            ? address.id
+            : null,
+        deliveryPincode: address.pinCode,
+        items: _checkoutItemsFromCart(items),
+        paymentGateway: _selectedPaymentGateway,
+      );
+      if (mounted && requestId == _shippingQuoteRequestId) {
+        setState(() {
+          _shippingQuote = quote;
+          _shippingQuoteError = null;
+        });
+      }
+      return quote;
+    } catch (error) {
+      final message = error is DioException && error.response?.data is Map
+          ? ((error.response!.data as Map)['message']?.toString() ??
+                'Delivery quote is unavailable.')
+          : 'Delivery quote is unavailable. Please try again.';
+      if (mounted && requestId == _shippingQuoteRequestId) {
+        setState(() {
+          _shippingQuote = null;
+          _shippingQuoteError = message;
+        });
+      }
+      return null;
+    } finally {
+      if (mounted && requestId == _shippingQuoteRequestId) {
+        setState(() => _isLoadingQuote = false);
+      }
+    }
+  }
+
+  String _quoteInputKey(List<dynamic> items, DeliveryAddress? address) =>
+      '${address?.pinCode}|$_selectedPaymentGateway|${_checkoutItemsFromCart(items).map((item) => '${item['productId']}:${item['plan']}:${item['quantity']}').join('|')}';
+
   Future<void> _handlePlaceOrder() async {
     if (_isSubmitting) return;
     if (_pendingPaymentOrder != null) {
-      if (_pendingPaymentId != null) {
-        await _verifyPendingPayment();
-      } else {
-        setState(() => _isSubmitting = true);
-        _openPendingRazorpayPayment();
-      }
+      await _resumePendingCheckout();
       return;
     }
     final address = _selectedAddress;
@@ -272,28 +522,58 @@ class _CheckoutViewState extends State<CheckoutView> {
     });
 
     try {
-      final checkoutItems = items.map((item) {
-        final rawId =
-            (item['productId'] ?? item['product_id'] ?? item['id'] ?? '')
-                .toString();
-        final productId = rawId.contains('::')
-            ? rawId.split('::').first
-            : rawId;
-        final plan = item['plan']?.toString() ?? 'Standard';
-        final qty = (item['quantity'] as num?)?.toInt() ?? 1;
-        return {'productId': productId, 'plan': plan, 'quantity': qty};
-      }).toList();
+      final checkoutItems = _checkoutItemsFromCart(items);
+      final previousQuoteId = _shippingQuote?['quote_id'];
+      final quote = await _refreshShippingQuote(token: token);
+      if (quote == null) {
+        throw StateError(
+          _shippingQuoteError ??
+              'A live delivery quote is required before checkout.',
+        );
+      }
+      if (previousQuoteId != null && previousQuoteId != quote['quote_id']) {
+        if (!mounted) return;
+        final fee = (quote['shipping_fee'] as num?)?.toDouble() ?? 0;
+        final accepted = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Delivery price updated'),
+            content: Text(
+              'Courier price or availability changed. Delivery is now ₹${fee.toStringAsFixed(0)}. Continue with this quote?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Review'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        );
+        if (accepted != true) return;
+      }
 
-      final idempotencyKey =
-          'idem_${DateTime.now().millisecondsSinceEpoch}_${address.id}';
+      final fingerprint =
+          '${address.id}|${checkoutItems.map((item) => '${item['productId']}:${item['plan']}:${item['quantity']}').join('|')}';
+      if (_checkoutAttemptKey == null ||
+          _checkoutAttemptFingerprint != fingerprint) {
+        _checkoutAttemptFingerprint = fingerprint;
+        _checkoutAttemptKey =
+            'checkout_${DateTime.now().microsecondsSinceEpoch}_${address.id.hashCode.abs()}';
+      }
+      await _persistCheckoutRecovery();
 
       final result = await _commerceDataSource.checkout(
         token: token,
-        idempotencyKey: idempotencyKey,
+        idempotencyKey: _checkoutAttemptKey!,
         addressId: address.id.startsWith('addr_') ? null : address.id,
         shippingAddress: address,
         items: checkoutItems,
         paymentGateway: _selectedPaymentGateway,
+        shippingQuoteId: quote['quote_id']?.toString(),
       );
 
       final rawOrder = result['order'] is Map<String, dynamic>
@@ -311,14 +591,18 @@ class _CheckoutViewState extends State<CheckoutView> {
         _pendingPaymentOrder = result;
         _pendingPaymentToken = token;
         _pendingPaymentError = null;
+        await _persistCheckoutRecovery();
         _openPendingRazorpayPayment();
         return;
       }
       final placedOrder = CareOrder.fromJson(rawOrder);
+      await _clearCheckoutRecovery();
 
       if (mounted) {
         context.read<CareCubit>().addOrder(placedOrder);
         context.read<CartCubit?>()?.clear();
+        _checkoutAttemptKey = null;
+        _checkoutAttemptFingerprint = null;
         AppToast.show(
           context,
           SnackBar(
@@ -334,8 +618,10 @@ class _CheckoutViewState extends State<CheckoutView> {
         if (serverMsg is String && serverMsg.isNotEmpty) {
           errorMessage = serverMsg;
         } else if (e.response?.statusCode == 409) {
-          errorMessage = 'Item is out of stock. Please adjust your cart.';
+          errorMessage = 'Order or courier details changed. Review checkout and try again.';
         }
+      } else if (e is StateError) {
+        errorMessage = e.message;
       }
       if (mounted) {
         AppToast.show(context, SnackBar(content: Text(errorMessage)));
@@ -353,6 +639,24 @@ class _CheckoutViewState extends State<CheckoutView> {
   Widget build(BuildContext context) {
     final cartState = context.watch<CartCubit?>()?.state;
     final amount = cartState?.subtotal ?? 0;
+    final cartItems = cartState?.items ?? [];
+    final pendingRawOrder = _pendingPaymentOrder?['order'];
+    final pendingOrder = pendingRawOrder is Map ? pendingRawOrder : null;
+    final pendingPricing = pendingOrder?['pricing'] is Map
+        ? pendingOrder!['pricing'] as Map
+        : null;
+    final pendingTotal = (pendingPricing?['total'] as num?)?.round();
+    final buttonAmount =
+        pendingTotal ??
+        amount + ((_shippingQuote?['shipping_fee'] as num?)?.round() ?? 0);
+    if (_selectedAddress != null &&
+        cartItems.isNotEmpty &&
+        _shippingQuoteInputKey != _quoteInputKey(cartItems, _selectedAddress) &&
+        !_isLoadingQuote) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _refreshShippingQuote();
+      });
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -367,6 +671,53 @@ class _CheckoutViewState extends State<CheckoutView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_pendingPaymentOrder != null) ...[
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF6F8F8),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'PAYMENT NEEDS CONFIRMATION',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        color: AppColors.secondaryDark,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Order ${pendingOrder?['order_id'] ?? ''} · ₹${pendingTotal ?? 0}',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      _pendingPaymentError ??
+                          (_pendingPaymentId == null
+                              ? 'Your order is saved. We will check its payment status before offering another payment attempt.'
+                              : 'Payment was submitted. The app checks Razorpay before offering another payment attempt.'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.45,
+                        color: AppColors.secondaryDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             // Delivery Address Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -570,7 +921,13 @@ class _CheckoutViewState extends State<CheckoutView> {
               selected: _selectedPaymentGateway == 'cod',
               onTap: _isSubmitting
                   ? null
-                  : () => setState(() => _selectedPaymentGateway = 'cod'),
+                  : () {
+                      setState(() {
+                        _selectedPaymentGateway = 'cod';
+                        _shippingQuote = null;
+                      });
+                      _refreshShippingQuote();
+                    },
             ),
             if (!kIsWeb) ...[
               const SizedBox(height: 8),
@@ -586,8 +943,13 @@ class _CheckoutViewState extends State<CheckoutView> {
                     _selectedPaymentGateway == 'razorpay',
                 onTap: _isSubmitting || RazorpayConfig.keyId.isEmpty
                     ? null
-                    : () =>
-                          setState(() => _selectedPaymentGateway = 'razorpay'),
+                    : () {
+                        setState(() {
+                          _selectedPaymentGateway = 'razorpay';
+                          _shippingQuote = null;
+                        });
+                        _refreshShippingQuote();
+                      },
               ),
             ],
             if (_pendingPaymentError != null) ...[
@@ -611,10 +973,37 @@ class _CheckoutViewState extends State<CheckoutView> {
               child: Column(
                 children: [
                   _SummaryRow('Items Total', '₹$amount'),
-                  const _SummaryRow('Express Delivery', 'FREE'),
+                  _SummaryRow(
+                    'Courier delivery',
+                    _isLoadingQuote
+                        ? 'Checking…'
+                        : _shippingQuote == null
+                        ? 'Unavailable'
+                        : '₹${((_shippingQuote!['shipping_fee'] as num?) ?? 0).round()}',
+                  ),
+                  if (_shippingQuote != null)
+                    _SummaryRow(
+                      'Courier & ETA',
+                      '${_shippingQuote!['courier'] ?? 'Available'}${(_shippingQuote!['estimated_delivery'] ?? '').toString().isEmpty ? '' : ' • ${_shippingQuote!['estimated_delivery']}'}',
+                    ),
+                  if (_shippingQuoteError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        _shippingQuoteError!,
+                        style: const TextStyle(
+                          color: Colors.deepOrange,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
                   const _SummaryRow('Doctor Review Fee', 'WAIVED'),
                   const Divider(color: AppColors.border, height: 10),
-                  _SummaryRow('Total Payable', '₹$amount', isTotal: true),
+                  _SummaryRow(
+                    'Total Payable',
+                    '₹${_pendingPaymentOrder != null ? (pendingTotal ?? 0) : buttonAmount}',
+                    isTotal: true,
+                  ),
                 ],
               ),
             ),
@@ -625,7 +1014,11 @@ class _CheckoutViewState extends State<CheckoutView> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _isSubmitting ? null : _handlePlaceOrder,
+                onPressed:
+                    _isSubmitting ||
+                        (_pendingPaymentOrder == null && _shippingQuote == null)
+                    ? null
+                    : _handlePlaceOrder,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -649,7 +1042,7 @@ class _CheckoutViewState extends State<CheckoutView> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            '${_pendingPaymentOrder != null ? (_pendingPaymentId != null ? 'Retry Payment Verification' : 'Retry Payment') : (_selectedPaymentGateway == 'razorpay' ? 'Pay Securely' : 'Place Order')} • ₹$amount',
+                            '${_pendingPaymentOrder != null ? 'Check Payment Status' : (_selectedPaymentGateway == 'razorpay' ? 'Pay Securely' : 'Place Order')} • ₹$buttonAmount',
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,

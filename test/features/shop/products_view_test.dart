@@ -5,17 +5,20 @@ import 'package:dr_hair/features/shop/presentation/viewmodels/cart_cubit.dart';
 import 'package:dr_hair/features/shop/presentation/viewmodels/products_cubit.dart';
 import 'package:dr_hair/features/shop/presentation/viewmodels/products_state.dart';
 import 'package:dr_hair/features/shop/presentation/views/products_view.dart';
+import 'package:dr_hair/core/storage/app_local_cache.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skeletonizer/skeletonizer.dart';
+
+import '../../helpers/product_test_fixtures.dart';
 
 class _FakeProductRepo implements ProductRepository {
   final bool shouldFail;
   final List<ProductItem> items;
 
   _FakeProductRepo({this.shouldFail = false, List<ProductItem>? items})
-    : items = items ?? ProductItem.demoCatalog;
+    : items = items ?? ProductTestFixtures.catalog;
 
   @override
   Future<({List<ProductItem> items, bool hasMore, int total})> getProducts({
@@ -38,7 +41,7 @@ class _FakeProductRepo implements ProductRepository {
 
   @override
   Future<List<CategoryItem>> getCategories({String? type}) async {
-    return CategoryItem.defaultProductCategories();
+    return ProductTestFixtures.categories;
   }
 }
 
@@ -69,6 +72,7 @@ void main() {
     });
 
     test('handles error state gracefully on fetch failure', () async {
+      await AppLocalCache.instance.clearAll();
       final repo = _FakeProductRepo(shouldFail: true);
       final cubit = ProductsCubit(repository: repo);
 

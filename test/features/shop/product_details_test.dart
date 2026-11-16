@@ -1,48 +1,45 @@
 import 'package:dr_hair/features/shop/presentation/viewmodels/product_details_cubit.dart';
 import 'package:dr_hair/features/shop/presentation/viewmodels/product_details_state.dart';
 import 'package:dr_hair/features/shop/presentation/views/product_details_view.dart';
+import 'package:dr_hair/features/shop/presentation/viewmodels/cart_cubit.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
+import '../../helpers/product_test_fixtures.dart';
+
+class _CartAwareMaterialApp extends StatelessWidget {
+  final Widget home;
+
+  const _CartAwareMaterialApp({required this.home});
+
+  @override
+  Widget build(BuildContext context) => BlocProvider<CartCubit>(
+    create: (_) => CartCubit(syncWithBackend: false),
+    child: MaterialApp(home: home),
+  );
+}
+
 void main() {
-  group('ProductSupplyPlan.ensureThreePlans', () {
-    test(
-      'when admin provides 1 plan, dynamically computes 3 plans with pricing',
-      () {
-        final adminPlans = [
-          const ProductSupplyPlan(
-            title: '1 Month',
-            subtitle: 'Starter bottle',
-            price: 1000,
-            mrp: 1500,
-          ),
-        ];
+  group('ProductSupplyPlan backend plans', () {
+    test('preserves one configured plan without inventing other prices', () {
+      final adminPlans = [
+        const ProductSupplyPlan(
+          title: '1 Month',
+          subtitle: 'Starter bottle',
+          price: 1000,
+          mrp: 1500,
+        ),
+      ];
 
-        final plans = ProductSupplyPlan.ensureThreePlans(adminPlans);
-        expect(plans.length, 3);
-
-        // Plan 1
-        expect(plans[0].title, '1 Month');
-        expect(plans[0].price, 1000);
-        expect(plans[0].mrp, 1500);
-
-        // Plan 2 (2 Months at 10% discount)
-        expect(plans[1].title, '2 Months');
-        expect(plans[1].price, 1800); // 1000 * 2 * 0.90
-        expect(plans[1].mrp, 3000); // 1500 * 2
-        expect(plans[1].badge, 'Most Popular');
-        expect(plans[1].monthlyPrice, 900);
-
-        // Plan 3 (3 Months at 18% discount)
-        expect(plans[2].title, '3 Months');
-        expect(plans[2].price, 2460); // 1000 * 3 * 0.82
-        expect(plans[2].mrp, 4500); // 1500 * 3
-        expect(plans[2].badge, 'Best Value');
-        expect(plans[2].monthlyPrice, 820);
-      },
-    );
+      final plans = ProductSupplyPlan.ensureThreePlans(adminPlans);
+      expect(plans.length, 1);
+      expect(plans[0].title, '1 Month');
+      expect(plans[0].price, 1000);
+      expect(plans[0].mrp, 1500);
+    });
 
     test('when admin provides 3 plans, preserves all admin plans', () {
       final adminPlans = [
@@ -75,31 +72,28 @@ void main() {
       expect(plans[2].title, 'Annual Protocol');
     });
 
-    test('when admin provides 0 plans, generates sensible defaults', () {
-      final plans = ProductSupplyPlan.ensureThreePlans(
-        [],
-        fallbackPrice: 800,
-        fallbackMrp: 1200,
-      );
-      expect(plans.length, 3);
-      expect(plans[0].title, '1 Month');
-      expect(plans[0].price, 800);
-      expect(plans[1].title, '2 Months');
-      expect(plans[2].title, '3 Months');
-    });
+    test(
+      'when no plan is configured, product remains unavailable for purchase',
+      () {
+        final plans = ProductSupplyPlan.ensureThreePlans([]);
+        expect(plans, isEmpty);
+      },
+    );
   });
   group('ProductDetailsCubit', () {
     late ProductDetailsCubit cubit;
 
     setUp(() {
-      cubit = ProductDetailsCubit();
+      cubit = ProductDetailsCubit(
+        initialProduct: ProductTestFixtures.follicleSerum,
+      );
     });
 
     tearDown(() {
       cubit.close();
     });
 
-    test('initial state has default supply plans and values', () {
+    test('initial state uses the supplied product and its plans', () {
       expect(cubit.state.quantity, 1);
       expect(cubit.state.selectedSupplyIndex, 1);
       expect(cubit.state.currentUnitPrice, 2339);
@@ -183,7 +177,13 @@ void main() {
           tester.view.resetDevicePixelRatio();
         });
 
-        await tester.pumpWidget(const MaterialApp(home: ProductDetailsView()));
+        await tester.pumpWidget(
+          const _CartAwareMaterialApp(
+            home: ProductDetailsView(
+              initialProduct: ProductTestFixtures.follicleSerum,
+            ),
+          ),
+        );
 
         // Verify product titles and tags
         expect(find.text('Follicle Booster Serum'), findsOneWidget);
@@ -246,9 +246,11 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      final cubit = ProductDetailsCubit();
+      final cubit = ProductDetailsCubit(
+        initialProduct: ProductTestFixtures.follicleSerum,
+      );
       await tester.pumpWidget(
-        MaterialApp(home: ProductDetailsView(cubit: cubit)),
+        _CartAwareMaterialApp(home: ProductDetailsView(cubit: cubit)),
       );
 
       expect(cubit.state.activeImageIndex, 0);
@@ -278,9 +280,11 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      final cubit = ProductDetailsCubit();
+      final cubit = ProductDetailsCubit(
+        initialProduct: ProductTestFixtures.follicleSerum,
+      );
       await tester.pumpWidget(
-        MaterialApp(home: ProductDetailsView(cubit: cubit)),
+        _CartAwareMaterialApp(home: ProductDetailsView(cubit: cubit)),
       );
 
       // Open fullscreen viewer via maximize button
@@ -313,9 +317,11 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      final cubit = ProductDetailsCubit();
+      final cubit = ProductDetailsCubit(
+        initialProduct: ProductTestFixtures.follicleSerum,
+      );
       await tester.pumpWidget(
-        MaterialApp(home: ProductDetailsView(cubit: cubit)),
+        _CartAwareMaterialApp(home: ProductDetailsView(cubit: cubit)),
       );
 
       expect(cubit.state.isFavorite, false);
@@ -332,7 +338,7 @@ void main() {
       tester,
     ) async {
       ProductItem.clearCachedProducts();
-      ProductItem.cacheProducts(ProductItem.demoCatalog);
+      ProductItem.cacheProducts(ProductTestFixtures.catalog);
       tester.view.physicalSize = const Size(420, 920);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -340,7 +346,13 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
 
-      await tester.pumpWidget(const MaterialApp(home: ProductDetailsView()));
+      await tester.pumpWidget(
+        const _CartAwareMaterialApp(
+          home: ProductDetailsView(
+            initialProduct: ProductTestFixtures.follicleSerum,
+          ),
+        ),
+      );
 
       // Scroll down to suggested products
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
@@ -361,7 +373,13 @@ void main() {
           tester.view.resetDevicePixelRatio();
         });
 
-        await tester.pumpWidget(const MaterialApp(home: ProductDetailsView()));
+        await tester.pumpWidget(
+          const _CartAwareMaterialApp(
+            home: ProductDetailsView(
+              initialProduct: ProductTestFixtures.follicleSerum,
+            ),
+          ),
+        );
 
         // Purchase button should be visible without any overflow
         expect(find.textContaining('Add to cart'), findsOneWidget);
@@ -390,9 +408,11 @@ void main() {
         });
 
         final customProduct =
-            ProductItem.demoCatalog[1]; // Biotin Growth Complex
+            ProductTestFixtures.biotinComplex; // Biotin Growth Complex
         await tester.pumpWidget(
-          MaterialApp(home: ProductDetailsView(initialProduct: customProduct)),
+          _CartAwareMaterialApp(
+            home: ProductDetailsView(initialProduct: customProduct),
+          ),
         );
 
         expect(find.text('Biotin Growth Complex'), findsOneWidget);
@@ -412,7 +432,7 @@ void main() {
           initialState: ProductDetailsState.initial(isNotFound: true),
         );
         await tester.pumpWidget(
-          MaterialApp(home: ProductDetailsView(cubit: cubit)),
+          _CartAwareMaterialApp(home: ProductDetailsView(cubit: cubit)),
         );
         await tester.pumpAndSettle();
 
@@ -426,7 +446,7 @@ void main() {
     );
 
     testWidgets(
-      'Product with only 1 admin-uploaded plan renders 3 plans and switches properly',
+      'Product with one configured plan does not invent package prices',
       (tester) async {
         tester.view.physicalSize = const Size(420, 920);
         tester.view.devicePixelRatio = 1.0;
@@ -444,7 +464,7 @@ void main() {
           rating: 4.9,
           reviewsCount: 120,
           inStock: true,
-          images: const [ProductItem.fallbackProductImageUrl],
+          images: const [],
           supplyPlans: const [
             ProductSupplyPlan(
               title: '1 Month',
@@ -460,36 +480,12 @@ void main() {
         );
 
         await tester.pumpWidget(
-          MaterialApp(
+          _CartAwareMaterialApp(
             home: ProductDetailsView(initialProduct: singlePlanProduct),
           ),
         );
 
-        // All 3 plans should be visible on screen
         expect(find.text('1 Month'), findsOneWidget);
-        expect(find.text('2 Months'), findsOneWidget);
-        expect(find.text('3 Months'), findsOneWidget);
-
-        // Price calculations: 1000 * 2 * 0.90 = 1800 for 2 Months
-        expect(find.text('₹1800'), findsWidgets);
-        // 1000 * 3 * 0.82 = 2460 for 3 Months
-        expect(find.text('₹2460'), findsWidgets);
-
-        // Default selection is 2 Months (index 1) -> 1800
-        expect(find.textContaining('Add to cart · ₹1800'), findsOneWidget);
-
-        // Tap 3 Months plan
-        await tester.ensureVisible(find.text('3 Months'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('3 Months'));
-        await tester.pumpAndSettle();
-        expect(find.textContaining('Add to cart · ₹2460'), findsOneWidget);
-
-        // Tap 1 Month plan
-        await tester.ensureVisible(find.text('1 Month'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('1 Month'));
-        await tester.pumpAndSettle();
         expect(find.textContaining('Add to cart · ₹1000'), findsOneWidget);
       },
     );
@@ -501,7 +497,7 @@ void main() {
           initialState: ProductDetailsState.initial(isLoading: true),
         );
         await tester.pumpWidget(
-          MaterialApp(home: ProductDetailsView(cubit: cubit)),
+          _CartAwareMaterialApp(home: ProductDetailsView(cubit: cubit)),
         );
 
         final skeletonizer = tester.widget<Skeletonizer>(
@@ -526,8 +522,17 @@ void main() {
           tester.view.resetDevicePixelRatio();
         });
 
-        await tester.pumpWidget(const MaterialApp(home: ProductDetailsView()));
-        await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
+        await tester.pumpWidget(
+          const _CartAwareMaterialApp(
+            home: ProductDetailsView(
+              initialProduct: ProductTestFixtures.follicleSerum,
+            ),
+          ),
+        );
+        await tester.drag(
+          find.byType(CustomScrollView),
+          const Offset(0, -1200),
+        );
         await tester.pumpAndSettle();
 
         final tabScrollViewFinder = find.byWidgetPredicate(

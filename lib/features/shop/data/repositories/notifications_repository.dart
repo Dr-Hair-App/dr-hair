@@ -7,7 +7,7 @@ import '../models/notification_item_model.dart';
 
 abstract class NotificationsRepository {
   Future<({List<NotificationItemModel> items, int unreadCount, bool hasMore})>
-      getNotifications({int page = 1, int limit = 20});
+  getNotifications({int page = 1, int limit = 20});
   Future<bool> markAsRead(String id);
   Future<bool> markAllAsRead();
 }
@@ -17,20 +17,16 @@ class NotificationsRepositoryImpl implements NotificationsRepository {
   final SecureSessionStore _sessionStore;
 
   NotificationsRepositoryImpl({Dio? dio, SecureSessionStore? sessionStore})
-      : _dio = dio ?? DioClient(baseUrl: ApiEndpoints.backendBaseUrl).dio,
-        _sessionStore = sessionStore ?? SecureSessionStore();
+    : _dio = dio ?? DioClient(baseUrl: ApiEndpoints.backendBaseUrl).dio,
+      _sessionStore = sessionStore ?? SecureSessionStore();
 
   @override
   Future<({List<NotificationItemModel> items, int unreadCount, bool hasMore})>
-      getNotifications({int page = 1, int limit = 20}) async {
+  getNotifications({int page = 1, int limit = 20}) async {
     // Guest or unauthenticated users have no remote notifications
     final token = await _sessionStore.readToken();
     if (token == null || token.trim().isEmpty) {
-      return (
-        items: <NotificationItemModel>[],
-        unreadCount: 0,
-        hasMore: false,
-      );
+      return (items: <NotificationItemModel>[], unreadCount: 0, hasMore: false);
     }
 
     try {
@@ -46,8 +42,10 @@ class NotificationsRepositoryImpl implements NotificationsRepository {
       final hasMore = data['hasMore'] as bool? ?? false;
 
       final items = rawList
-          .map((item) =>
-              NotificationItemModel.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) =>
+                NotificationItemModel.fromJson(item as Map<String, dynamic>),
+          )
           .toList();
 
       return (items: items, unreadCount: unreadCount, hasMore: hasMore);

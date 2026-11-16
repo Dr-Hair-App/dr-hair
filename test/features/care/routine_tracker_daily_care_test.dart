@@ -1,7 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dr_hair/core/storage/app_local_cache.dart';
 import 'package:dr_hair/features/care/presentation/viewmodels/care_cubit.dart';
 import 'package:dr_hair/features/care/presentation/views/routine_tracker_view.dart';
@@ -10,7 +9,6 @@ void main() {
   late CareCubit cubit;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
     await AppLocalCache.instance.clearAll();
     cubit = CareCubit();
     cubit.loadSampleFixturesForTesting();

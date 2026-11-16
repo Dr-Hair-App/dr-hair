@@ -13,6 +13,7 @@ import '../../../../core/session/session_coordinator.dart';
 import '../../../../core/storage/app_local_cache.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_toast.dart';
+import '../../../../core/widgets/dotted_divider.dart';
 import '../../../auth/presentation/viewmodels/auth_cubit.dart';
 import '../../../auth/presentation/viewmodels/auth_state.dart';
 
@@ -64,7 +65,9 @@ class _SettingsViewState extends State<SettingsView> {
           );
         }
       } else {
-        await FirebasePushService.unregisterDeviceToken();
+        // Keep the FCM token on device so the user can opt in again without
+        // rotating it; remove only this account's server-side subscription.
+        await FirebasePushService.unregisterDeviceToken(deleteFcmToken: false);
         if (mounted) {
           AppToast.show(
             context,
@@ -90,79 +93,6 @@ class _SettingsViewState extends State<SettingsView> {
         setState(() => _isTogglingPush = false);
       }
     }
-  }
-
-  void _showDeviceDataControls(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (sheetContext) => SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Your data on this device',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primaryDark,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Assessment answers, routine steps, reminders, check-ins, and clinic appointment requests are stored locally. Export or delete this care data from the device.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.secondaryDark,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 20),
-              AppButton(
-                text: 'Export Diagnostic Summary',
-                variant: AppButtonVariant.outlined,
-                borderColor: AppColors.primary,
-                foregroundColor: AppColors.primary,
-                onPressed: () {
-                  Navigator.pop(sheetContext);
-                  AppToast.show(
-                    context,
-                    const SnackBar(
-                      content: Text('Care summary exported successfully.'),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 10),
-              AppButton(
-                text: 'Clear Local Session Cache',
-                variant: AppButtonVariant.filled,
-                backgroundColor: AppColors.danger,
-                foregroundColor: Colors.white,
-                onPressed: () async {
-                  Navigator.pop(sheetContext);
-                  await AppLocalCache.instance.clearAll();
-                  if (context.mounted) {
-                    AppToast.show(
-                      context,
-                      const SnackBar(
-                        backgroundColor: AppColors.primaryDark,
-                        content: Text('Local cache cleared.'),
-                      ),
-                    );
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   void _showDeleteAccountSheet(BuildContext context) {
@@ -215,10 +145,10 @@ class _SettingsViewState extends State<SettingsView> {
                         child: const Icon(
                           LucideIcons.alertTriangle,
                           color: AppColors.danger,
-                          size: 22,
+                          size: 20,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       const Expanded(
                         child: Text(
                           'Permanently Delete Account?',
@@ -234,8 +164,9 @@ class _SettingsViewState extends State<SettingsView> {
                   const SizedBox(height: 12),
                   const Text(
                     'In compliance with DPDP data privacy standards, deleting your account will permanently erase your personal profile, assessment answers, routine check-ins, and active login sessions. Past clinical invoices and prescriptions are retained securely for mandatory medical record compliance.',
+                    textAlign: TextAlign.justify,
                     style: TextStyle(
-                      fontSize: 12.5,
+                      fontSize: 12,
                       height: 1.45,
                       color: AppColors.secondaryDark,
                     ),
@@ -251,8 +182,8 @@ class _SettingsViewState extends State<SettingsView> {
                   ),
                   const SizedBox(height: 8),
                   Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+                    spacing: 4,
+                    runSpacing: 4,
                     children: reasons.map((reason) {
                       final isSelected = selectedReason == reason;
                       return ChoiceChip(
@@ -292,7 +223,12 @@ class _SettingsViewState extends State<SettingsView> {
                     children: [
                       Expanded(
                         child: AppButton(
+                          height: 45,
                           text: 'Keep Account',
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                          ),
                           variant: AppButtonVariant.outlined,
                           borderColor: AppColors.border,
                           foregroundColor: AppColors.secondaryDark,
@@ -302,10 +238,16 @@ class _SettingsViewState extends State<SettingsView> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: AppButton(
+                          height: 45,
                           text: 'Delete Forever',
                           variant: AppButtonVariant.filled,
                           backgroundColor: AppColors.danger,
                           foregroundColor: Colors.white,
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            color: Colors.white,
+                          ),
                           onPressed: () async {
                             Navigator.pop(sheetContext);
                             _executeAccountDeletion(context);
@@ -417,7 +359,7 @@ class _SettingsViewState extends State<SettingsView> {
                           ),
                           SizedBox(height: 2),
                           Text(
-                            'Receive clinical care reminders, order tracking, and doctor updates.',
+                            'Receive order, booking, and doctor updates. Care alerts are managed in Reminders.',
                             style: TextStyle(
                               fontSize: 11.5,
                               color: AppColors.secondaryDark,
@@ -472,7 +414,7 @@ class _SettingsViewState extends State<SettingsView> {
                           ),
                         ),
                       ),
-                      const Divider(height: 20),
+                      const DottedDivider(height: 20),
                     ],
                     _buildInfoRow(
                       icon: LucideIcons.user,
@@ -481,7 +423,7 @@ class _SettingsViewState extends State<SettingsView> {
                           ? user!.name
                           : 'Patient User',
                     ),
-                    const Divider(height: 20),
+                    const DottedDivider(height: 20),
                     _buildInfoRow(
                       icon: LucideIcons.mail,
                       label: 'Email',
@@ -489,7 +431,7 @@ class _SettingsViewState extends State<SettingsView> {
                           ? user!.email!
                           : 'Not linked',
                     ),
-                    const Divider(height: 20),
+                    const DottedDivider(height: 20),
                     _buildInfoRow(
                       icon: LucideIcons.phone,
                       label: 'Mobile',
@@ -497,7 +439,7 @@ class _SettingsViewState extends State<SettingsView> {
                           ? user!.phone!
                           : 'Not linked',
                     ),
-                    const Divider(height: 20),
+                    const DottedDivider(height: 20),
                     InkWell(
                       onTap: () => context.push(RouteNames.updateProfile),
                       borderRadius: BorderRadius.circular(8),
@@ -550,14 +492,14 @@ class _SettingsViewState extends State<SettingsView> {
                         mode: LaunchMode.externalApplication,
                       ),
                     ),
-                    const Divider(height: 20),
+                    const DottedDivider(height: 20),
                     _buildNavRow(
                       icon: LucideIcons.fileText,
                       title: 'Terms of Service',
                       subtitle: 'Platform agreements and consultation terms',
                       onTap: () => context.push(RouteNames.terms),
                     ),
-                    const Divider(height: 20),
+                    const DottedDivider(height: 20),
                     _buildNavRow(
                       icon: LucideIcons.receipt,
                       title: 'Return & Refund Policy',
@@ -565,20 +507,12 @@ class _SettingsViewState extends State<SettingsView> {
                           'Guidelines for product returns and clinic fees',
                       onTap: () => context.push(RouteNames.returnsRefunds),
                     ),
-                    const Divider(height: 20),
+                    const DottedDivider(height: 20),
                     _buildNavRow(
                       icon: LucideIcons.ban,
                       title: 'Cancellation Policy',
                       subtitle: 'Appointment and order cancellation windows',
                       onTap: () => context.push(RouteNames.cancellationPolicy),
-                    ),
-                    const Divider(height: 20),
-                    _buildNavRow(
-                      icon: LucideIcons.database,
-                      title: 'Manage Device Data',
-                      subtitle:
-                          'Export or delete local diagnostic session cache',
-                      onTap: () => _showDeviceDataControls(context),
                     ),
                   ],
                 ),
@@ -614,7 +548,7 @@ class _SettingsViewState extends State<SettingsView> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const DottedDivider(height: 18),
                     const Text(
                       'Dr. Hair provides trichological wellness guidance and doctor consultations. It does not replace emergency medical diagnosis.',
                       style: TextStyle(
@@ -716,7 +650,7 @@ class _SettingsViewState extends State<SettingsView> {
 
   Widget _buildCardContainer({required Widget child}) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16).copyWith(top: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),

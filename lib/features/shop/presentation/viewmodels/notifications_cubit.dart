@@ -10,25 +10,29 @@ class NotificationsCubit extends Cubit<NotificationsState> {
   NotificationsCubit({
     NotificationsRepository? repository,
     NotificationsState? initialState,
-  })  : _repository = repository ?? NotificationsRepositoryImpl(),
-        super(initialState ?? NotificationsState.initial());
+  }) : _repository = repository ?? NotificationsRepositoryImpl(),
+       super(initialState ?? NotificationsState.initial());
 
   Future<void> loadNotifications() async {
     emit(state.copyWith(isLoading: true, errorMessage: null));
     try {
       final result = await _repository.getNotifications(page: 1, limit: 20);
-      emit(state.copyWith(
-        notifications: result.items,
-        unreadCount: result.unreadCount,
-        hasMore: result.hasMore,
-        currentPage: 1,
-        isLoading: false,
-      ));
+      emit(
+        state.copyWith(
+          notifications: result.items,
+          unreadCount: result.unreadCount,
+          hasMore: result.hasMore,
+          currentPage: 1,
+          isLoading: false,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
-        isLoading: false,
-        errorMessage: 'Failed to load notifications: $e',
-      ));
+      emit(
+        state.copyWith(
+          isLoading: false,
+          errorMessage: 'Failed to load notifications: $e',
+        ),
+      );
     }
   }
 
@@ -42,10 +46,9 @@ class NotificationsCubit extends Cubit<NotificationsState> {
 
     final newUnreadCount = updatedList.where((n) => !n.isRead).length;
 
-    emit(state.copyWith(
-      notifications: updatedList,
-      unreadCount: newUnreadCount,
-    ));
+    emit(
+      state.copyWith(notifications: updatedList, unreadCount: newUnreadCount),
+    );
 
     await _repository.markAsRead(id);
   }
@@ -55,10 +58,7 @@ class NotificationsCubit extends Cubit<NotificationsState> {
       return item.copyWith(isRead: true);
     }).toList();
 
-    emit(state.copyWith(
-      notifications: updatedList,
-      unreadCount: 0,
-    ));
+    emit(state.copyWith(notifications: updatedList, unreadCount: 0));
 
     await _repository.markAllAsRead();
   }
@@ -72,8 +72,7 @@ class NotificationsCubit extends Cubit<NotificationsState> {
     String? type,
     Map<String, dynamic>? data,
   }) {
-    final notificationId =
-        id ?? 'fcm_${DateTime.now().millisecondsSinceEpoch}';
+    final notificationId = id ?? 'fcm_${DateTime.now().millisecondsSinceEpoch}';
 
     // Guard against duplicates
     if (state.notifications.any((n) => n.id == notificationId)) {
@@ -95,10 +94,12 @@ class NotificationsCubit extends Cubit<NotificationsState> {
       createdAt: DateTime.now(),
     );
 
-    emit(state.copyWith(
-      notifications: [newItem, ...state.notifications],
-      unreadCount: state.unreadCount + 1,
-    ));
+    emit(
+      state.copyWith(
+        notifications: [newItem, ...state.notifications],
+        unreadCount: state.unreadCount + 1,
+      ),
+    );
   }
 
   /// Resets notifications state on patient logout.

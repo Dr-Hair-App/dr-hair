@@ -10,8 +10,19 @@ import 'package:dr_hair/features/treatment/presentation/views/treatment_details_
 import '../auth/fake_auth_repository.dart';
 
 class _FakePatientClinicalApi extends PatientClinicalApi {
+  final Map<String, dynamic>? customResponse;
+  final bool shouldThrow;
+
+  _FakePatientClinicalApi({this.customResponse, this.shouldThrow = false});
+
   @override
   Future<Map<String, dynamic>> getClinicalRecord(String accessToken) async {
+    if (shouldThrow) {
+      throw Exception('Network disconnected');
+    }
+    if (customResponse != null) {
+      return customResponse!;
+    }
     return {
       'care_plans': [
         {
@@ -21,8 +32,10 @@ class _FakePatientClinicalApi extends PatientClinicalApi {
           'diagnosis': 'Stage 2 androgenetic thinning with mild scalp flaking.',
           'stage': 'Stage 2',
           'duration': '6 Months',
+          'next_review_date': '2026-12-15',
           'medications': [
             {
+              'catalog_id': 'prod_regrowth_booster',
               'name': 'Dr.Hair 5% Topical Regrowth Booster',
               'category': 'Clinical Topical',
               'form': 'Solution',
@@ -102,6 +115,9 @@ void main() {
     expect(find.text('Custom Regrowth Protocol'), findsOneWidget);
     expect(find.text('Prepared by Dr. Jai Bansal'), findsOneWidget);
     expect(find.text('Dr.Hair 5% Topical Regrowth Booster'), findsOneWidget);
+    expect(find.text('Ask on WhatsApp'), findsOneWidget);
+    expect(find.text('Book Review'), findsOneWidget);
+    expect(find.text('Order from Clinic Shop'), findsOneWidget);
 
     // Switch to Medical Reports tab
     await tester.tap(find.text('Medical Reports'));
@@ -109,5 +125,75 @@ void main() {
 
     expect(find.text('High-Resolution Scalp Trichoscopy Scan'), findsOneWidget);
     expect(find.byIcon(LucideIcons.download), findsOneWidget);
+  });
+
+  testWidgets('TreatmentDetailsView displays clean empty state when no care plan is active', (tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final authCubit = AuthCubit(repository: FakeAuthRepository());
+    authCubit.emit(
+      authCubit.state.copyWith(
+        status: AuthStatus.authenticated,
+        sessionToken: 'test-token',
+        user: UserModel.demoPatient(),
+      ),
+    );
+
+    await tester.pumpWidget(
+      BlocProvider<AuthCubit>.value(
+        value: authCubit,
+        child: MaterialApp(
+          home: TreatmentDetailsView(
+            clinicalApi: _FakePatientClinicalApi(
+              customResponse: {'care_plans': [], 'reports': []},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('No Active Care Plan Yet'), findsOneWidget);
+    expect(find.text('Take Hair Test'), findsOneWidget);
+    expect(find.text('Chat on WhatsApp'), findsOneWidget);
+  });
+
+  testWidgets('TreatmentDetailsView displays error state with retry when clinical record fails', (tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final authCubit = AuthCubit(repository: FakeAuthRepository());
+    authCubit.emit(
+      authCubit.state.copyWith(
+        status: AuthStatus.authenticated,
+        sessionToken: 'test-token',
+        user: UserModel.demoPatient(),
+      ),
+    );
+
+    await tester.pumpWidget(
+      BlocProvider<AuthCubit>.value(
+        value: authCubit,
+        child: MaterialApp(
+          home: TreatmentDetailsView(
+            clinicalApi: _FakePatientClinicalApi(shouldThrow: true),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Your clinic plan could not be loaded. Check your connection and try again.'),
+      findsOneWidget,
+    );
+    expect(find.text('Try again'), findsOneWidget);
   });
 }

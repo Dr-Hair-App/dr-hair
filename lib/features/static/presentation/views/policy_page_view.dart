@@ -56,10 +56,11 @@ class _PolicyPageViewState extends State<PolicyPageView> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
+        centerTitle: true,
         title: Text(
           policy.title,
           style: const TextStyle(
-            fontSize: 17,
+            fontSize: 18,
             fontWeight: FontWeight.w800,
             color: AppColors.primaryDark,
           ),
@@ -77,7 +78,7 @@ class _PolicyPageViewState extends State<PolicyPageView> {
             // Policy Document Content
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(18, 16, 18, 40),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -85,16 +86,16 @@ class _PolicyPageViewState extends State<PolicyPageView> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(
-                          child: Text(
-                            policy.title,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.primaryDark,
-                            ),
-                          ),
-                        ),
+                        // Expanded(
+                        //   child: Text(
+                        //     policy.title,
+                        //     style: const TextStyle(
+                        //       fontSize: 17,
+                        //       fontWeight: FontWeight.w700,
+                        //       color: AppColors.primaryDark,
+                        //     ),
+                        //   ),
+                        // ),
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 10,
@@ -108,7 +109,7 @@ class _PolicyPageViewState extends State<PolicyPageView> {
                           child: Text(
                             'Updated ${policy.lastUpdated}',
                             style: const TextStyle(
-                              fontSize: 10,
+                              fontSize: 8,
                               fontWeight: FontWeight.w700,
                               color: AppColors.primary,
                             ),

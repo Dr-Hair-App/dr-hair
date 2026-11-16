@@ -8,13 +8,13 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../data/datasources/cart_remote_data_source.dart';
-import '../../data/models/coupon_model.dart';
 import '../viewmodels/cart_cubit.dart';
 
 class CartView extends StatefulWidget {
   final List<Map<String, dynamic>>? initialItems;
+  final CartRemoteDataSource? remoteDataSource;
 
-  const CartView({super.key, this.initialItems});
+  const CartView({super.key, this.initialItems, this.remoteDataSource});
 
   @override
   State<CartView> createState() => _CartViewState();
@@ -26,16 +26,22 @@ class _CartViewState extends State<CartView> {
       context.read<CartCubit?>()?.state.items ?? _localItems;
 
   final TextEditingController _couponController = TextEditingController();
-  CouponRule? _appliedCoupon;
+  String? _appliedCouponCode;
+  int _serverCouponDiscount = 0;
+  String? _appliedCartFingerprint;
   String? _couponError;
 
-  CouponEvaluation? get _couponEvaluation =>
-      _appliedCoupon?.evaluate(subtotal: _subtotal, items: _items);
-
-  bool get _couponApplied => _couponEvaluation?.isValid ?? false;
+  String get _cartFingerprint => _items
+      .map((item) => '${item['id']}:${item['quantity']}:${item['price']}')
+      .join('|');
+  bool get _couponApplied =>
+      _appliedCouponCode != null && _appliedCartFingerprint == _cartFingerprint;
+  bool get _cartChangedAfterCoupon =>
+      _appliedCouponCode != null && !_couponApplied;
   String? get _couponMessage {
-    final result = _couponEvaluation;
-    if (result != null && !result.isValid) return result.message;
+    if (_cartChangedAfterCoupon) {
+      return 'Cart changed. Apply the coupon again to refresh its discount.';
+    }
     return _couponError;
   }
 
@@ -46,22 +52,7 @@ class _CartViewState extends State<CartView> {
         ? List<Map<String, dynamic>>.from(
             widget.initialItems!.map((item) => Map<String, dynamic>.from(item)),
           )
-        : [
-            {
-              'title': 'Follicle Booster Serum',
-              'desc': 'Advance Density Complex • 30ml',
-              'price': 1299,
-              'quantity': 1,
-              'image': 'https://images.unsplash.com/photo-1608248597359-5509a5665805?q=80&w=400',
-            },
-            {
-              'title': 'Clinical Scalp Detox Shampoo',
-              'desc': 'Anti-Microbial Zinc Pyrithione • 200ml',
-              'price': 749,
-              'quantity': 1,
-              'image': 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?q=80&w=400',
-            },
-          ];
+        : <Map<String, dynamic>>[];
   }
 
   @override
@@ -78,7 +69,7 @@ class _CartViewState extends State<CartView> {
   int get _totalItemCount =>
       _items.fold(0, (sum, item) => sum + (item['quantity'] as int));
 
-  int get _discount => _couponEvaluation?.discount ?? 0;
+  int get _discount => _couponApplied ? _serverCouponDiscount : 0;
 
   int get _totalAmount {
     final total = _subtotal - _discount;
@@ -239,14 +230,18 @@ class _CartViewState extends State<CartView> {
     if (sharedCart != null) {
       sharedCart.clear();
       setState(() {
-        _appliedCoupon = null;
+        _appliedCouponCode = null;
+        _serverCouponDiscount = 0;
+        _appliedCartFingerprint = null;
         _couponError = null;
         _couponController.clear();
       });
     } else {
       setState(() {
         _localItems.clear();
-        _appliedCoupon = null;
+        _appliedCouponCode = null;
+        _serverCouponDiscount = 0;
+        _appliedCartFingerprint = null;
         _couponError = null;
         _couponController.clear();
       });
@@ -261,54 +256,33 @@ class _CartViewState extends State<CartView> {
       return;
     }
 
-    final remoteRes = await CartRemoteDataSource().applyCoupon(code);
+    final remoteRes = await (widget.remoteDataSource ?? CartRemoteDataSource())
+        .applyCoupon(code);
     if (!mounted) return;
 
     if (remoteRes.success) {
-      final matchingRules = demoCouponRules.where((c) => c.code == code);
-      final coupon = matchingRules.isNotEmpty
-          ? matchingRules.first
-          : CouponRule(
-              code: code,
-              discountType: CouponDiscountType.fixed,
-              discountValue: remoteRes.discount,
-              appliesTo: 'All products',
-              minimumOrder: 0,
-              uses: 0,
-              maxUses: 999999,
-              expiresOn: DateTime.now().add(const Duration(days: 365)),
-              isActive: true,
-            );
       setState(() {
-        _appliedCoupon = coupon;
+        _appliedCouponCode = code;
+        _serverCouponDiscount = remoteRes.discount;
+        _appliedCartFingerprint = _cartFingerprint;
         _couponError = null;
       });
       HapticFeedback.lightImpact();
       return;
     }
-
-    final matchingRules = demoCouponRules.where((c) => c.code == code);
-    if (matchingRules.isNotEmpty) {
-      final coupon = matchingRules.first;
-      final result = coupon.evaluate(subtotal: _subtotal, items: _items);
-      setState(() {
-        _appliedCoupon = result.isValid ? coupon : null;
-        _couponError = result.isValid
-            ? null
-            : (remoteRes.message ?? result.message);
-      });
-      if (result.isValid) HapticFeedback.lightImpact();
-    } else {
-      setState(() {
-        _appliedCoupon = null;
-        _couponError = remoteRes.message ?? 'Invalid or expired coupon code.';
-      });
-    }
+    setState(() {
+      _appliedCouponCode = null;
+      _serverCouponDiscount = 0;
+      _appliedCartFingerprint = null;
+      _couponError = remoteRes.message ?? 'Invalid or expired coupon code.';
+    });
   }
 
   void _removeCoupon() {
     setState(() {
-      _appliedCoupon = null;
+      _appliedCouponCode = null;
+      _serverCouponDiscount = 0;
+      _appliedCartFingerprint = null;
       _couponError = null;
       _couponController.clear();
     });
@@ -532,7 +506,7 @@ class _CartViewState extends State<CartView> {
                   Icon(LucideIcons.truck, size: 14, color: AppColors.success),
                   SizedBox(width: 4),
                   Text(
-                    'Free Express Shipping',
+                    'Shipping at checkout',
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w700,
@@ -767,10 +741,12 @@ class _CartViewState extends State<CartView> {
                         textCapitalization: TextCapitalization.characters,
                         onChanged: (value) {
                           setState(() {
-                            if (_appliedCoupon != null &&
+                            if (_appliedCouponCode != null &&
                                 value.trim().toUpperCase() !=
-                                    _appliedCoupon!.code) {
-                              _appliedCoupon = null;
+                                    _appliedCouponCode) {
+                              _appliedCouponCode = null;
+                              _serverCouponDiscount = 0;
+                              _appliedCartFingerprint = null;
                             }
                             _couponError = null;
                           });
@@ -853,7 +829,7 @@ class _CartViewState extends State<CartView> {
                       ),
                       SizedBox(width: 6),
                       Text(
-                        '${_appliedCoupon?.code ?? 'Coupon'} applied. ₹$_discount saved.',
+                        '$_appliedCouponCode applied. ₹$_discount saved.',
                         style: const TextStyle(
                           color: AppColors.success,
                           fontSize: 12,
@@ -865,7 +841,7 @@ class _CartViewState extends State<CartView> {
                 ] else if (_couponController.text.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Text(
-                    _couponMessage ?? 'Try FIRSTDR, GROW15, or SERUM300.',
+                    _couponMessage ?? 'Enter an active coupon code.',
                     style: TextStyle(
                       color: _couponMessage == null
                           ? AppColors.secondaryDark
@@ -903,12 +879,11 @@ class _CartViewState extends State<CartView> {
                 _buildSummaryRow('Subtotal', '₹$_subtotal'),
                 if (_couponApplied)
                   _buildSummaryRow(
-                    'Coupon (${_appliedCoupon?.code ?? 'Offer'})',
+                    'Coupon (${_appliedCouponCode ?? 'Offer'})',
                     '- ₹$_discount',
                     isDiscount: true,
                   ),
-                _buildSummaryRow('Clinical Delivery Fee', 'FREE', isFree: true),
-                _buildSummaryRow('Tax & Consult Charge', 'Included'),
+                _buildSummaryRow('Delivery charge', 'Calculated at checkout'),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
                   child: Divider(color: AppColors.border, height: 1),
@@ -963,7 +938,7 @@ class _CartViewState extends State<CartView> {
                       ),
                     ),
                     Text(
-                      '$_totalItemCount items • Free Delivery',
+                      '$_totalItemCount items • delivery at checkout',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -1020,10 +995,9 @@ class _CartViewState extends State<CartView> {
     String value, {
     bool isTotal = false,
     bool isDiscount = false,
-    bool isFree = false,
   }) {
     Color valueColor;
-    if (isDiscount || isFree) {
+    if (isDiscount) {
       valueColor = AppColors.success;
     } else if (isTotal) {
       valueColor = AppColors.primary;

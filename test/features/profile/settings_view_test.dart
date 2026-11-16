@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:dr_hair/core/widgets/dotted_divider.dart';
 import 'package:dr_hair/features/auth/domain/models/user_model.dart';
 import 'package:dr_hair/features/auth/presentation/viewmodels/auth_cubit.dart';
 import 'package:dr_hair/features/profile/presentation/views/settings_view.dart';
@@ -88,5 +89,15 @@ void main() {
       expect(find.text('Privacy or data concerns'), findsOneWidget);
       expect(find.text('Permanently Delete Account'), findsWidgets);
     });
+
+    testWidgets(
+      'renders DottedDivider widgets across sections for clean separation',
+      (tester) async {
+        await tester.pumpWidget(createTestWidget());
+        await tester.pumpAndSettle();
+
+        expect(find.byType(DottedDivider), findsWidgets);
+      },
+    );
   });
 }

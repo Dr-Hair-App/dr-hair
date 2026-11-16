@@ -1,6 +1,7 @@
 import 'package:dr_hair/core/constants/app_strings.dart';
 import 'package:dr_hair/features/app_config/data/app_config_repository.dart';
 import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_cubit.dart';
+import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_state.dart';
 import 'package:dr_hair/features/hair_test/presentation/viewmodels/hair_test_cubit.dart';
 import 'package:dr_hair/features/hair_test/presentation/viewmodels/hair_test_state.dart';
 import 'package:dr_hair/features/hair_test/presentation/views/assessment_result_view.dart';
@@ -19,6 +20,12 @@ class _FakeDisabledShopConfigRepository extends AppConfigRepository {
   Future<Map<String, bool>> fetchAppFeatures() async {
     return const {'shop': false, 'clinic_appointment': true, 'routine': true};
   }
+
+  @override
+  Future<AppConfigBundle> fetchAppConfig() async => AppConfigBundle(
+    features: {'shop': false, 'clinic_appointment': true, 'routine': true},
+    appointmentBilling: const AppointmentBillingConfig(),
+  );
 }
 
 class _MockCompletedHairTestCubit extends HairTestCubit {
@@ -42,8 +49,8 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: ProfileView()));
 
     // Patient info
-    expect(find.text('Yashveer Soni'), findsOneWidget);
-    expect(find.text('Patient ID: DHP0001'), findsOneWidget);
+    expect(find.text('Your profile'), findsOneWidget);
+    expect(find.text('Sign in to view your patient ID'), findsOneWidget);
     expect(find.text('The tools for your hair health journey'), findsOneWidget);
 
     // Key drawer sections present in profile, including Assessment result
@@ -58,6 +65,9 @@ void main() {
     expect(find.text('Nutrition guide'), findsOneWidget);
     expect(find.text('Care reminders'), findsOneWidget);
     expect(find.text('Clinic appointments'), findsOneWidget);
+    expect(find.text('Dr. Hair AI Assistant'), findsOneWidget);
+    expect(find.text('Open your saved conversations'), findsOneWidget);
+    expect(find.text('Browse products'), findsOneWidget);
     expect(find.text('My cart'), findsOneWidget);
     expect(find.text('Orders & delivery'), findsOneWidget);
     expect(find.text('Settings & preferences'), findsOneWidget);
@@ -78,7 +88,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Assessment Report'), findsOneWidget);
-      expect(find.text('What this may mean'), findsOneWidget);
+      expect(find.text('WHAT YOU SHARED'), findsOneWidget);
       expect(find.textContaining('Dandruff'), findsWidgets);
     },
   );

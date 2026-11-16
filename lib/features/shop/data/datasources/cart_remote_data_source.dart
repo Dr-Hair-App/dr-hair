@@ -14,9 +14,9 @@ class CartRemoteDataSource {
     Dio? dio,
     SecureSessionStore? sessionStore,
     AppLocalCache? cache,
-  })  : _dio = dio ?? DioClient(baseUrl: ApiEndpoints.backendBaseUrl).dio,
-        _sessionStore = sessionStore ?? SecureSessionStore(),
-        _cache = cache ?? AppLocalCache.instance;
+  }) : _dio = dio ?? DioClient(baseUrl: ApiEndpoints.backendBaseUrl).dio,
+       _sessionStore = sessionStore ?? SecureSessionStore(),
+       _cache = cache ?? AppLocalCache.instance;
 
   static const String _guestKey = 'shop_guest_session_id';
 
@@ -38,10 +38,7 @@ class CartRemoteDataSource {
       final headers = await _buildHeaders();
       final response = await _dio.get<Map<String, dynamic>>(
         ApiEndpoints.cart,
-        options: Options(
-          headers: headers,
-          extra: const {'silent': true},
-        ),
+        options: Options(headers: headers, extra: const {'silent': true}),
       );
       final data = response.data?['data'];
       if (data is Map<String, dynamic>) {
@@ -67,10 +64,7 @@ class CartRemoteDataSource {
           if (planTitle != null && planTitle.isNotEmpty) 'planTitle': planTitle,
           'quantity': quantity,
         },
-        options: Options(
-          headers: headers,
-          extra: const {'silent': true},
-        ),
+        options: Options(headers: headers, extra: const {'silent': true}),
       );
       final data = response.data?['data'];
       if (data is Map<String, dynamic>) {
@@ -89,10 +83,7 @@ class CartRemoteDataSource {
       final response = await _dio.patch<Map<String, dynamic>>(
         ApiEndpoints.cartItemById(itemId),
         data: {'quantity': quantity},
-        options: Options(
-          headers: headers,
-          extra: const {'silent': true},
-        ),
+        options: Options(headers: headers, extra: const {'silent': true}),
       );
       final data = response.data?['data'];
       if (data is Map<String, dynamic>) {
@@ -107,10 +98,7 @@ class CartRemoteDataSource {
       final headers = await _buildHeaders();
       final response = await _dio.delete<Map<String, dynamic>>(
         ApiEndpoints.cartItemById(itemId),
-        options: Options(
-          headers: headers,
-          extra: const {'silent': true},
-        ),
+        options: Options(headers: headers, extra: const {'silent': true}),
       );
       final data = response.data?['data'];
       if (data is Map<String, dynamic>) {
@@ -125,10 +113,7 @@ class CartRemoteDataSource {
       final headers = await _buildHeaders();
       await _dio.delete(
         ApiEndpoints.cart,
-        options: Options(
-          headers: headers,
-          extra: const {'silent': true},
-        ),
+        options: Options(headers: headers, extra: const {'silent': true}),
       );
       return true;
     } catch (_) {
@@ -187,10 +172,7 @@ class CartRemoteDataSource {
       final response = await _dio.post<Map<String, dynamic>>(
         ApiEndpoints.cartApplyReward,
         data: {'code': code.trim().toUpperCase()},
-        options: Options(
-          headers: headers,
-          extra: const {'silent': true},
-        ),
+        options: Options(headers: headers, extra: const {'silent': true}),
       );
       final data = response.data?['data'];
       if (data is Map<String, dynamic>) {

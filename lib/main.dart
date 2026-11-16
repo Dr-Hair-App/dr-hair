@@ -75,7 +75,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    _notificationsCubit = NotificationsCubit()..loadNotifications();
+    _notificationsCubit = NotificationsCubit();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initPushNotifications();
     });
@@ -83,8 +83,6 @@ class _MyAppState extends State<MyApp> {
 
   void _initPushNotifications() {
     if (FirebasePushService.isTesting) return;
-
-    FirebasePushService.syncDeviceTokenWithBackend();
 
     // Check cold-start notification message when app was terminated
     FirebasePushService.initialNotificationMessage
@@ -198,9 +196,7 @@ class _MyAppState extends State<MyApp> {
         BlocProvider<HairTestCubit>(
           create: (_) => HairTestCubit()..loadSavedState(),
         ),
-        BlocProvider<HomeSummaryCubit>(
-          create: (_) => HomeSummaryCubit(),
-        ),
+        BlocProvider<HomeSummaryCubit>(create: (_) => HomeSummaryCubit()),
       ],
       child: Builder(
         builder: (context) {
@@ -211,6 +207,7 @@ class _MyAppState extends State<MyApp> {
             appointmentCubit: context.read<ClinicAppointmentCubit>(),
             hairTestCubit: context.read<HairTestCubit>(),
             homeSummaryCubit: context.read<HomeSummaryCubit>(),
+            notificationsCubit: context.read<NotificationsCubit>(),
           );
           return app;
         },

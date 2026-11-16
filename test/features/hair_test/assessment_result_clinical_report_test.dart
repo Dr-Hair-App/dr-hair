@@ -27,16 +27,14 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: AssessmentResultView(cubit: cubit),
-        ),
+        MaterialApp(home: AssessmentResultView(cubit: cubit)),
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
       // Assert doctor's clinical report section
-      expect(find.text("Doctor's Clinical Report"), findsOneWidget);
-      expect(find.text('Verified by Dr. Jai Bansal'), findsOneWidget);
+      expect(find.text('Clinical documents'), findsOneWidget);
+      expect(find.text('Shared with your care team'), findsOneWidget);
       expect(
         find.text('Scalp Trichoscopy & Follicular Assessment'),
         findsOneWidget,
@@ -50,4 +48,3 @@ void main() {
     },
   );
 }
-

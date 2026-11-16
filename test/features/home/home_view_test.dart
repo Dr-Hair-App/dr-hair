@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../helpers/product_test_fixtures.dart';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -43,13 +45,13 @@ class _FakeHomeProductRepository implements ProductRepository {
     int page = 1,
     int limit = 20,
   }) async {
-    final items = ProductItem.demoCatalog.take(limit).toList();
+    final items = ProductTestFixtures.catalog.take(limit).toList();
     return (items: items, hasMore: false, total: items.length);
   }
 
   @override
   Future<ProductItem?> getProductById(String id) async {
-    for (final product in ProductItem.demoCatalog) {
+    for (final product in ProductTestFixtures.catalog) {
       if (product.id == id) return product;
     }
     return null;
@@ -57,7 +59,7 @@ class _FakeHomeProductRepository implements ProductRepository {
 
   @override
   Future<List<CategoryItem>> getCategories({String? type}) async {
-    return CategoryItem.defaultProductCategories();
+    return ProductTestFixtures.categories;
   }
 }
 

@@ -24,6 +24,9 @@ void main() {
         'id': 'available',
         'name': 'Available',
         'in_stock': true,
+        'supply_plans': [
+          {'title': 'Four Week Course', 'price': 1000, 'mrp': 1200},
+        ],
       }),
       ProductItem.fromJson({
         'id': 'sold-out',

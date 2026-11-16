@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Dr. Hair needs access to your camera to take photos of your scalp for clinical evaluation.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Dr. Hair uses your calendar only when you choose to add an appointment.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Dr. Hair needs access to your photos to upload scalp photos for clinical evaluation.</string>
 	<key>UIApplicationSceneManifest</key>

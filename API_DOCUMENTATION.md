@@ -98,6 +98,7 @@ sequenceDiagram
 | 15 | `/api/v1/patient/progress-checkins` | `POST` | `application/json` | ✅ | `features/care` |
 | 16 | `/api/v1/appointments/availability?from=YYYY-MM-DD&to=YYYY-MM-DD` | `GET` | `application/json` | ❌ | `features/appointments` |
 | 17 | `/api/v1/patient/care-events` | `GET` / `PUT` | `application/json` | ✅ | `features/care` |
+| 18 | `/api/v1/patient/assistant/chat` | `POST` | `application/json` → `text/event-stream` | ✅ | `features/assistant_chat` |
 
 ---
 
@@ -112,6 +113,17 @@ sequenceDiagram
 - **PUT example**:
   ```json
   {"event_date":"2026-11-13","event_type":"routine","event_key":"rt_1","status":"skipped","note":"Was travelling"}
+  ```
+
+### Streaming AI hair and scalp assistant
+Send the latest conversation turns to the authenticated patient endpoint. The response is a server-sent event stream with `data: {"type":"delta","text":"..."}` events, optional `data: {"type":"action","action":{...}}` proposals, then `data: {"type":"done"}`. An error is sent as `data: {"type":"error","message":"..."}`. Requests support up to 12 alternating user/assistant turns, each up to 1,200 characters. The backend does not store conversations; the app stores completed conversations locally, scoped to the signed-in patient, and excludes blank or unanswered chats. Limit is eight messages per patient per minute. Replies are general wellness information and do not diagnose or prescribe. Proposed app changes require the patient to confirm them.
+
+- **URL**: `{BASE_URL}/api/v1/patient/assistant/chat`
+- **Method**: `POST`
+- **Authentication**: Required
+- **Request example**:
+  ```json
+  {"messages":[{"role":"user","content":"What can cause dry scalp?"}]}
   ```
 
 ### Clinic appointment availability

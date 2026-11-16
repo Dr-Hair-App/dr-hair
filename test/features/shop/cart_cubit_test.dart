@@ -31,13 +31,9 @@ class _FakeCartRemoteDataSource extends CartRemoteDataSource {
               'price': 999,
               'quantity': 1,
               'image': 'https://res.cloudinary.com/test/image.jpg',
-            }
+            },
           ],
-          'summary': {
-            'subtotal': 999,
-            'discount': 0,
-            'total': 999,
-          }
+          'summary': {'subtotal': 999, 'discount': 0, 'total': 999},
         };
   }
 
@@ -111,12 +107,15 @@ void main() {
       clinicalMetrics: [],
     );
 
-    test('initializes empty when no cache exists and syncWithBackend is false', () {
-      final cubit = CartCubit(cache: cache, syncWithBackend: false);
-      expect(cubit.state.items, isEmpty);
-      expect(cubit.state.itemCount, 0);
-      expect(cubit.state.subtotal, 0);
-    });
+    test(
+      'initializes empty when no cache exists and syncWithBackend is false',
+      () {
+        final cubit = CartCubit(cache: cache, syncWithBackend: false);
+        expect(cubit.state.items, isEmpty);
+        expect(cubit.state.itemCount, 0);
+        expect(cubit.state.subtotal, 0);
+      },
+    );
 
     test('syncs items from remote data source on init', () async {
       final remote = _FakeCartRemoteDataSource();
@@ -170,33 +169,45 @@ void main() {
         quantity: 1,
       );
 
-      final lineId = CartCubit.lineId(testProduct.id, testProduct.supplyPlans.first.title);
+      final lineId = CartCubit.lineId(
+        testProduct.id,
+        testProduct.supplyPlans.first.title,
+      );
       cubit.setQuantity(lineId, 15); // Exceeds 10
 
-      expect(cubit.quantityFor(testProduct.id, testProduct.supplyPlans.first.title), 10);
+      expect(
+        cubit.quantityFor(testProduct.id, testProduct.supplyPlans.first.title),
+        10,
+      );
       expect(remote.updateQuantityCalls, 1);
     });
 
-    test('setting quantity to 0 removes the item and calls remote removeItem', () {
-      final remote = _FakeCartRemoteDataSource();
-      final cubit = CartCubit(
-        cache: cache,
-        remoteDataSource: remote,
-        syncWithBackend: false,
-      );
+    test(
+      'setting quantity to 0 removes the item and calls remote removeItem',
+      () {
+        final remote = _FakeCartRemoteDataSource();
+        final cubit = CartCubit(
+          cache: cache,
+          remoteDataSource: remote,
+          syncWithBackend: false,
+        );
 
-      cubit.addProduct(
-        product: testProduct,
-        plan: testProduct.supplyPlans.first,
-        quantity: 1,
-      );
+        cubit.addProduct(
+          product: testProduct,
+          plan: testProduct.supplyPlans.first,
+          quantity: 1,
+        );
 
-      final lineId = CartCubit.lineId(testProduct.id, testProduct.supplyPlans.first.title);
-      cubit.setQuantity(lineId, 0);
+        final lineId = CartCubit.lineId(
+          testProduct.id,
+          testProduct.supplyPlans.first.title,
+        );
+        cubit.setQuantity(lineId, 0);
 
-      expect(cubit.state.items, isEmpty);
-      expect(remote.removeItemCalls, 1);
-    });
+        expect(cubit.state.items, isEmpty);
+        expect(remote.removeItemCalls, 1);
+      },
+    );
 
     test('clear resets items and calls remote clearCart', () {
       final remote = _FakeCartRemoteDataSource();

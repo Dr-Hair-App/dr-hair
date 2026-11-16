@@ -1,6 +1,5 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dr_hair/core/storage/app_local_cache.dart';
 import 'package:dr_hair/features/care/data/patient_progress_api.dart';
 import 'package:dr_hair/features/care/data/patient_diet_api.dart';
@@ -14,7 +13,6 @@ void main() {
     late CareCubit cubit;
 
     setUp(() async {
-      SharedPreferences.setMockInitialValues({});
       await AppLocalCache.instance.clearAll();
       cubit = CareCubit();
     });

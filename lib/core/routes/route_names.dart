@@ -22,7 +22,6 @@ class RouteNames {
   static const String otp = '/otp';
   static const String completeProfile = '/complete-profile';
   static const String about = '/about';
-  static const String contact = '/contact';
   static const String routine = '/routine';
   static const String progress = '/progress';
   static const String clinicAppointment = '/clinic-appointment';
@@ -37,5 +36,6 @@ class RouteNames {
   static const String cancellationPolicy = '/cancellation-policy';
   static const String products = '/products';
   static const String assessmentResult = '/assessment-result';
+  static const String assistantHistory = '/assistant-history';
   static const String noInternet = '/no-internet';
 }

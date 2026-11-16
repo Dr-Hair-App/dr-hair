@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
+import '../../../../core/utils/whatsapp_launcher.dart';
 import '../viewmodels/care_cubit.dart';
 import '../viewmodels/care_state.dart';
 import '../widgets/add_routine_task_bottom_sheet.dart';
@@ -672,7 +673,10 @@ Future<void> _showSymptomCheckIn(BuildContext context) async {
           FilledButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              context.push(RouteNames.contact);
+              WhatsAppLauncher.launch(
+                message:
+                    'Hello, I am reporting symptoms from my Dr. Hair daily routine check-in and would like clinical guidance.',
+              );
             },
             child: const Text('Contact clinic'),
           ),

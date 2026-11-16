@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dr_hair/core/storage/app_local_cache.dart';
 import 'package:dr_hair/features/home/presentation/viewmodels/home_summary_cubit.dart';
 import 'package:dr_hair/features/treatment/data/patient_clinical_api.dart';
 
@@ -16,41 +17,42 @@ class _FakePatientClinicalApi extends Fake implements PatientClinicalApi {
   @override
   Future<Map<String, dynamic>> getHomeSummary(String accessToken) async {
     if (throwError != null) throw throwError!;
-    return mockResponse ?? {
-      'patient': {'id': 'pat-1', 'name': 'Test Patient'},
-      'action_cards': [
+    return mockResponse ??
         {
-          'id': 'card-1',
-          'type': 'clinician_urgent',
-          'priority': 100,
-          'title': 'Urgent Clinic Evaluation Recommended',
-          'body': 'Rapid progressive thinning detected. Please consult a clinician.',
-          'action_label': 'Book Clinic Consultation',
-          'destination_route': '/clinic-appointment',
-          'entity_id': 'asmt-1',
-          'why_shown': 'Clinical flag: rapid thinning',
-        },
-        {
-          'id': 'card-2',
-          'type': 'shared_report',
-          'priority': 80,
-          'title': 'New report from clinic',
-          'body': 'Your trichoscopy report is ready for review.',
-          'action_label': 'Open report',
-          'entity_id': 'rep-1',
-          'why_shown': 'Clinic shared a diagnostic report',
-        },
-        {
-          'id': 'card-3',
-          'type': 'care_plan',
-          'priority': 70,
-          'title': 'Your care plan',
-          'body': 'Active 90-day regrowth protocol.',
-          'action_label': 'View plan',
-          'entity_id': 'cp-1',
-        },
-      ],
-    };
+          'patient': {'id': 'pat-1', 'name': 'Test Patient'},
+          'action_cards': [
+            {
+              'id': 'card-1',
+              'type': 'clinician_urgent',
+              'priority': 100,
+              'title': 'Urgent Clinic Evaluation Recommended',
+              'body': 'Rapid progressive thinning detected. Please consult a clinician.',
+              'action_label': 'Book Clinic Consultation',
+              'destination_route': '/clinic-appointment',
+              'entity_id': 'asmt-1',
+              'why_shown': 'Clinical flag: rapid thinning',
+            },
+            {
+              'id': 'card-2',
+              'type': 'shared_report',
+              'priority': 80,
+              'title': 'New report from clinic',
+              'body': 'Your trichoscopy report is ready for review.',
+              'action_label': 'Open report',
+              'entity_id': 'rep-1',
+              'why_shown': 'Clinic shared a diagnostic report',
+            },
+            {
+              'id': 'card-3',
+              'type': 'care_plan',
+              'priority': 70,
+              'title': 'Your care plan',
+              'body': 'Active 90-day regrowth protocol.',
+              'action_label': 'View plan',
+              'entity_id': 'cp-1',
+            },
+          ],
+        };
   }
 
   @override
@@ -59,11 +61,16 @@ class _FakePatientClinicalApi extends Fake implements PatientClinicalApi {
     required String reportId,
   }) async {
     if (throwError != null) throw throwError!;
-    return downloadUri ?? Uri.parse('https://example.com/reports/$reportId.pdf');
+    return downloadUri ??
+        Uri.parse('https://example.com/reports/$reportId.pdf');
   }
 }
 
 void main() {
+  setUp(() async {
+    await AppLocalCache.instance.clearAll();
+  });
+
   group('HomeSummaryCubit', () {
     test('initial state has empty data and is not loading', () {
       final cubit = HomeSummaryCubit(clinicalApi: _FakePatientClinicalApi());
@@ -111,19 +118,22 @@ void main() {
       cubit.close();
     });
 
-    test('loadHomeSummary handles API failure gracefully without crashing', () async {
-      final cubit = HomeSummaryCubit(
-        clinicalApi: _FakePatientClinicalApi(
-          throwError: Exception('Network offline'),
-        ),
-      );
+    test(
+      'loadHomeSummary handles API failure gracefully without crashing',
+      () async {
+        final cubit = HomeSummaryCubit(
+          clinicalApi: _FakePatientClinicalApi(
+            throwError: Exception('Network offline'),
+          ),
+        );
 
-      await cubit.loadHomeSummary('token');
-      expect(cubit.state.isLoading, isFalse);
-      expect(cubit.state.errorMessage, isNotNull);
-      expect(cubit.state.hasCards, isFalse);
-      cubit.close();
-    });
+        await cubit.loadHomeSummary('token');
+        expect(cubit.state.isLoading, isFalse);
+        expect(cubit.state.errorMessage, isNotNull);
+        expect(cubit.state.hasCards, isFalse);
+        cubit.close();
+      },
+    );
 
     test('getReportDownloadUri returns URI from clinical api', () async {
       final cubit = HomeSummaryCubit(

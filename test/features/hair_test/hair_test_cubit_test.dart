@@ -8,7 +8,6 @@ import 'package:dr_hair/features/hair_test/presentation/viewmodels/hair_test_cub
 import 'package:dr_hair/features/treatment/data/patient_clinical_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeImagePicker extends Fake implements ImagePicker {
   final XFile? fileToReturn;
@@ -47,13 +46,14 @@ void main() {
               );
               return;
             }
-            if (options.path == '/HairTest/ai_assessment') {
+            if (options.path ==
+                '/api/v1/hair-tests/HT-TEST-001/ai_assessment/status') {
               if (!aiRequestStarted.isCompleted) aiRequestStarted.complete();
               handler.resolve(
                 Response(
                   requestOptions: options,
                   statusCode: 200,
-                  data: await aiResponse.future,
+                  data: {'status': 'success', 'data': await aiResponse.future},
                 ),
               );
               return;
@@ -85,21 +85,27 @@ void main() {
       expect(cubit.state.aiAssessment, isNull);
 
       aiResponse.complete({
-        'data': {
-          'ai_assessment': {
-            'ai_status': 'available',
-            'scalp_health_score': 72,
-            'stage_classification': 'Reported pattern',
-            'summary': 'Screening summary based on reported answers.',
-            'recommended_regimen': {'daily_steps': []},
-            'next_step_recommendation': {
-              'type': 'products',
-              'reason': 'Daily care guidance is a reasonable next step.',
-            },
+        'status': 'ready',
+        'ai_assessment': {
+          'ai_status': 'available',
+          'scalp_health_score': 72,
+          'stage_classification': 'Reported pattern',
+          'summary': 'Screening summary based on reported answers.',
+          'recommended_regimen': {'daily_steps': []},
+          'next_step_recommendation': {
+            'type': 'products',
+            'reason': 'Daily care guidance is a reasonable next step.',
           },
         },
       });
       await submission;
+      for (
+        var attempt = 0;
+        attempt < 100 && cubit.state.isSubmitting;
+        attempt++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
 
       expect(cubit.state.isSubmitting, isFalse);
       expect(cubit.state.isSubmitted, isTrue);
@@ -230,7 +236,7 @@ void main() {
             photoPath: path,
             status: HairDetectionStatus.notHair,
             confidence: 0.1,
-            message: 'Not scalp',
+            message: 'No hair or scalp detected. Please choose a scalp photo.',
             details: 'Test image does not contain a scalp.',
           );
         };
@@ -340,7 +346,6 @@ void main() {
     test(
       'markAssessmentSkipped sets cache flag and submit clears it',
       () async {
-        SharedPreferences.setMockInitialValues({});
         await AppLocalCache.instance.clearAll();
 
         final cubit = HairTestCubit();
@@ -378,7 +383,6 @@ void main() {
     });
 
     test('bindPatient with server assessment restores submitted state and reference number', () async {
-      SharedPreferences.setMockInitialValues({});
       await AppLocalCache.instance.clearAll();
 
       final fakeClinical = _FakeClinicalApi({

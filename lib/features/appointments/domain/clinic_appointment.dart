@@ -7,7 +7,7 @@ class ClinicAppointment {
   final String tokenNumber;
   final String doctorName;
   final String room;
-  final int consultationFee;
+  final int? consultationFee;
   final String paymentStatus;
   final String paymentMethod;
   final String paymentTransactionId;
@@ -21,9 +21,9 @@ class ClinicAppointment {
     required this.reason,
     this.status = 'Requested',
     this.tokenNumber = '',
-    this.doctorName = 'Dr. Jai Bansal',
-    this.room = 'Room 101 - Chamber A',
-    this.consultationFee = 500,
+    this.doctorName = '',
+    this.room = '',
+    this.consultationFee,
     this.paymentStatus = 'Pending',
     this.paymentMethod = 'UPI',
     this.paymentTransactionId = '',
@@ -78,24 +78,56 @@ class ClinicAppointment {
   static ClinicAppointment? fromJson(Object? value) {
     if (value is! Map) return null;
     final id = value['id']?.toString() ?? value['_id']?.toString() ?? '';
-    final patientId = value['patientId']?.toString() ??
+    final patientId =
+        value['patientId']?.toString() ??
         value['patient_code']?.toString() ??
         value['userId']?.toString() ??
         '';
-    final startsAt = DateTime.tryParse(value['startsAt']?.toString() ?? value['starts_at']?.toString() ?? '');
-    final reason = value['reason']?.toString() ?? value['service']?.toString() ?? 'General hair consultation';
-    final status = value['status']?.toString() ?? value['opdStatus']?.toString() ?? 'Requested';
-    final tokenNumber = value['tokenNumber']?.toString() ?? value['opd_token']?.toString() ?? '';
-    final doctorName = value['doctorName']?.toString() ?? value['doctor_name']?.toString() ?? 'Dr. Jai Bansal';
-    final room = value['room']?.toString() ?? 'Room 101 - Chamber A';
-    final consultationFee = (value['consultationFee'] ?? value['consultation_fee']) is num
-        ? ((value['consultationFee'] ?? value['consultation_fee']) as num).toInt()
-        : 500;
-    final paymentStatus = value['paymentStatus']?.toString() ?? value['payment_status']?.toString() ?? 'Pending';
-    final paymentMethod = value['paymentMethod']?.toString() ?? value['payment_method']?.toString() ?? 'UPI';
-    final paymentTransactionId = value['paymentTransactionId']?.toString() ?? value['payment_transaction_id']?.toString() ?? '';
-    final cancellationReason = value['cancellationReason']?.toString() ?? value['cancellation_reason']?.toString() ?? '';
-    final rescheduleReason = value['rescheduleReason']?.toString() ?? value['reschedule_reason']?.toString() ?? '';
+    final startsAt = DateTime.tryParse(
+      value['startsAt']?.toString() ?? value['starts_at']?.toString() ?? '',
+    );
+    final reason =
+        value['reason']?.toString() ??
+        value['service']?.toString() ??
+        'General hair consultation';
+    final status =
+        value['status']?.toString() ??
+        value['opdStatus']?.toString() ??
+        'Requested';
+    final tokenNumber =
+        value['tokenNumber']?.toString() ??
+        value['opd_token']?.toString() ??
+        '';
+    final doctorName =
+        value['doctorName']?.toString() ??
+        value['doctor_name']?.toString() ??
+        '';
+    final room = value['room']?.toString() ?? '';
+    final consultationFee =
+        (value['consultationFee'] ?? value['consultation_fee']) is num
+        ? ((value['consultationFee'] ?? value['consultation_fee']) as num)
+              .toInt()
+        : null;
+    final paymentStatus =
+        value['paymentStatus']?.toString() ??
+        value['payment_status']?.toString() ??
+        'Pending';
+    final paymentMethod =
+        value['paymentMethod']?.toString() ??
+        value['payment_method']?.toString() ??
+        'UPI';
+    final paymentTransactionId =
+        value['paymentTransactionId']?.toString() ??
+        value['payment_transaction_id']?.toString() ??
+        '';
+    final cancellationReason =
+        value['cancellationReason']?.toString() ??
+        value['cancellation_reason']?.toString() ??
+        '';
+    final rescheduleReason =
+        value['rescheduleReason']?.toString() ??
+        value['reschedule_reason']?.toString() ??
+        '';
 
     if (id.isEmpty || startsAt == null) {
       return null;
@@ -107,8 +139,8 @@ class ClinicAppointment {
       reason: reason,
       status: status.isNotEmpty ? status : 'Requested',
       tokenNumber: tokenNumber,
-      doctorName: doctorName.isNotEmpty ? doctorName : 'Dr. Jai Bansal',
-      room: room.isNotEmpty ? room : 'Room 101 - Chamber A',
+      doctorName: doctorName,
+      room: room,
       consultationFee: consultationFee,
       paymentStatus: paymentStatus.isNotEmpty ? paymentStatus : 'Pending',
       paymentMethod: paymentMethod.isNotEmpty ? paymentMethod : 'UPI',

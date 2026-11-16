@@ -74,7 +74,10 @@ void main() {
 
       // Default tab is Root Causes
       expect(find.text('DHT Sensitivity'), findsOneWidget);
-      expect(find.text('Moderate Impact'), findsOneWidget);
+      expect(
+        find.text('Temple follicles show sensitivity to DHT.'),
+        findsOneWidget,
+      );
       expect(find.text('Scalp Sebum Imbalance'), findsOneWidget);
 
       // Switch to Diet Plan tab

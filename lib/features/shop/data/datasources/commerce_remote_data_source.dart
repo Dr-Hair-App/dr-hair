@@ -67,6 +67,7 @@ class CommerceRemoteDataSource {
     required List<Map<String, dynamic>> items,
     String paymentGateway = 'cod',
     String? couponCode,
+    String? shippingQuoteId,
   }) async {
     final headers = await _buildHeaders(token: token);
     headers['Idempotency-Key'] = idempotencyKey;
@@ -84,6 +85,9 @@ class CommerceRemoteDataSource {
     if (couponCode != null && couponCode.isNotEmpty) {
       body['coupon_code'] = couponCode;
     }
+    if (shippingQuoteId != null && shippingQuoteId.isNotEmpty) {
+      body['shipping_quote_id'] = shippingQuoteId;
+    }
 
     final response = await _dio.post<Map<String, dynamic>>(
       ApiEndpoints.commerceCheckout,
@@ -96,6 +100,32 @@ class CommerceRemoteDataSource {
       return data;
     }
     throw const FormatException('Invalid checkout response format');
+  }
+
+  Future<Map<String, dynamic>> getShippingQuote({
+    String? token,
+    String? addressId,
+    required String deliveryPincode,
+    required List<Map<String, dynamic>> items,
+    required String paymentGateway,
+  }) async {
+    final headers = await _buildHeaders(token: token);
+    final body = <String, dynamic>{
+      'delivery_pincode': deliveryPincode,
+      'items': items,
+      'payment_gateway': paymentGateway,
+    };
+    if (addressId != null && addressId.isNotEmpty) {
+      body['address_id'] = addressId;
+    }
+    final response = await _dio.post<Map<String, dynamic>>(
+      ApiEndpoints.commerceShippingQuote,
+      data: body,
+      options: Options(headers: headers),
+    );
+    final data = response.data?['data'];
+    if (data is Map<String, dynamic>) return data;
+    throw const FormatException('Invalid shipping quote response');
   }
 
   Future<Map<String, dynamic>> verifyPayment({
@@ -123,6 +153,20 @@ class CommerceRemoteDataSource {
       return data;
     }
     throw const FormatException('Invalid payment verification response');
+  }
+
+  Future<Map<String, dynamic>> reconcilePayment({
+    String? token,
+    required String orderId,
+  }) async {
+    final headers = await _buildHeaders(token: token);
+    final response = await _dio.post<Map<String, dynamic>>(
+      ApiEndpoints.patientOrderPaymentReconciliation(orderId),
+      options: Options(headers: headers),
+    );
+    final data = response.data?['data'];
+    if (data is Map<String, dynamic>) return data;
+    throw const FormatException('Invalid payment reconciliation response');
   }
 
   Future<List<CareOrder>> fetchPatientOrders({

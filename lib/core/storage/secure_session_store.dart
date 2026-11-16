@@ -56,6 +56,15 @@ class SecureSessionStore implements AuthSessionStore {
           storage ?? _FlutterSessionSecretStorage(const FlutterSecureStorage()),
       _cache = cache ?? AppLocalCache.instance;
 
+  /// Stores a small, namespaced recovery value in the platform secure store.
+  /// Callers must own their key namespace and clear values when the flow ends.
+  Future<String?> readSecret({required String key}) => _storage.read(key: key);
+
+  Future<void> writeSecret({required String key, required String value}) =>
+      _storage.write(key: key, value: value);
+
+  Future<void> deleteSecret({required String key}) => _storage.delete(key: key);
+
   @override
   Future<String?> readToken() async =>
       await _storage.read(key: _tokenKey) ?? _cache.getString(_tokenKey);

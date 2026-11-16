@@ -8,14 +8,14 @@ class AppConfigCubit extends Cubit<AppConfigState> {
   final AppConfigRepository _repository;
 
   AppConfigCubit({AppConfigRepository? repository})
-      : _repository = repository ?? AppConfigRepository(),
-        super(
-          AppConfigState(
-            features: (repository ?? AppConfigRepository()).getCachedFeatures(),
-            appointmentBilling:
-                (repository ?? AppConfigRepository()).getCachedBillingConfig(),
-          ),
-        ) {
+    : _repository = repository ?? AppConfigRepository(),
+      super(
+        AppConfigState(
+          features: (repository ?? AppConfigRepository()).getCachedFeatures(),
+          appointmentBilling: (repository ?? AppConfigRepository())
+              .getCachedBillingConfig(),
+        ),
+      ) {
     loadConfig();
   }
 
@@ -41,4 +41,3 @@ class AppConfigCubit extends Cubit<AppConfigState> {
     return state.isFeatureEnabled(key, defaultValue: defaultValue);
   }
 }
-

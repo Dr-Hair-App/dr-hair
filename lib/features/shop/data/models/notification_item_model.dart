@@ -45,7 +45,8 @@ class NotificationItemModel {
       data: json['data'] is Map<String, dynamic>
           ? Map<String, dynamic>.from(json['data'] as Map)
           : const {},
-      imageUrl: json['imageUrl']?.toString() ??
+      imageUrl:
+          json['imageUrl']?.toString() ??
           json['image_url']?.toString() ??
           json['image']?.toString(),
       isRead: json['isRead'] == true || json['is_read'] == true,

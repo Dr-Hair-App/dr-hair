@@ -17,9 +17,8 @@ class NotificationsState {
     this.errorMessage,
   });
 
-  factory NotificationsState.initial() => const NotificationsState(
-        isLoading: true,
-      );
+  factory NotificationsState.initial() =>
+      const NotificationsState(isLoading: true);
 
   NotificationsState copyWith({
     List<NotificationItemModel>? notifications,

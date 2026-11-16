@@ -5,6 +5,7 @@ import '../../features/auth/presentation/views/signin_view.dart';
 import '../../features/auth/presentation/views/complete_profile_view.dart';
 import '../../features/appointments/presentation/clinic_appointment_view.dart';
 import '../../features/auth/presentation/views/splash_view.dart';
+import '../../features/assistant_chat/presentation/views/assistant_chat_history_view.dart';
 import '../../features/hair_test/presentation/views/assessment_result_view.dart';
 import '../../features/hair_test/presentation/views/hair_test_view.dart';
 import '../../features/home/presentation/views/home_view.dart';
@@ -21,7 +22,6 @@ import '../../features/shop/presentation/views/product_details_view.dart';
 import '../../features/shop/presentation/views/products_view.dart';
 import '../../features/static/domain/policy_models.dart';
 import '../../features/static/presentation/views/about_view.dart';
-import '../../features/static/presentation/views/contact_view.dart';
 import '../../features/static/presentation/views/no_internet_view.dart';
 import '../../features/static/presentation/views/policy_page_view.dart';
 import '../../features/treatment/presentation/views/treatment_details_view.dart';
@@ -120,6 +120,13 @@ class AppRouter {
             AssessmentRequiredRoute(child: const AssessmentResultView()),
       ),
       GoRoute(
+        path: RouteNames.assistantHistory,
+        builder: (context, state) => const AuthRequiredRoute(
+          routePath: RouteNames.assistantHistory,
+          child: AssistantChatHistoryView(),
+        ),
+      ),
+      GoRoute(
         path: RouteNames.updateProfile,
         builder: (context, state) => const AuthRequiredRoute(
           routePath: RouteNames.updateProfile,
@@ -190,12 +197,6 @@ class AppRouter {
       GoRoute(
         path: RouteNames.about,
         builder: (context, state) => const AboutView(),
-      ),
-      GoRoute(
-        path: RouteNames.contact,
-        builder: (context, state) => ContactView(
-          initialMessage: state.extra is String ? state.extra as String : null,
-        ),
       ),
       GoRoute(
         path: RouteNames.routine,

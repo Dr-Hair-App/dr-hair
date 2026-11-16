@@ -13,6 +13,7 @@ import '../../firebase_options.dart';
 import '../constants/api_endpoints.dart';
 import '../network/dio_client.dart';
 import '../routes/app_destination.dart';
+import '../storage/app_local_cache.dart';
 import '../storage/secure_session_store.dart';
 
 @pragma('vm:entry-point')
@@ -81,8 +82,9 @@ class FirebasePushService {
   // ignore: deprecated_member_use
   static Stream<String> get tokenRefreshes => _messaging.onTokenRefresh;
 
-  static const MethodChannel _nativeChannel =
-      MethodChannel('com.drhair.app/notifications');
+  static const MethodChannel _nativeChannel = MethodChannel(
+    'com.drhair.app/notifications',
+  );
 
   /// Displays a heads-up alert in Android system notification drawer when app is in foreground.
   static Future<void> showForegroundSystemNotification({
@@ -152,6 +154,10 @@ class FirebasePushService {
     if (isTesting) return;
 
     try {
+      if (AppLocalCache.instance.getBool('push_notifications_enabled') ==
+          false) {
+        return;
+      }
       final token = await requestPermissionAndGetToken();
       if (token == null || token.trim().isEmpty) {
         debugPrint('⚠️ [FCM] Could not obtain device token.');
@@ -178,7 +184,9 @@ class FirebasePushService {
       // Listen for background token rotations (cancelling any prior subscription)
       await _tokenRefreshSubscription?.cancel();
       // ignore: deprecated_member_use
-      _tokenRefreshSubscription = _messaging.onTokenRefresh.listen((newToken) async {
+      _tokenRefreshSubscription = _messaging.onTokenRefresh.listen((
+        newToken,
+      ) async {
         if (newToken.trim().isNotEmpty) {
           try {
             final dynamicAuth = await SecureSessionStore().readToken();
@@ -203,7 +211,10 @@ class FirebasePushService {
   }
 
   /// Unregisters device token on user logout and cleans device token from FCM.
-  static Future<void> unregisterDeviceToken({String? accessToken}) async {
+  static Future<void> unregisterDeviceToken({
+    String? accessToken,
+    bool deleteFcmToken = true,
+  }) async {
     if (isTesting) return;
 
     try {
@@ -224,10 +235,12 @@ class FirebasePushService {
           options: options,
         );
       }
-      try {
-        // ignore: deprecated_member_use
-        await _messaging.deleteToken();
-      } catch (_) {}
+      if (deleteFcmToken) {
+        try {
+          // ignore: deprecated_member_use
+          await _messaging.deleteToken();
+        } catch (_) {}
+      }
     } catch (e) {
       debugPrint('FirebasePushService unregisterDeviceToken error: $e');
     }

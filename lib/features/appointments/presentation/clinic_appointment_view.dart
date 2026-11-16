@@ -1,9 +1,12 @@
 import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_cubit.dart';
 import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_state.dart';
+import 'package:add_2_calendar/add_2_calendar.dart' as calendar;
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
@@ -28,8 +31,33 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
   String? _replacingId;
   String? _reschedulingId;
   String? _accessToken;
+  Map<String, dynamic> _clinicConfig = const {};
   bool _didLoadAppointments = false;
+  bool _didLoadSchedule = false;
   bool _saving = false;
+
+  String get _clinicName =>
+      _clinicConfig['clinic_name']?.toString().trim().isNotEmpty == true
+      ? _clinicConfig['clinic_name'].toString()
+      : 'Clinic';
+  String get _doctorName => _clinicConfig['doctor_name']?.toString() ?? '';
+  String get _clinicAddress =>
+      _clinicConfig['clinic_address']?.toString() ?? '';
+  String get _clinicRoom => _clinicConfig['room']?.toString() ?? '';
+
+  String get _clinicHours {
+    final sessions = _clinicConfig['sessions'];
+    if (sessions is! List || sessions.isEmpty) {
+      return 'Clinic hours are unavailable';
+    }
+    return sessions
+        .whereType<Map>()
+        .map(
+          (item) =>
+              '${item['label']}: ${item['opens_at']}–${item['closes_at']}',
+        )
+        .join(' · ');
+  }
 
   @override
   void dispose() {
@@ -40,7 +68,12 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    tz_data.initializeTimeZones();
     context.read<AppConfigCubit?>()?.loadConfig();
+    if (!_didLoadSchedule) {
+      _didLoadSchedule = true;
+      _loadClinicSchedule();
+    }
     final auth = context.read<AuthCubit>().state;
     final token = auth.sessionToken;
     if (token != null && token.isNotEmpty && auth.isGuest != true) {
@@ -52,14 +85,48 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     }
   }
 
-  String _dateLabel(DateTime date) =>
-      '${MaterialLocalizations.of(context).formatMediumDate(date)} · ${TimeOfDay.fromDateTime(date).format(context)}';
+  Future<void> _loadClinicSchedule() async {
+    final now = DateTime.now();
+    try {
+      final config = await context
+          .read<ClinicAppointmentCubit>()
+          .api
+          .getAvailability(
+            from: DateTime(now.year, now.month, 1),
+            to: DateTime(now.year, now.month + 1, 0),
+          );
+      if (mounted && config['is_configured'] == true) {
+        setState(() => _clinicConfig = config);
+      }
+    } catch (_) {
+      // Appointment booking remains unavailable until the date picker can refresh settings.
+    }
+  }
+
+  DateTime _inClinicTime(DateTime date) {
+    try {
+      return tz.TZDateTime.from(
+        date,
+        tz.getLocation(_clinicConfig['timezone']?.toString() ?? ''),
+      );
+    } catch (_) {
+      return date;
+    }
+  }
+
+  String _dateLabel(DateTime date) {
+    final clinicDate = _inClinicTime(date);
+    return '${MaterialLocalizations.of(context).formatMediumDate(clinicDate)} · ${TimeOfDay.fromDateTime(clinicDate).format(context)}';
+  }
 
   Future<void> _pickDateAndSlot() async {
     final picked = await AppointmentDatePickerBottomSheet.show(
       context,
       initialDate: _startsAt,
       api: context.read<ClinicAppointmentCubit>().api,
+      onScheduleLoaded: (config) {
+        if (mounted) setState(() => _clinicConfig = config);
+      },
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -92,13 +159,28 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
 
     final activePatientId = user?.patientId ?? patientId;
     final userReason = _reasonController.text.trim();
-    final finalReason = userReason.isEmpty
-        ? 'General hair & scalp consultation'
-        : userReason;
+    final configuredServices = _clinicConfig['appointment_services'];
+    final defaultReason =
+        configuredServices is List && configuredServices.isNotEmpty
+        ? configuredServices.first.toString()
+        : '';
+    final finalReason = userReason.isEmpty ? defaultReason : userReason;
+    if (finalReason.isEmpty) {
+      _message(
+        'Clinic service details are unavailable. Refresh appointment availability and try again.',
+      );
+      return;
+    }
 
     final billing =
         context.read<AppConfigCubit?>()?.state.appointmentBilling ??
         const AppointmentBillingConfig();
+    if (!billing.configured || billing.consultationFee == null) {
+      _message(
+        'Appointment pricing is not available yet. Please try again after the clinic updates its settings.',
+      );
+      return;
+    }
     final existingRequests = context.read<ClinicAppointmentCubit>().forPatient(
       activePatientId,
       userId: user?.id,
@@ -107,7 +189,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     final isFirstAppointment = !hasPriorVisit;
 
     final isFirstFree = billing.firstAppointmentFree && isFirstAppointment;
-    final fee = isFirstFree ? 0 : billing.consultationFee;
+    final fee = isFirstFree ? 0 : billing.consultationFee!;
     final paymentRequired = billing.paymentRequired && !isFirstFree;
 
     AppointmentPaymentResult? payment;
@@ -116,7 +198,8 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
         context,
         startsAt: _startsAt!,
         reason: finalReason,
-        doctorName: 'Dr. Jai Bansal',
+        doctorName: _clinicConfig['doctor_name']?.toString() ?? '',
+        timezone: _clinicConfig['timezone']?.toString() ?? '',
         fee: fee,
         paymentRequired: paymentRequired,
         patientToken: _accessToken ?? auth.state.sessionToken,
@@ -129,6 +212,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     }
 
     setState(() => _saving = true);
+    final requestedStart = _startsAt!;
     String? error;
     final activeToken = _accessToken ?? auth.state.sessionToken ?? '';
 
@@ -169,9 +253,62 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
         _replacingId = null;
       }
     });
-    _message(
-      error ?? 'Appointment request submitted to Dr. Jai Bansal. OPD token assigned.',
-    );
+    if (error != null) {
+      _message(error);
+    } else {
+      _showAppointmentRequestSuccess(requestedStart);
+    }
+  }
+
+  void _showAppointmentRequestSuccess(DateTime startsAt) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Appointment request sent. Add it to your calendar?',
+          ),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 9),
+          action: SnackBarAction(
+            label: 'Add to calendar',
+            onPressed: () => _addAppointmentToCalendar(startsAt),
+          ),
+        ),
+      );
+  }
+
+  Future<void> _addAppointmentToCalendar(DateTime startsAt) async {
+    try {
+      final duration = (_clinicConfig['appointment_duration_minutes'] as num?)
+          ?.toInt();
+      if (duration == null || duration <= 0) {
+        _message(
+          'Clinic calendar details are unavailable. Refresh appointment availability and try again.',
+        );
+        return;
+      }
+      final added = await calendar.Add2Calendar.addEvent2Cal(
+        calendar.Event(
+          title: '$_clinicName appointment (Requested)',
+          description: 'Appointment request. The clinic will confirm the requested time.',
+          location: _clinicConfig['clinic_address']?.toString() ?? '',
+          startDate: startsAt,
+          endDate: startsAt.add(Duration(minutes: duration)),
+          iosParams: const calendar.IOSParams(),
+        ),
+      );
+      if (!mounted) return;
+      _message(
+        added
+            ? 'Calendar opened with your appointment details.'
+            : 'Could not open the calendar app. Please try again.',
+      );
+    } catch (_) {
+      if (mounted) {
+        _message('Could not open the calendar app. Please try again.');
+      }
+    }
   }
 
   Future<void> _confirmCancel(String id, String patientId) async {
@@ -424,8 +561,10 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                             children: [
                               Row(
                                 children: [
-                                  const Text(
-                                    'Dr. Jai Bansal',
+                                  Text(
+                                    _doctorName.isEmpty
+                                        ? _clinicName
+                                        : _doctorName,
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w800,
@@ -435,7 +574,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                 ],
                               ),
                               const SizedBox(height: 3),
-                              const Text(
+                              Text(
                                 'In-clinic hair and scalp consultation',
                                 style: TextStyle(
                                   fontSize: 11,
@@ -466,8 +605,8 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Dr. Hair Restoration & Trichology Center',
+                              Text(
+                                _clinicName,
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
@@ -475,8 +614,10 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                 ),
                               ),
                               const SizedBox(height: 2),
-                              const Text(
-                                'Dr. Hair & Cosmodent Clinic, Jaipur, Rajasthan · 302017',
+                              Text(
+                                _clinicAddress.isEmpty
+                                    ? 'Clinic address is not available'
+                                    : _clinicAddress,
                                 style: TextStyle(
                                   fontSize: 10,
                                   height: 1.35,
@@ -487,7 +628,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                               InkWell(
                                 onTap: () async {
                                   final uri = Uri.parse(
-                                    'https://www.google.com/maps/search/?api=1&query=Dr+Hair+Jaipur',
+                                    'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(_clinicAddress.isEmpty ? _clinicName : _clinicAddress)}',
                                   );
                                   if (await canLaunchUrl(uri)) {
                                     await launchUrl(
@@ -536,7 +677,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                         color: AppColors.primary5,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
                           Icon(
                             LucideIcons.clock,
@@ -546,7 +687,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                           SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              'Sitting Hours: Mon – Sat (10 AM – 1 PM & 3:30 PM – 7 PM)',
+                              _clinicHours,
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
@@ -617,7 +758,9 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                           Row(
                             children: [
                               Text(
-                                isFirstFree
+                                !billing.configured
+                                    ? 'Appointment booking unavailable'
+                                    : isFirstFree
                                     ? '1st Clinic Visit 100% FREE'
                                     : (!billing.paymentRequired
                                           ? 'No Online Payment Required'
@@ -667,11 +810,13 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            isFirstFree
-                                ? 'Welcome offer: Your first consultation with Dr. Jai Bansal is complimentary.'
+                            !billing.configured
+                                ? 'Set appointment pricing in clinic settings before booking is available.'
+                                : isFirstFree
+                                ? 'Your first clinic consultation is complimentary.'
                                 : (!billing.paymentRequired
-                                      ? 'Online payment is OFF. Reserve your slot now; pay consultation fee ${fee > 0 ? "₹$fee " : ""}at clinic reception.'
-                                      : 'Consultation fee of ₹$fee payable via Razorpay (UPI, Card, NetBanking) for instant token.'),
+                                      ? 'Online payment is OFF. Reserve your slot now; pay consultation fee ${fee != null && fee > 0 ? "₹$fee " : ""}at clinic reception.'
+                                      : 'Consultation fee of ${fee == null ? "—" : "₹$fee"} payable via Razorpay for instant token.'),
                             style: TextStyle(
                               fontSize: 10.5,
                               height: 1.35,
@@ -862,7 +1007,9 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
-                                        'Dr. Jai Bansal Clinic Chamber',
+                                        _clinicRoom.isEmpty
+                                            ? _clinicName
+                                            : _clinicRoom,
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w700,
@@ -931,8 +1078,10 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              const Text(
-                                'Venue: Dr. Hair & Cosmodent Clinic · Jaipur Clinic',
+                              Text(
+                                _clinicAddress.isEmpty
+                                    ? 'Venue: $_clinicName'
+                                    : 'Venue: $_clinicAddress',
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: AppColors.textSecondary,
@@ -1267,7 +1416,10 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: _saving
+                  onPressed:
+                      _saving ||
+                          !billing.configured ||
+                          billing.consultationFee == null
                       ? null
                       : canRequest
                       ? () => _save(patientId)
@@ -1304,7 +1456,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                       ? isFirstFree
                                             ? 'Book free consultation'
                                             : billing.paymentRequired
-                                            ? 'Continue · ₹$fee'
+                                            ? 'Continue · ${fee == null ? "—" : "₹$fee"}'
                                             : 'Continue · Pay at clinic'
                                       : 'Update appointment time'
                                 : 'Sign in to book',

@@ -27,7 +27,15 @@ class _MockAppointmentApi extends PatientAppointmentApi {
     required DateTime to,
   }) async => {
     'timezone': 'Asia/Kolkata',
+    'is_configured': true,
+    'clinic_name': 'Dr. Jai Bansal Clinic',
+    'doctor_name': 'Dr. Jai Bansal',
+    'room': 'Clinic Chamber',
+    'clinic_address': 'Clinic test address',
     'booking_window_days': 90,
+    'slot_interval_minutes': 30,
+    'appointment_duration_minutes': 30,
+    'appointment_services': ['Consultation'],
     'weekly_closed_weekdays': [7],
     'sessions': [
       {'label': 'Morning Session', 'opens_at': '10:00', 'closes_at': '12:30'},
@@ -129,12 +137,22 @@ void main() {
         isGuest: false,
       );
       final authCubit = _FakeAuthCubit(user);
+      final appConfigCubit = _FakeAppConfigCubit(
+        const AppointmentBillingConfig(
+          configured: true,
+          paymentRequired: true,
+          consultationFee: 500,
+          effectiveFee: 500,
+          effectivePaymentRequired: true,
+        ),
+      );
 
       await tester.pumpWidget(
         MultiBlocProvider(
           providers: [
             BlocProvider<AuthCubit>.value(value: authCubit),
             BlocProvider<ClinicAppointmentCubit>.value(value: appointmentCubit),
+            BlocProvider<AppConfigCubit>.value(value: appConfigCubit),
           ],
           child: const MaterialApp(home: ClinicAppointmentView()),
         ),
@@ -249,6 +267,7 @@ void main() {
                     result = await AppointmentPaymentSheet.show(
                       context,
                       startsAt: DateTime.now().add(const Duration(days: 2)),
+                      fee: 500,
                       patientToken: 'patient-session-token',
                       appointmentApi: _UnavailablePaymentApi(),
                     );
@@ -295,6 +314,8 @@ void main() {
           'starts_at': existingSlot.toUtc().toIso8601String(),
           'reason': 'Scalp scan & treatment',
           'consultation_fee': 500,
+          'doctorName': 'Dr. Jai Bansal',
+          'room': 'Clinic Chamber',
           'payment_method': 'UPI',
           'payment_status': 'Paid',
           'status': 'Confirmed',
@@ -316,15 +337,6 @@ void main() {
       );
       final authCubit = _FakeAuthCubit(user);
 
-      await appointmentCubit.saveRequest(
-        patientId: 'PAT-991',
-        startsAt: existingSlot,
-        reason: 'Scalp scan & treatment',
-        consultationFee: 500,
-        paymentMethod: 'UPI',
-        paymentStatus: 'Paid',
-      );
-
       await tester.pumpWidget(
         MultiBlocProvider(
           providers: [
@@ -337,7 +349,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify existing appointment is listed
-      expect(find.text('Dr. Jai Bansal Clinic Chamber'), findsOneWidget);
+      expect(find.text('Scalp scan & treatment'), findsOneWidget);
       final rescheduleFinder = find.text('Reschedule');
       expect(rescheduleFinder, findsOneWidget);
       await tester.ensureVisible(rescheduleFinder);
@@ -366,7 +378,7 @@ void main() {
       expect(find.text('Select Appointment Slot'), findsNothing);
 
       // Verify appointment card still rendered with updated slot
-      expect(find.text('Dr. Jai Bansal Clinic Chamber'), findsOneWidget);
+      expect(find.text('Scalp scan & treatment'), findsOneWidget);
     },
   );
 
@@ -445,6 +457,7 @@ void main() {
       final authCubit = _FakeAuthCubit(user);
       final appConfigCubit = _FakeAppConfigCubit(
         const AppointmentBillingConfig(
+          configured: true,
           paymentRequired: false,
           consultationFee: 450,
           firstAppointmentFree: false,

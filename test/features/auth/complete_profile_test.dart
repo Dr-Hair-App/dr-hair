@@ -4,6 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dr_hair/core/storage/app_local_cache.dart';
 import 'package:dr_hair/features/appointments/presentation/clinic_appointment_cubit.dart';
 import 'package:dr_hair/features/appointments/presentation/clinic_appointment_view.dart';
+import 'package:dr_hair/features/appointments/data/patient_appointment_api.dart';
+import 'package:dr_hair/features/app_config/data/app_config_repository.dart';
+import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_cubit.dart';
+import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_state.dart';
 import 'package:dr_hair/features/auth/domain/models/user_model.dart';
 import 'package:dr_hair/features/auth/presentation/viewmodels/auth_cubit.dart';
 import 'package:dr_hair/features/auth/presentation/viewmodels/auth_state.dart';
@@ -11,6 +15,74 @@ import 'package:dr_hair/features/auth/presentation/views/complete_profile_view.d
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'fake_auth_repository.dart';
+
+class _ClinicAppointmentApi extends PatientAppointmentApi {
+  final items = <Map<String, dynamic>>[];
+
+  @override
+  Future<List<Map<String, dynamic>>> list(String token) async =>
+      List.from(items);
+
+  @override
+  Future<Map<String, dynamic>> create({
+    required String token,
+    required DateTime startsAt,
+    required String reason,
+    String paymentMethod = 'Pay at clinic',
+  }) async {
+    final item = {
+      'id': 'APT-TEST-${items.length + 1}',
+      'patientId': 'DHP0055',
+      'starts_at': startsAt.toUtc().toIso8601String(),
+      'reason': reason,
+      'status': 'Requested',
+      'consultation_fee': 500,
+      'payment_status': 'Pending',
+      'payment_method': paymentMethod,
+    };
+    items.add(item);
+    return item;
+  }
+
+  @override
+  Future<Map<String, dynamic>> getAvailability({
+    required DateTime from,
+    required DateTime to,
+  }) async => {
+    'is_configured': true,
+    'timezone': 'Asia/Kolkata',
+    'booking_window_days': 90,
+    'slot_interval_minutes': 30,
+    'appointment_duration_minutes': 30,
+    'appointment_services': ['Consultation'],
+    'weekly_closed_weekdays': [],
+    'sessions': [
+      {'label': 'Clinic', 'opens_at': '09:00', 'closes_at': '18:00'},
+    ],
+    'closed_dates': [],
+    'booked_slots': [],
+  };
+}
+
+class _AppointmentConfigCubit extends AppConfigCubit {
+  _AppointmentConfigCubit()
+    : super(repository: AppConfigRepository(cache: AppLocalCache.inMemory())) {
+    emit(
+      const AppConfigState(
+        appointmentBilling: AppointmentBillingConfig(
+          configured: true,
+          paymentRequired: false,
+          consultationFee: 500,
+          effectiveFee: 500,
+          effectivePaymentRequired: false,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<void> loadConfig() async {}
+}
 
 void main() {
   group('CompleteProfileView & CompleteProfileBottomSheet Tests', () {
@@ -195,11 +267,16 @@ void main() {
             status: AuthStatus.authenticated,
             user: userWithoutAgeGender,
             phoneNumber: '9876543210',
+            sessionToken: 'test-session-token',
           ),
         );
 
         final cache = AppLocalCache.inMemory();
-        final appointmentCubit = ClinicAppointmentCubit(cache: cache);
+        final appointmentCubit = ClinicAppointmentCubit(
+          cache: cache,
+          api: _ClinicAppointmentApi(),
+        );
+        final appConfigCubit = _AppointmentConfigCubit();
 
         await tester.pumpWidget(
           MultiBlocProvider(
@@ -208,6 +285,7 @@ void main() {
               BlocProvider<ClinicAppointmentCubit>.value(
                 value: appointmentCubit,
               ),
+              BlocProvider<AppConfigCubit>.value(value: appConfigCubit),
             ],
             child: const MaterialApp(home: ClinicAppointmentView()),
           ),
@@ -217,7 +295,7 @@ void main() {
         expect(find.text('In-Clinic Appointment'), findsOneWidget);
 
         // Tap sitting slot picker container
-        await tester.tap(find.text('Tap to choose date & sitting slot'));
+        await tester.tap(find.text('Choose a date and time'));
         await tester.pumpAndSettle();
 
         // AppointmentDatePickerBottomSheet should appear
@@ -233,8 +311,7 @@ void main() {
         await tester.tap(find.text('Confirm Slot'));
         await tester.pumpAndSettle();
 
-        // Now on ClinicAppointmentView, tap Proceed to Book & Pay
-        final confirmBtn = find.text('Proceed to Book & Pay (₹500)');
+        final confirmBtn = find.text('Continue · Pay at clinic');
         await tester.ensureVisible(confirmBtn);
         await tester.tap(confirmBtn);
         await tester.pumpAndSettle();
@@ -272,15 +349,11 @@ void main() {
         expect(cubit.state.user?.age, 34);
         expect(cubit.state.user?.gender, 'Male');
 
-        // AppointmentPaymentSheet appears to confirm consultation fee checkout
         expect(find.text('Consultation Checkout'), findsOneWidget);
-        await tester.tap(find.text('Pay ₹500 & Confirm Visit'));
-        await tester.pumpAndSettle();
-
-        // And the in-clinic appointment request should now be saved!
+        // Opening checkout must not create a local appointment before the user confirms.
         expect(
           appointmentCubit.forPatient(cubit.state.user!.patientId),
-          hasLength(1),
+          isEmpty,
         );
       },
     );

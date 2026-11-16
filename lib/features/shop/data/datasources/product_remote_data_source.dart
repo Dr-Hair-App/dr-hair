@@ -9,7 +9,7 @@ class ProductRemoteDataSource {
   final Dio _dio;
 
   ProductRemoteDataSource({Dio? dio})
-      : _dio = dio ?? DioClient(baseUrl: ApiEndpoints.backendBaseUrl).dio;
+    : _dio = dio ?? DioClient(baseUrl: ApiEndpoints.backendBaseUrl).dio;
 
   Future<({List<ProductItem> items, bool hasMore, int total})> fetchProducts({
     String? category,
@@ -18,14 +18,17 @@ class ProductRemoteDataSource {
     int page = 1,
     int limit = 20,
   }) async {
-    final queryParams = <String, dynamic>{
-      'page': page,
-      'limit': limit,
-    };
-    if (category != null && category.trim().isNotEmpty && category != 'All' && category != 'all') {
+    final queryParams = <String, dynamic>{'page': page, 'limit': limit};
+    if (category != null &&
+        category.trim().isNotEmpty &&
+        category != 'All' &&
+        category != 'all') {
       queryParams['category'] = category.trim();
     }
-    if (rootCause != null && rootCause.trim().isNotEmpty && rootCause != 'All' && rootCause != 'all') {
+    if (rootCause != null &&
+        rootCause.trim().isNotEmpty &&
+        rootCause != 'All' &&
+        rootCause != 'all') {
       queryParams['root_cause'] = rootCause.trim();
     }
     if (query != null && query.trim().isNotEmpty) {
@@ -76,32 +79,28 @@ class ProductRemoteDataSource {
   }
 
   Future<List<CategoryItem>> fetchCategories({String? type}) async {
-    try {
-      final response = await _dio.get<Map<String, dynamic>>(
-        type != null ? ApiEndpoints.categories : ApiEndpoints.productCategories,
-        queryParameters: type != null ? {'type': type} : null,
-        options: Options(extra: const {'silent': true}),
-      );
+    final response = await _dio.get<Map<String, dynamic>>(
+      type != null ? ApiEndpoints.categories : ApiEndpoints.productCategories,
+      queryParameters: type != null ? {'type': type} : null,
+      options: Options(extra: const {'silent': true}),
+    );
 
-      final data = response.data?['data'];
-      if (data is List) {
-        return data
-            .whereType<Map<String, dynamic>>()
-            .map(CategoryItem.fromJson)
-            .toList();
-      } else if (data is Map<String, dynamic>) {
-        final list = (type == 'videos'
-                ? data['videos']
-                : type == 'services'
-                    ? data['services']
-                    : (data['products'] ?? data['categories'])) as List<dynamic>? ??
-            [];
-        return list
-            .whereType<Map<String, dynamic>>()
-            .map(CategoryItem.fromJson)
-            .toList();
-      }
-    } catch (_) {}
-    return CategoryItem.defaultProductCategories();
+    final data = response.data?['data'];
+    final dynamic rawList = data is List
+        ? data
+        : data is Map<String, dynamic>
+        ? (type == 'videos'
+              ? data['videos']
+              : type == 'services'
+              ? data['services']
+              : (data['products'] ?? data['categories']))
+        : null;
+    if (rawList is! List) {
+      throw const FormatException('The category response is invalid.');
+    }
+    return rawList
+        .whereType<Map<String, dynamic>>()
+        .map(CategoryItem.fromJson)
+        .toList();
   }
 }

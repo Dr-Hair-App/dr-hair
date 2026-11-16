@@ -1,14 +1,12 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/routes/route_names.dart';
 
 /// Modern bottom navigation bar inspired by the dual-element design:
 /// - A sleek floating pill with a fluid sliding capsule indicator for active tabs.
-/// - A standalone circular action button on the right that navigates to a dedicated full-screen view.
+/// - A standalone circular action button on the right for the AI assistant sheet.
 class ShellBottomNavBar extends StatefulWidget {
   final int currentIndex;
   final bool isHidden;
@@ -18,8 +16,6 @@ class ShellBottomNavBar extends StatefulWidget {
   final int cartItemCount;
   final int? cartSubtotal;
   final VoidCallback? onActionPressed;
-  final bool isTestCompleted;
-  final bool isProductEnabled;
   final bool showActionButton;
 
   const ShellBottomNavBar({
@@ -32,8 +28,6 @@ class ShellBottomNavBar extends StatefulWidget {
     this.cartItemCount = 0,
     this.cartSubtotal,
     this.onActionPressed,
-    this.isTestCompleted = false,
-    this.isProductEnabled = true,
     this.showActionButton = true,
   });
 
@@ -62,12 +56,6 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
     HapticFeedback.mediumImpact();
     if (widget.onActionPressed != null) {
       widget.onActionPressed!();
-    } else {
-      if (widget.isTestCompleted && widget.isProductEnabled) {
-        context.push(RouteNames.products);
-      } else {
-        context.push(RouteNames.hairTest);
-      }
     }
   }
 
@@ -483,8 +471,7 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
     required Duration motionDuration,
     required double size,
   }) {
-    final bool isCompleted = widget.isTestCompleted && widget.isProductEnabled;
-    final String label = isCompleted ? 'Products' : 'AI Hair Analysis';
+    const String label = 'AI Hair Assistant';
 
     return Semantics(
       button: true,
@@ -523,28 +510,19 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
                     shape: BoxShape.circle,
                     color: activeBg,
                   ),
+                  padding: const EdgeInsets.only(bottom: 6, left: 4),
                   child: Center(
                     child: Transform.rotate(
                       angle: iconAngle,
                       child: Transform.scale(
                         scale: iconScale,
-                        child: isCompleted
-                            ? const Icon(
-                                LucideIcons.pill,
-                                color: Colors.white,
-                                size: 24,
-                              )
-                            : Image.asset(
-                                "assets/icons/LampIcon.png",
-                                height: 26,
-                                width: 26,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(
-                                      LucideIcons.sparkles,
-                                      color: Colors.white,
-                                      size: 24,
-                                    ),
-                              ),
+                        child: Image.asset(
+                          'assets/images/WhiteLogo.png',
+                          // width: 26,
+                          height: 38,
+                          fit: BoxFit.contain,
+                          semanticLabel: 'Dr. Hair logo',
+                        ),
                       ),
                     ),
                   ),

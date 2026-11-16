@@ -1,7 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:dr_hair/features/auth/presentation/viewmodels/auth_cubit.dart';
 import 'package:dr_hair/features/care/presentation/views/progress_tracking_view.dart';
@@ -11,7 +10,6 @@ void main() {
   testWidgets(
     'progress journal explains that signed-out check-ins stay local',
     (tester) async {
-      SharedPreferences.setMockInitialValues({});
       final authCubit = AuthCubit();
       final careCubit = CareCubit();
       addTearDown(authCubit.close);

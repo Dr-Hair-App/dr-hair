@@ -6,6 +6,8 @@ class CareState {
   final List<RoutineTask> routineTasks;
   final List<CareReminder> reminders;
   final List<List<DietMeal>> dietPlans;
+  final List<DietMeal> assistantDietMeals;
+  final String assistantDietTitle;
   final int currentDietDay;
   final String dietTreatmentName;
   final String dietDoctorName;
@@ -23,6 +25,8 @@ class CareState {
     this.routineTasks = const [],
     this.reminders = const [],
     this.dietPlans = const [],
+    this.assistantDietMeals = const [],
+    this.assistantDietTitle = '',
     this.currentDietDay = 0,
     this.dietTreatmentName = '',
     this.dietDoctorName = '',
@@ -62,6 +66,8 @@ class CareState {
     List<RoutineTask>? routineTasks,
     List<CareReminder>? reminders,
     List<List<DietMeal>>? dietPlans,
+    List<DietMeal>? assistantDietMeals,
+    String? assistantDietTitle,
     int? currentDietDay,
     String? dietTreatmentName,
     String? dietDoctorName,
@@ -79,6 +85,8 @@ class CareState {
       routineTasks: routineTasks ?? this.routineTasks,
       reminders: reminders ?? this.reminders,
       dietPlans: dietPlans ?? this.dietPlans,
+      assistantDietMeals: assistantDietMeals ?? this.assistantDietMeals,
+      assistantDietTitle: assistantDietTitle ?? this.assistantDietTitle,
       currentDietDay: currentDietDay ?? this.currentDietDay,
       dietTreatmentName: dietTreatmentName ?? this.dietTreatmentName,
       dietDoctorName: dietDoctorName ?? this.dietDoctorName,

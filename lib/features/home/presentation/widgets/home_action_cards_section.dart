@@ -229,14 +229,14 @@ class HomeActionCardsSection extends StatelessWidget {
           SizedBox(
             height: 36,
             child: ElevatedButton.icon(
-              onPressed: () {
-                final route = card.destinationRoute ?? RouteNames.clinicAppointment;
-                context.push(route);
-              },
+              onPressed: () => context.push(RouteNames.clinicAppointment),
               icon: const Icon(LucideIcons.calendarDays, size: 15),
               label: Text(
                 card.actionLabel,
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE11D48),
@@ -254,7 +254,10 @@ class HomeActionCardsSection extends StatelessWidget {
     );
   }
 
-  Widget _buildPendingAssessmentCard(BuildContext context, HomeActionCard card) {
+  Widget _buildPendingAssessmentCard(
+    BuildContext context,
+    HomeActionCard card,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -325,7 +328,10 @@ class HomeActionCardsSection extends StatelessWidget {
               icon: const Icon(LucideIcons.arrowRight, size: 15),
               label: Text(
                 card.actionLabel,
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFD97706),
@@ -343,7 +349,10 @@ class HomeActionCardsSection extends StatelessWidget {
     );
   }
 
-  Widget _buildPendingAppointmentCard(BuildContext context, HomeActionCard card) {
+  Widget _buildPendingAppointmentCard(
+    BuildContext context,
+    HomeActionCard card,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -421,7 +430,10 @@ class HomeActionCardsSection extends StatelessWidget {
               icon: const Icon(LucideIcons.arrowRight, size: 15),
               label: Text(
                 card.actionLabel,
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
@@ -530,7 +542,9 @@ class HomeActionCardsSection extends StatelessWidget {
                             return;
                           }
                           final cubit = context.read<HomeSummaryCubit>();
-                          final uri = await cubit.getReportDownloadUri(reportId);
+                          final uri = await cubit.getReportDownloadUri(
+                            reportId,
+                          );
                           if (uri != null) {
                             final launched = await launchUrl(
                               uri,
@@ -668,7 +682,10 @@ class HomeActionCardsSection extends StatelessWidget {
               icon: const Icon(LucideIcons.arrowRight, size: 15),
               label: Text(
                 card.actionLabel,
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0D9488),
@@ -686,7 +703,10 @@ class HomeActionCardsSection extends StatelessWidget {
     );
   }
 
-  Widget _buildProductSuggestionsCard(BuildContext context, HomeActionCard card) {
+  Widget _buildProductSuggestionsCard(
+    BuildContext context,
+    HomeActionCard card,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -826,7 +846,10 @@ class HomeActionCardsSection extends StatelessWidget {
               icon: const Icon(LucideIcons.shoppingBag, size: 15),
               label: Text(
                 card.actionLabel,
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
@@ -844,7 +867,10 @@ class HomeActionCardsSection extends StatelessWidget {
     );
   }
 
-  Widget _buildAppointmentSuggestionCard(BuildContext context, HomeActionCard card) {
+  Widget _buildAppointmentSuggestionCard(
+    BuildContext context,
+    HomeActionCard card,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -922,7 +948,10 @@ class HomeActionCardsSection extends StatelessWidget {
               icon: const Icon(LucideIcons.calendarDays, size: 15),
               label: Text(
                 card.actionLabel,
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
@@ -983,7 +1012,10 @@ class HomeActionCardsSection extends StatelessWidget {
                 ),
                 child: Text(
                   card.actionLabel,
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),

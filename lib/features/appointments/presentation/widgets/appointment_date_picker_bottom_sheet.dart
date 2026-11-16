@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 
 import '../../../../core/constants/app_colors.dart';
 import '../../data/patient_appointment_api.dart';
@@ -8,12 +10,14 @@ class AppointmentDatePickerBottomSheet extends StatefulWidget {
   final DateTime? initialDate;
   final String? initialSlot;
   final PatientAppointmentApi? api;
+  final ValueChanged<Map<String, dynamic>>? onScheduleLoaded;
 
   const AppointmentDatePickerBottomSheet({
     super.key,
     this.initialDate,
     this.initialSlot,
     this.api,
+    this.onScheduleLoaded,
   });
 
   /// Static helper to open the reusable bottom sheet
@@ -22,6 +26,7 @@ class AppointmentDatePickerBottomSheet extends StatefulWidget {
     DateTime? initialDate,
     String? initialSlot,
     PatientAppointmentApi? api,
+    ValueChanged<Map<String, dynamic>>? onScheduleLoaded,
   }) {
     return showModalBottomSheet<DateTime>(
       context: context,
@@ -31,6 +36,7 @@ class AppointmentDatePickerBottomSheet extends StatefulWidget {
         initialDate: initialDate,
         initialSlot: initialSlot,
         api: api,
+        onScheduleLoaded: onScheduleLoaded,
       ),
     );
   }
@@ -48,16 +54,21 @@ class _AppointmentDatePickerBottomSheetState
   late final PatientAppointmentApi _api;
   bool _isLoadingAvailability = true;
   String? _availabilityError;
-  int _bookingWindowDays = 90;
-  String _timezone = 'Asia/Kolkata';
-  Set<int> _closedWeekdays = {DateTime.sunday};
+  int _bookingWindowDays = 0;
+  int _slotIntervalMinutes = 0;
+  int _appointmentDurationMinutes = 0;
+  String _timezone = '';
+  Set<int> _closedWeekdays = {};
   Set<String> _closedDates = {};
   Set<String> _bookedSlots = {};
   List<Map<String, dynamic>> _sessions = const [];
+  String _clinicName = '';
+  String _doctorName = '';
 
   @override
   void initState() {
     super.initState();
+    tz_data.initializeTimeZones();
     _api = widget.api ?? PatientAppointmentApi();
     final now = DateTime.now();
     _focusedMonth = DateTime(now.year, now.month);
@@ -75,6 +86,14 @@ class _AppointmentDatePickerBottomSheetState
 
   String _dateKey(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  DateTime get _clinicNow {
+    try {
+      return tz.TZDateTime.from(DateTime.now(), tz.getLocation(_timezone));
+    } catch (_) {
+      return DateTime.now();
+    }
+  }
 
   Future<void> _loadAvailability({bool showLoading = true}) async {
     final month = _focusedMonth;
@@ -97,10 +116,17 @@ class _AppointmentDatePickerBottomSheetState
       final rawSessions = response['sessions'];
       final rawClosedDates = response['closed_dates'];
       final rawBookedSlots = response['booked_slots'];
+      if (response['is_configured'] != true) {
+        throw const FormatException(
+          'The clinic has not configured appointment availability yet. Please try again later.',
+        );
+      }
       if (rawSessions is! List ||
           rawSessions.isEmpty ||
           response['timezone'] is! String ||
           response['booking_window_days'] is! num ||
+          response['slot_interval_minutes'] is! num ||
+          response['appointment_duration_minutes'] is! num ||
           response['weekly_closed_weekdays'] is! List ||
           rawClosedDates is! List ||
           rawBookedSlots is! List) {
@@ -119,14 +145,38 @@ class _AppointmentDatePickerBottomSheetState
         );
       }
       setState(() {
-        _bookingWindowDays =
-            (response['booking_window_days'] as num?)?.toInt() ?? 90;
-        _timezone = response['timezone']?.toString() ?? 'Asia/Kolkata';
+        _bookingWindowDays = (response['booking_window_days'] as num).toInt();
+        _slotIntervalMinutes = (response['slot_interval_minutes'] as num)
+            .toInt();
+        _appointmentDurationMinutes =
+            (response['appointment_duration_minutes'] as num).toInt();
+        _timezone = response['timezone'] as String;
+        try {
+          final location = tz.getLocation(_timezone);
+          if (widget.initialDate != null) {
+            final clinicInitial = tz.TZDateTime.from(
+              widget.initialDate!,
+              location,
+            );
+            _selectedDate = DateTime(
+              clinicInitial.year,
+              clinicInitial.month,
+              clinicInitial.day,
+            );
+          } else {
+            final now = _clinicNow;
+            _focusedMonth = DateTime(now.year, now.month);
+          }
+        } catch (_) {
+          // Keep the device-local calendar if the server returns an unsupported timezone.
+        }
         _closedWeekdays = rawWeekdays
             .whereType<num>()
             .map((day) => day.toInt())
             .toSet();
         _sessions = sessions;
+        _clinicName = response['clinic_name']?.toString() ?? '';
+        _doctorName = response['doctor_name']?.toString() ?? '';
         _closedDates = rawClosedDates
             .whereType<Map>()
             .map((item) => item['date']?.toString() ?? '')
@@ -143,7 +193,8 @@ class _AppointmentDatePickerBottomSheetState
           _selectedSlot = null;
         }
       });
-    } catch (_) {
+      widget.onScheduleLoaded?.call(Map<String, dynamic>.from(response));
+    } catch (error) {
       if (!mounted ||
           month.year != _focusedMonth.year ||
           month.month != _focusedMonth.month) {
@@ -151,14 +202,14 @@ class _AppointmentDatePickerBottomSheetState
       }
       setState(() {
         _isLoadingAvailability = false;
-        _availabilityError = 'Appointment availability could not be loaded.';
+        _availabilityError = _errorMessageForAvailability(error);
         _selectedSlot = null;
       });
     }
   }
 
   DateTime? _firstSelectableDateInMonth(DateTime month) {
-    final today = DateTime.now();
+    final today = _clinicNow;
     final startDay = month.year == today.year && month.month == today.month
         ? today.day
         : 1;
@@ -175,15 +226,13 @@ class _AppointmentDatePickerBottomSheetState
   bool _isHoliday(DateTime date) => _closedDates.contains(_dateKey(date));
 
   bool _isPastDay(DateTime date) {
-    final today = DateTime.now();
+    final today = _clinicNow;
     final startOfToday = DateTime(today.year, today.month, today.day);
     return date.isBefore(startOfToday);
   }
 
   bool _isDateSelectable(DateTime date) {
-    final lastBookableDate = DateTime.now().add(
-      Duration(days: _bookingWindowDays),
-    );
+    final lastBookableDate = _clinicNow.add(Duration(days: _bookingWindowDays));
     return !_isLoadingAvailability &&
         _availabilityError == null &&
         !_isPastDay(date) &&
@@ -217,10 +266,18 @@ class _AppointmentDatePickerBottomSheetState
     final closes = _minutesFromClock(session['closes_at']?.toString());
     if (opens == null || closes == null || closes < opens) return const [];
     return [
-      for (var minutes = opens; minutes <= closes; minutes += 30)
+      for (
+        var minutes = opens;
+        minutes + _appointmentDurationMinutes <= closes;
+        minutes += _slotIntervalMinutes
+      )
         _formatSlot(minutes),
     ];
   }
+
+  String _errorMessageForAvailability(Object error) => error is FormatException
+      ? error.message
+      : 'Appointment availability could not be loaded. Check your connection and refresh.';
 
   List<String> _slotsForDate(DateTime date) => _sessions
       .expand(_slotsForSession)
@@ -248,16 +305,27 @@ class _AppointmentDatePickerBottomSheetState
     final minute = int.parse(timeParts[1]);
     if (parts[1] == 'PM' && hour != 12) hour += 12;
     if (parts[1] == 'AM' && hour == 12) hour = 0;
-    return DateTime(date.year, date.month, date.day, hour, minute);
+    try {
+      return tz.TZDateTime(
+        tz.getLocation(_timezone),
+        date.year,
+        date.month,
+        date.day,
+        hour,
+        minute,
+      );
+    } catch (_) {
+      return DateTime(date.year, date.month, date.day, hour, minute);
+    }
   }
 
   bool _isSlotPast(DateTime date, String slotStr) {
     final slotTime = _combineDateAndTime(date, slotStr);
-    return slotTime.isBefore(DateTime.now());
+    return slotTime.isBefore(_clinicNow);
   }
 
   void _nextMonth() {
-    final today = DateTime.now();
+    final today = _clinicNow;
     final lastBookableDate = today.add(Duration(days: _bookingWindowDays));
     final nextMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
     if (nextMonth.isAfter(
@@ -274,7 +342,7 @@ class _AppointmentDatePickerBottomSheetState
   }
 
   void _prevMonth() {
-    final now = DateTime.now();
+    final now = _clinicNow;
     if (_focusedMonth.year == now.year && _focusedMonth.month <= now.month) {
       return; // Cannot go prior to current month
     }
@@ -310,7 +378,7 @@ class _AppointmentDatePickerBottomSheetState
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
+    final now = _clinicNow;
     final canGoPrev =
         _focusedMonth.year > now.year || _focusedMonth.month > now.month;
     final lastBookableDate = now.add(Duration(days: _bookingWindowDays));
@@ -349,7 +417,7 @@ class _AppointmentDatePickerBottomSheetState
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -363,7 +431,10 @@ class _AppointmentDatePickerBottomSheetState
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Dr. Jai Bansal · Dr. Hair & Cosmodent Clinic · Jaipur',
+                        [
+                          _doctorName,
+                          _clinicName,
+                        ].where((item) => item.isNotEmpty).join(' · '),
                         style: TextStyle(
                           fontSize: 11,
                           color: AppColors.secondaryDark,
@@ -504,8 +575,10 @@ class _AppointmentDatePickerBottomSheetState
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Dr. Jai Bansal Sitting Slots',
+                      Text(
+                        _doctorName.isEmpty
+                            ? 'Available clinic slots'
+                            : '$_doctorName · Available slots',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
@@ -721,7 +794,7 @@ class _AppointmentDatePickerBottomSheetState
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'Dr. Jai Bansal\'s clinic is closed on Sundays (Weekly Off).',
+                                  'The clinic is closed on this day.',
                                 ),
                                 duration: Duration(seconds: 2),
                               ),

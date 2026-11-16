@@ -1,9 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/routes/route_names.dart';
+import '../../../../core/utils/whatsapp_launcher.dart';
 import '../../domain/models/ai_assessment_model.dart';
 
 /// AI screening summary, possible factors, nutrition, lifestyle, and daily routine.
@@ -206,6 +205,46 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
           ),
 
           const SizedBox(height: 16),
+
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '$score',
+                style: const TextStyle(
+                  fontSize: 36,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primaryDark,
+                  letterSpacing: -1.2,
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(left: 3, bottom: 4),
+                child: Text(
+                  '/100',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  ai.stageClassification,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.3,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primaryDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
 
           Container(
             width: double.infinity,
@@ -726,9 +765,8 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
             ),
           const SizedBox(height: 6),
           TextButton.icon(
-            onPressed: () => context.push(
-              RouteNames.contact,
-              extra:
+            onPressed: () => WhatsAppLauncher.launch(
+              message:
                   'I would like a clinician to review my AI meal plan because it may not be suitable for me. Assessment reference: ${widget.assessmentReferenceNo ?? 'not available'}.',
             ),
             icon: const Icon(LucideIcons.flag, size: 15),

@@ -6,6 +6,10 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class ApiEndpoints {
   ApiEndpoints._();
 
+  /// Set by widget tests before the app is pumped to keep smoke tests off any
+  /// configured real backend. Production code should use build-time/env URLs.
+  static String? testOverride;
+
   static String get baseUrl => backendBaseUrl;
 
   /// Returns the configured backend Base URL:
@@ -18,6 +22,10 @@ class ApiEndpoints {
   );
 
   static String get backendBaseUrl {
+    final testUrl = testOverride;
+    if (testUrl != null && testUrl.trim().isNotEmpty) {
+      return testUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    }
     if (_buildBackendUrl.trim().isNotEmpty) {
       return _buildBackendUrl.trim().replaceAll(RegExp(r'/+$'), '');
     }
@@ -99,6 +107,7 @@ class ApiEndpoints {
   // 7. Commerce & Orders Endpoints (/api/v1/commerce, /api/v1/patient)
   // ---------------------------------------------------------------------------
   static const String commerceCheckout = '/api/v1/commerce/checkout';
+  static const String commerceShippingQuote = '/api/v1/commerce/shipping/quote';
   static const String commerceVerifyPayment = '/api/v1/commerce/verify-payment';
   static const String patientAddresses = '/api/v1/patient/addresses';
   static String patientAddressById(String id) =>
@@ -110,6 +119,8 @@ class ApiEndpoints {
       '${patientOrderById(orderId)}/tracking';
   static String patientOrderCancel(String orderId) =>
       '/api/v1/patient/orders/${Uri.encodeComponent(orderId)}/cancel';
+  static String patientOrderPaymentReconciliation(String orderId) =>
+      '${patientOrderById(orderId)}/reconcile-payment';
 
   // ---------------------------------------------------------------------------
   // 8. Content, FAQs & Policies Endpoints (/api/v1/content)
@@ -147,6 +158,7 @@ class ApiEndpoints {
   // 11. Care, Clinical & Diet Endpoints (/api/v1/patient)
   // ---------------------------------------------------------------------------
   static const String patientClinicalRecord = '/api/v1/patient/clinical-record';
+  static const String patientAssistantChat = '/api/v1/patient/assistant/chat';
   static const String patientHomeSummary = '/api/v1/patient/home-summary';
   static const String patientDietPlan = '/api/v1/patient/diet-plan';
   static const String patientRoutineSteps = '/api/v1/patient/routine-steps';

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,6 +10,8 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/routes/app_destination.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
+import '../../data/services/pincode_delivery_service.dart';
+import '../../data/datasources/commerce_remote_data_source.dart';
 import '../viewmodels/cart_cubit.dart';
 import '../viewmodels/product_details_cubit.dart';
 import '../viewmodels/product_details_state.dart';
@@ -543,7 +546,7 @@ class _ProductDetailsContentState extends State<_ProductDetailsContent>
                                     ),
                                     SizedBox(width: 4),
                                     Text(
-                                      'In Stock • Ships Free',
+                                      'In Stock',
                                       style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w700,
@@ -845,6 +848,12 @@ class _ProductDetailsContentState extends State<_ProductDetailsContent>
                                 ),
                               ],
                             ),
+                          ),
+
+                          const SizedBox(height: 18),
+                          _PincodeDeliveryCard(
+                            productId: product.id,
+                            plan: state.selectedSupplyPlan.title,
                           ),
                         ],
                       ),
@@ -1230,9 +1239,12 @@ class _ProductDetailsContentState extends State<_ProductDetailsContent>
                                 width: double.infinity,
                                 height: 50,
                                 child: FilledButton.icon(
-                                  onPressed: product.inStock
+                                  onPressed:
+                                      product.inStock &&
+                                          state.supplyPlans.isNotEmpty &&
+                                          cart != null
                                       ? () {
-                                          cart?.addProduct(
+                                          cart.addProduct(
                                             product: product,
                                             plan: state.selectedSupplyPlan,
                                             quantity: state.quantity,
@@ -1246,9 +1258,13 @@ class _ProductDetailsContentState extends State<_ProductDetailsContent>
                                     size: 18,
                                   ),
                                   label: Text(
-                                    product.inStock
-                                        ? 'Add to cart · ₹${state.totalPrice}'
-                                        : 'Currently unavailable',
+                                    !product.inStock
+                                        ? 'Currently unavailable'
+                                        : state.supplyPlans.isEmpty
+                                        ? 'Purchase options unavailable'
+                                        : cart == null
+                                        ? 'Cart unavailable'
+                                        : 'Add to cart · ₹${state.totalPrice}',
                                   ),
                                   style: FilledButton.styleFrom(
                                     backgroundColor: AppColors.primary,
@@ -1799,6 +1815,265 @@ class _FullscreenGalleryViewerState extends State<_FullscreenGalleryViewer> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PincodeDeliveryCard extends StatefulWidget {
+  final String productId;
+  final String plan;
+
+  const _PincodeDeliveryCard({required this.productId, required this.plan});
+
+  @override
+  State<_PincodeDeliveryCard> createState() => _PincodeDeliveryCardState();
+}
+
+class _PincodeDeliveryCardState extends State<_PincodeDeliveryCard> {
+  late final TextEditingController _controller;
+  final CommerceRemoteDataSource _commerce = CommerceRemoteDataSource();
+  Map<String, dynamic>? _quote;
+  String? _error;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final saved = PincodeDeliveryService.getSavedPincode() ?? '';
+    _controller = TextEditingController(text: saved);
+    if (PincodeDeliveryService.isValidPincode(saved)) _checkPincode();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PincodeDeliveryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.productId != widget.productId ||
+        oldWidget.plan != widget.plan) {
+      _quote = null;
+      _checkPincode();
+    }
+  }
+
+  Future<void> _checkPincode() async {
+    final pin = _controller.text.trim();
+    if (!PincodeDeliveryService.isValidPincode(pin)) {
+      setState(() {
+        _quote = null;
+        _error = 'Enter a valid 6-digit PIN code.';
+      });
+      return;
+    }
+    HapticFeedback.lightImpact();
+    await PincodeDeliveryService.rememberPincode(pin);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final quote = await _commerce.getShippingQuote(
+        deliveryPincode: pin,
+        paymentGateway: 'razorpay',
+        items: [
+          {'productId': widget.productId, 'plan': widget.plan, 'quantity': 1},
+        ],
+      );
+      if (mounted) {
+        setState(() {
+          _quote = quote;
+          _error = null;
+        });
+      }
+    } catch (error) {
+      final message = error is DioException && error.response?.data is Map
+          ? ((error.response!.data as Map)['message']?.toString() ??
+                'Delivery is unavailable for this PIN code.')
+          : 'Delivery quote is unavailable. Please try again later.';
+      if (mounted) {
+        setState(() {
+          _quote = null;
+          _error = message;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final quote = _quote;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                LucideIcons.mapPin,
+                size: 16,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Delivery & Availability',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primaryDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (quote != null) ...[
+            Row(
+              children: [
+                const Icon(
+                  LucideIcons.truck,
+                  size: 16,
+                  color: Color(0xFF059669),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${quote['courier'] ?? 'Courier available'} • ₹${((quote['shipping_fee'] as num?) ?? 0).toStringAsFixed(0)}${(quote['estimated_delivery'] ?? '').toString().isNotEmpty ? ' • ${quote['estimated_delivery']}' : ''}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Live courier availability for ${quote['destination_pincode'] ?? _controller.text}. COD availability is confirmed at checkout.',
+              style: const TextStyle(
+                fontSize: 11.5,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 42,
+                    child: TextField(
+                      controller: _controller,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(6),
+                      ],
+                      onSubmitted: (_) => _checkPincode(),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.0,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Enter 6-digit Pincode',
+                        hintStyle: const TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.textMuted,
+                          letterSpacing: 0,
+                        ),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        fillColor: Colors.white,
+                        filled: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFCBD5E1),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFCBD5E1),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  height: 42,
+                  child: FilledButton(
+                    onPressed: _loading ? null : _checkPincode,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                    child: _loading
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Check',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.danger,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ],
       ),
     );
   }

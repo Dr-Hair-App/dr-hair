@@ -8,6 +8,8 @@ import 'package:dr_hair/features/shop/data/models/product_model.dart';
 import 'package:dr_hair/features/shop/presentation/viewmodels/products_cubit.dart';
 import 'package:dr_hair/features/shop/presentation/viewmodels/products_state.dart';
 
+import '../../helpers/product_test_fixtures.dart';
+
 Widget _reportApp(
   HairTestCubit cubit, {
   List<ProductItem> products = const [],
@@ -175,7 +177,7 @@ void main() {
       'only suggests an AI-matched item when the catalog says in stock',
       (tester) async {
         final cubit = HairTestCubit();
-        final liveProduct = ProductItem.demoCatalog.first;
+        final liveProduct = ProductTestFixtures.catalog.first;
         final ai = AiAssessmentModel(
           isAvailable: true,
           scalpHealthScore: 74,

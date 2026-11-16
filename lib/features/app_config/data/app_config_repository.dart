@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/constants/api_endpoints.dart';
@@ -22,8 +23,8 @@ class AppConfigRepository {
   final AppLocalCache _cache;
 
   AppConfigRepository({DioClient? dioClient, AppLocalCache? cache})
-      : _dioClient = dioClient ?? DioClient(),
-        _cache = cache ?? AppLocalCache.instance;
+    : _dioClient = dioClient ?? DioClient(),
+      _cache = cache ?? AppLocalCache.instance;
 
   static const String _cacheKey = 'cached_feature_flags_v1';
   static const String _billingCacheKey = 'cached_appointment_billing_v1';
@@ -96,12 +97,16 @@ class AppConfigRepository {
           await _cache.put(_cacheKey, jsonEncode(featuresResult));
         }
 
-        AppointmentBillingConfig billingResult = const AppointmentBillingConfig();
+        AppointmentBillingConfig billingResult =
+            const AppointmentBillingConfig();
         if (billingData is Map) {
           billingResult = AppointmentBillingConfig.fromJson(
             Map<String, dynamic>.from(billingData),
           );
-          await _cache.put(_billingCacheKey, jsonEncode(billingResult.toJson()));
+          await _cache.put(
+            _billingCacheKey,
+            jsonEncode(billingResult.toJson()),
+          );
         }
 
         return AppConfigBundle(
@@ -123,4 +128,3 @@ class AppConfigRepository {
     return bundle.features;
   }
 }
-

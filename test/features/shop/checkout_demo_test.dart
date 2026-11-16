@@ -7,7 +7,7 @@ import 'package:dr_hair/features/shop/presentation/views/checkout_view.dart';
 import 'package:dr_hair/features/shop/presentation/viewmodels/cart_cubit.dart';
 
 void main() {
-  group('CheckoutView Demo Behavior & Policy Links Tests', () {
+  group('CheckoutView server-backed checkout states', () {
     Widget createTestApp({List<DeliveryAddress>? initialAddresses}) {
       return BlocProvider<CartCubit>(
         create: (_) => CartCubit(),
@@ -17,113 +17,133 @@ void main() {
       );
     }
 
-    testWidgets('renders delivery required, payment provider note, and order breakdown', (tester) async {
-      await tester.pumpWidget(createTestApp());
-      await tester.pumpAndSettle();
+    testWidgets(
+      'renders delivery required, payment provider note, and order breakdown',
+      (tester) async {
+        await tester.pumpWidget(createTestApp());
+        await tester.pumpAndSettle();
 
-      expect(find.text('Checkout'), findsOneWidget);
-      expect(find.text('DELIVERY ADDRESS'), findsOneWidget);
-      expect(find.text('Delivery address required'), findsOneWidget);
-      expect(find.text('PAYMENT METHOD'), findsOneWidget);
-      expect(find.text('Pay on Delivery / Pay at Clinic'), findsOneWidget);
-      expect(find.text('Items Total'), findsOneWidget);
-      expect(find.text('₹0'), findsWidgets);
-    });
+        expect(find.text('Checkout'), findsOneWidget);
+        expect(find.text('DELIVERY ADDRESS'), findsOneWidget);
+        expect(find.text('Delivery address required'), findsOneWidget);
+        expect(find.text('PAYMENT METHOD'), findsOneWidget);
+        expect(find.text('Cash on Delivery'), findsOneWidget);
+        expect(find.text('Items Total'), findsOneWidget);
+        expect(find.text('₹0'), findsWidgets);
+      },
+    );
 
-    testWidgets('displays checkout verification note and validates delivery address before order placement', (tester) async {
-      await tester.pumpWidget(createTestApp());
-      await tester.pumpAndSettle();
+    testWidgets(
+      'displays checkout verification note and validates delivery address before order placement',
+      (tester) async {
+        await tester.pumpWidget(createTestApp());
+        await tester.pumpAndSettle();
 
-      expect(find.textContaining('Orders are verified with server-determined pricing'), findsOneWidget);
-      expect(find.textContaining('Place Order'), findsOneWidget);
+        expect(
+          find.textContaining(
+            'Orders are verified with server-determined pricing',
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Place Order'), findsOneWidget);
 
-      // Tap Place Order button
-      await tester.tap(find.textContaining('Place Order'));
-      await tester.pumpAndSettle();
+        final placeOrder = tester.widget<ElevatedButton>(
+          find.ancestor(
+            of: find.textContaining('Place Order'),
+            matching: find.byType(ElevatedButton),
+          ),
+        );
+        expect(
+          placeOrder.onPressed,
+          isNull,
+          reason: 'Checkout must stay disabled until address and live shipping quote are available.',
+        );
+      },
+    );
 
-      expect(
-        find.text('Select a delivery address first.'),
-        findsOneWidget,
-      );
-    });
+    testWidgets(
+      'renders clickable policy links for Terms, Privacy, and Returns',
+      (tester) async {
+        await tester.pumpWidget(createTestApp());
+        await tester.pumpAndSettle();
 
-    testWidgets('renders clickable policy links for Terms, Privacy, and Returns', (tester) async {
-      await tester.pumpWidget(createTestApp());
-      await tester.pumpAndSettle();
+        expect(find.text('Terms & Conditions'), findsOneWidget);
+        expect(find.text('Privacy Policy'), findsOneWidget);
+        expect(find.text('Returns & Refunds'), findsOneWidget);
+      },
+    );
 
-      expect(find.text('Terms & Conditions'), findsOneWidget);
-      expect(find.text('Privacy Policy'), findsOneWidget);
-      expect(find.text('Returns & Refunds'), findsOneWidget);
-    });
+    testWidgets(
+      'tapping Change opens delivery address sheet, allows selecting and updating address',
+      (tester) async {
+        const testAddresses = [
+          DeliveryAddress(
+            id: 'addr_1',
+            name: 'Yashveer Soni',
+            phone: '+91 98765 43210',
+            houseNumber: 'Flat 402',
+            street: 'Royal Residency',
+            city: 'Jaipur',
+            state: 'Rajasthan',
+            pinCode: '302001',
+            tag: 'Home',
+            isDefault: true,
+          ),
+          DeliveryAddress(
+            id: 'addr_2',
+            name: 'Yashveer Soni',
+            phone: '+91 98765 43210',
+            houseNumber: 'Tower B, Suite 10',
+            street: 'World Trade Park',
+            city: 'Jaipur',
+            state: 'Rajasthan',
+            pinCode: '302020',
+            tag: 'Work',
+            isDefault: false,
+          ),
+        ];
+        await tester.pumpWidget(createTestApp(initialAddresses: testAddresses));
+        await tester.pumpAndSettle();
 
-    testWidgets('tapping Change opens delivery address sheet, allows selecting and updating address', (tester) async {
-      const testAddresses = [
-        DeliveryAddress(
-          id: 'addr_1',
-          name: 'Yashveer Soni',
-          phone: '+91 98765 43210',
-          houseNumber: 'Flat 402',
-          street: 'Royal Residency',
-          city: 'Jaipur',
-          state: 'Rajasthan',
-          pinCode: '302001',
-          tag: 'Home',
-          isDefault: true,
-        ),
-        DeliveryAddress(
-          id: 'addr_2',
-          name: 'Yashveer Soni',
-          phone: '+91 98765 43210',
-          houseNumber: 'Tower B, Suite 10',
-          street: 'World Trade Park',
-          city: 'Jaipur',
-          state: 'Rajasthan',
-          pinCode: '302020',
-          tag: 'Work',
-          isDefault: false,
-        ),
-      ];
-      await tester.pumpWidget(createTestApp(initialAddresses: testAddresses));
-      await tester.pumpAndSettle();
+        // Tap Change to open delivery address bottom sheet
+        await tester.tap(find.text('Change'));
+        await tester.pumpAndSettle();
 
-      // Tap Change to open delivery address bottom sheet
-      await tester.tap(find.text('Change'));
-      await tester.pumpAndSettle();
+        // Bottom sheet header and saved addresses
+        expect(find.text('Select Delivery Address'), findsOneWidget);
+        expect(find.text('SAVED ADDRESSES'), findsOneWidget);
+        expect(find.text('Add New Delivery Address'), findsOneWidget);
+        expect(find.text('HOME'), findsWidgets);
+        expect(find.text('WORK'), findsOneWidget);
+        expect(find.textContaining('Flat 402, Royal Residency'), findsWidgets);
 
-      // Bottom sheet header and saved addresses
-      expect(find.text('Select Delivery Address'), findsOneWidget);
-      expect(find.text('SAVED ADDRESSES'), findsOneWidget);
-      expect(find.text('Add New Delivery Address'), findsOneWidget);
-      expect(find.text('HOME'), findsWidgets);
-      expect(find.text('WORK'), findsOneWidget);
-      expect(find.textContaining('Flat 402, Royal Residency'), findsWidgets);
+        // Tap "Deliver to this Address"
+        await tester.tap(find.text('Deliver to this Address'));
+        await tester.pumpAndSettle();
 
-      // Tap "Deliver to this Address"
-      await tester.tap(find.text('Deliver to this Address'));
-      await tester.pumpAndSettle();
+        // The checkout address card updates with the selected address
+        expect(find.text('Delivery address required'), findsNothing);
+        expect(find.text('Yashveer Soni'), findsOneWidget);
+        expect(find.textContaining('Royal Residency'), findsOneWidget);
+        expect(find.text('HOME'), findsOneWidget);
 
-      // The checkout address card updates with the selected address
-      expect(find.text('Delivery address required'), findsNothing);
-      expect(find.text('Yashveer Soni'), findsOneWidget);
-      expect(find.textContaining('Royal Residency'), findsOneWidget);
-      expect(find.text('HOME'), findsOneWidget);
+        // Tap address card to reopen sheet
+        await tester.tap(find.text('Yashveer Soni'));
+        await tester.pumpAndSettle();
 
-      // Tap address card to reopen sheet
-      await tester.tap(find.text('Yashveer Soni'));
-      await tester.pumpAndSettle();
+        expect(find.text('Select Delivery Address'), findsOneWidget);
 
-      expect(find.text('Select Delivery Address'), findsOneWidget);
+        // Select WORK address
+        await tester.tap(find.text('WORK'));
+        await tester.pumpAndSettle();
 
-      // Select WORK address
-      await tester.tap(find.text('WORK'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Deliver to this Address'));
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Deliver to this Address'));
-      await tester.pumpAndSettle();
-
-      // Verified WORK address updated on card
-      expect(find.text('WORK'), findsOneWidget);
-      expect(find.textContaining('World Trade Park'), findsOneWidget);
-    });
+        // Verified WORK address updated on card
+        expect(find.text('WORK'), findsOneWidget);
+        expect(find.textContaining('World Trade Park'), findsOneWidget);
+      },
+    );
   });
 }

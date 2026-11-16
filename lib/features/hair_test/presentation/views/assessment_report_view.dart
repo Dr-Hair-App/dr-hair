@@ -12,8 +12,10 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../../../core/widgets/photo_source_bottom_sheet.dart';
 import '../../../care/presentation/viewmodels/care_cubit.dart';
+import '../../../assistant_chat/presentation/views/assistant_chat_view.dart';
 import '../../../shop/data/models/product_model.dart';
 import '../../../shop/presentation/viewmodels/cart_cubit.dart';
+import '../../data/services/assessment_pdf_generator.dart';
 import '../../domain/models/ai_assessment_model.dart';
 import '../viewmodels/hair_test_cubit.dart';
 import '../viewmodels/hair_test_state.dart';
@@ -180,6 +182,11 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               ),
             ),
             actions: [
+              IconButton(
+                tooltip: 'Open Dr. Hair Assistant',
+                onPressed: () => showAssistantChatSheet(context),
+                icon: const Icon(LucideIcons.messageCircleMore),
+              ),
               TextButton(
                 onPressed: () {
                   context.read<HairTestCubit>().startRetest();
@@ -257,6 +264,89 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                   },
                             isGeneratingDietPlan: state.isGeneratingDietPlan,
                             dietPlanError: state.dietPlanError,
+                          ),
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0FDFA),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: const Color(0xFF99F6E4),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF0F766E),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    LucideIcons.fileText,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Official Clinical Summary (PDF)',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF134E4A),
+                                        ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'Doctor-signed prescription slip with diagnosis & regimen.',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Color(0xFF0F766E),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  onPressed: () =>
+                                      AssessmentPdfGenerator.downloadOrPrint(
+                                        widget.state,
+                                      ),
+                                  icon: const Icon(
+                                    LucideIcons.download,
+                                    size: 13,
+                                  ),
+                                  label: const Text(
+                                    'PDF',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF0F766E),
+                                    side: const BorderSide(
+                                      color: Color(0xFF0F766E),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ] else if (state.referenceNo != null &&
                             state.referenceNo!.isNotEmpty) ...[
@@ -524,6 +614,62 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                               'Book consultation',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () =>
+                                AssessmentPdfGenerator.downloadOrPrint(
+                                  widget.state,
+                                ),
+                            icon: const Icon(LucideIcons.fileDown, size: 14),
+                            label: const Text(
+                              'Download PDF',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              side: const BorderSide(color: AppColors.primary),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () =>
+                                AssessmentPdfGenerator.sharePdf(widget.state),
+                            icon: const Icon(LucideIcons.share2, size: 14),
+                            label: const Text(
+                              'Share Summary',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primaryDark,
+                              side: const BorderSide(color: AppColors.border),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                             ),
                           ),
                         ),
@@ -1676,9 +1822,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               width: 58,
               height: 58,
               child: CustomCachedImage(
-                imageUrl: product.images.isNotEmpty
-                    ? product.images.first
-                    : ProductItem.fallbackProductImageUrl,
+                imageUrl: product.images.isNotEmpty ? product.images.first : '',
                 fit: BoxFit.cover,
               ),
             ),
@@ -2301,7 +2445,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
       child: Row(
         children: [
           Container(
-            width: 45,
+            width: 55,
             height: 24,
             alignment: Alignment.center,
             decoration: const BoxDecoration(

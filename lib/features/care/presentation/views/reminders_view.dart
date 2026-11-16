@@ -10,6 +10,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../domain/models/care_models.dart';
+import '../../data/services/care_notification_service.dart';
 import '../viewmodels/care_cubit.dart';
 import '../viewmodels/care_state.dart';
 import '../widgets/add_reminder_bottom_sheet.dart';
@@ -231,45 +232,9 @@ class RemindersView extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              careCard(
-                backgroundColor: AppColors.primary5,
-                border: Border.all(color: AppColors.primary100),
-                child: const Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      LucideIcons.bellOff,
-                      color: AppColors.primary,
-                      size: 22,
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Scheduled alerts are unavailable',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primaryDark,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Your reminders sync with your account, but this app build will not send timed alerts. We will ask for notification permission when alerts are supported.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              height: 1.4,
-                              color: AppColors.secondaryDark,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              if (state.notificationPermissionStatus !=
+                  NotificationPermissionStatus.granted)
+                _notificationPermissionCard(context, state),
 
               const SizedBox(height: 8),
 
@@ -609,6 +574,72 @@ class RemindersView extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _notificationPermissionCard(BuildContext context, CareState state) {
+    final status = state.notificationPermissionStatus;
+    final isUnavailable = status == NotificationPermissionStatus.unavailable;
+    final isDenied = status == NotificationPermissionStatus.denied;
+    final title = isUnavailable
+        ? 'Scheduled alerts are unavailable'
+        : isDenied
+        ? 'Notifications are turned off'
+        : 'Get care reminders on time';
+    final body = isUnavailable
+        ? 'Timed care alerts are supported on the Dr. Hair iOS and Android apps.'
+        : isDenied
+        ? 'Allow notifications for Dr. Hair in your device settings to receive scheduled care alerts.'
+        : 'Turn on notifications to receive your care reminders at the times you choose.';
+
+    return careCard(
+      backgroundColor: AppColors.primary5,
+      border: Border.all(color: AppColors.primary100),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isDenied || isUnavailable ? LucideIcons.bellOff : LucideIcons.bell,
+            color: AppColors.primary,
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primaryDark,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: AppColors.secondaryDark,
+                  ),
+                ),
+                if (status == NotificationPermissionStatus.notDetermined) ...[
+                  const SizedBox(height: 10),
+                  TextButton.icon(
+                    onPressed: () => context
+                        .read<CareCubit>()
+                        .requestNotificationPermission(),
+                    icon: const Icon(LucideIcons.bell, size: 16),
+                    label: const Text('Turn on notifications'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

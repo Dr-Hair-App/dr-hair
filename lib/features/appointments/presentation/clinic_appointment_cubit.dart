@@ -44,7 +44,12 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
     loadError = null;
     try {
       final records = await api.list(activeToken);
-      emit(records.map(ClinicAppointment.fromJson).whereType<ClinicAppointment>().toList());
+      emit(
+        records
+            .map(ClinicAppointment.fromJson)
+            .whereType<ClinicAppointment>()
+            .toList(),
+      );
       await _persist();
     } catch (error) {
       loadError = error.toString();
@@ -60,7 +65,8 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
     return state.where((item) {
       if (item.patientId == cleanPatientId) return true;
       if (cleanUserId.isNotEmpty &&
-          (item.patientId == cleanUserId || item.patientId.contains(cleanUserId))) {
+          (item.patientId == cleanUserId ||
+              item.patientId.contains(cleanUserId))) {
         return true;
       }
       if (cleanPatientId.isNotEmpty &&
@@ -69,8 +75,7 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
         return true;
       }
       return false;
-    }).toList()
-      ..sort((a, b) => b.startsAt.compareTo(a.startsAt));
+    }).toList()..sort((a, b) => b.startsAt.compareTo(a.startsAt));
   }
 
   Future<String?> verifyAndBookPaidAppointment({
@@ -115,7 +120,7 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
     required DateTime startsAt,
     required String reason,
     String? replacingId,
-    int consultationFee = 500,
+    int? consultationFee,
     String paymentMethod = 'Pay at clinic',
     String paymentStatus = 'Pending',
     String? paymentTransactionId,
@@ -123,22 +128,10 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
     if (patientId.isEmpty || patientId == 'GUEST') {
       return 'Sign in to save an appointment request.';
     }
-    if (startsAt.isBefore(DateTime.now().add(const Duration(hours: 1)))) {
-      return 'Choose a time at least one hour from now.';
-    }
-    if (startsAt.isAfter(DateTime.now().add(const Duration(days: 90)))) {
-      return 'Choose a time within the next 90 days.';
+    if (startsAt.isBefore(DateTime.now())) {
+      return 'Choose a future clinic slot.';
     }
     if (reason.trim().isEmpty) return 'Choose a reason for your visit.';
-    if (state.any(
-      (item) =>
-          item.patientId == patientId &&
-          item.id != replacingId &&
-          item.status != 'Cancelled' &&
-          item.startsAt.difference(startsAt).inMinutes.abs() < 30,
-    )) {
-      return 'You already have a request close to this time.';
-    }
     if (replacingId != null &&
         !state.any(
           (item) =>
@@ -149,56 +142,37 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
       return 'This appointment request is no longer available.';
     }
     final activeToken = accessToken ?? await SecureSessionStore().readToken();
-    if (activeToken != null && activeToken.isNotEmpty) {
-      try {
-        if (replacingId == null) {
-          final res = await api.create(
-            token: activeToken,
-            startsAt: startsAt,
-            reason: reason.trim(),
-            consultationFee: consultationFee,
-            paymentMethod: paymentMethod,
-            paymentStatus: paymentStatus == 'Paid' ? 'Pending' : paymentStatus,
-            paymentTransactionId: paymentTransactionId,
-          );
-          final createdApt = ClinicAppointment.fromJson(res);
-          if (createdApt != null) {
-            emit([createdApt, ...state.where((i) => i.id != createdApt.id)]);
-            await _persist();
-          }
-        } else {
-          await api.update(
-            token: activeToken,
-            appointmentId: replacingId,
-            data: {'action': 'reschedule', 'starts_at': startsAt.toUtc().toIso8601String()},
-          );
-        }
-        await loadFromApi(activeToken);
-        return null;
-      } catch (error) {
-        return _errorMessage(error, 'Appointment request could not be saved.');
-      }
+    if (activeToken == null || activeToken.isEmpty) {
+      return 'Your session has expired. Sign in again to book this appointment.';
     }
-    final appointment = ClinicAppointment(
-      id: replacingId ?? 'APT-${DateTime.now().microsecondsSinceEpoch}',
-      patientId: patientId,
-      startsAt: startsAt,
-      reason: reason.trim(),
-      consultationFee: consultationFee,
-      paymentMethod: paymentMethod,
-      paymentStatus: paymentStatus,
-      paymentTransactionId: paymentTransactionId ?? '',
-      tokenNumber: 'OPD-${state.length + 1}'.padLeft(8, '0'),
-    );
-    emit(
-      replacingId == null
-          ? [appointment, ...state]
-          : state
-                .map((item) => item.id == replacingId ? appointment : item)
-                .toList(),
-    );
-    await _persist();
-    return null;
+    try {
+      if (replacingId == null) {
+        final res = await api.create(
+          token: activeToken,
+          startsAt: startsAt,
+          reason: reason.trim(),
+          paymentMethod: paymentMethod,
+        );
+        final createdApt = ClinicAppointment.fromJson(res);
+        if (createdApt != null) {
+          emit([createdApt, ...state.where((i) => i.id != createdApt.id)]);
+          await _persist();
+        }
+      } else {
+        await api.update(
+          token: activeToken,
+          appointmentId: replacingId,
+          data: {
+            'action': 'reschedule',
+            'starts_at': startsAt.toUtc().toIso8601String(),
+          },
+        );
+      }
+      await loadFromApi(activeToken);
+      return null;
+    } catch (error) {
+      return _errorMessage(error, 'Appointment request could not be saved.');
+    }
   }
 
   Future<String?> reschedule({
@@ -210,20 +184,12 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
     if (patientId.isEmpty || patientId == 'GUEST') {
       return 'Sign in to reschedule your appointment.';
     }
-    if (newStartsAt.isBefore(DateTime.now().add(const Duration(hours: 1)))) {
-      return 'Choose a time at least one hour from now.';
+    final activeToken = accessToken ?? await SecureSessionStore().readToken();
+    if (activeToken == null || activeToken.isEmpty) {
+      return 'Your session has expired. Sign in again to reschedule.';
     }
-    if (newStartsAt.isAfter(DateTime.now().add(const Duration(days: 90)))) {
-      return 'Choose a time within the next 90 days.';
-    }
-    if (state.any(
-      (item) =>
-          item.patientId == patientId &&
-          item.id != id &&
-          item.status != 'Cancelled' &&
-          item.startsAt.difference(newStartsAt).inMinutes.abs() < 30,
-    )) {
-      return 'You already have an appointment request close to this time.';
+    if (newStartsAt.isBefore(DateTime.now())) {
+      return 'Choose a future clinic slot.';
     }
 
     // Direct optimistic update so screen updates immediately
@@ -238,60 +204,51 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
     );
     await _persist();
 
-    final activeToken = accessToken ?? await SecureSessionStore().readToken();
-    if (activeToken != null && activeToken.isNotEmpty) {
-      try {
-        final res = await api.update(
-          token: activeToken,
-          appointmentId: id,
-          data: {
-            'action': 'reschedule',
-            'starts_at': newStartsAt.toUtc().toIso8601String(),
-          },
-        );
-        final updatedApt = ClinicAppointment.fromJson(res);
-        if (updatedApt != null) {
-          emit(
-            state.map((item) => item.id == id ? updatedApt : item).toList(),
-          );
-          await _persist();
-        }
-        await loadFromApi(activeToken);
-        return null;
-      } catch (error) {
-        await loadFromApi(activeToken);
-        return _errorMessage(error, 'Appointment could not be rescheduled.');
+    try {
+      final res = await api.update(
+        token: activeToken,
+        appointmentId: id,
+        data: {
+          'action': 'reschedule',
+          'starts_at': newStartsAt.toUtc().toIso8601String(),
+        },
+      );
+      final updatedApt = ClinicAppointment.fromJson(res);
+      if (updatedApt != null) {
+        emit(state.map((item) => item.id == id ? updatedApt : item).toList());
+        await _persist();
       }
+      await loadFromApi(activeToken);
+      return null;
+    } catch (error) {
+      await loadFromApi(activeToken);
+      return _errorMessage(error, 'Appointment could not be rescheduled.');
     }
-
-    return null;
   }
 
-  Future<String?> cancel(String id, String patientId, {String? accessToken}) async {
+  Future<String?> cancel(
+    String id,
+    String patientId, {
+    String? accessToken,
+  }) async {
     final activeToken = accessToken ?? await SecureSessionStore().readToken();
-    if (activeToken != null && activeToken.isNotEmpty) {
-      try {
-        await api.update(token: activeToken, appointmentId: id, data: {'action': 'cancel'});
-        await loadFromApi(activeToken);
-        return null;
-      } catch (error) {
-        return _errorMessage(error, 'Appointment request could not be cancelled.');
-      }
+    if (activeToken == null || activeToken.isEmpty) {
+      return 'Your session has expired. Sign in again to cancel this appointment.';
     }
-    emit(
-      state
-          .map(
-            (item) =>
-                item.id == id &&
-                    item.patientId == patientId &&
-                    item.status != 'Cancelled'
-                ? item.copyWith(status: 'Cancelled')
-                : item,
-          )
-          .toList(),
-    );
-    await _persist();
-    return null;
+    try {
+      await api.update(
+        token: activeToken,
+        appointmentId: id,
+        data: {'action': 'cancel'},
+      );
+      await loadFromApi(activeToken);
+      return null;
+    } catch (error) {
+      return _errorMessage(
+        error,
+        'Appointment request could not be cancelled.',
+      );
+    }
   }
 
   Future<void> clearForPatient(String patientId) async {
@@ -307,7 +264,9 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
   String _errorMessage(Object error, String fallback) {
     if (error is DioException) {
       final message = error.response?.data;
-      if (message is Map && message['message'] is String) return message['message'] as String;
+      if (message is Map && message['message'] is String) {
+        return message['message'] as String;
+      }
       return error.message ?? fallback;
     }
     return error is FormatException ? error.message : fallback;

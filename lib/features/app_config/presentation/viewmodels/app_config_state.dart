@@ -1,8 +1,9 @@
 import 'package:equatable/equatable.dart';
 
 class AppointmentBillingConfig extends Equatable {
+  final bool configured;
   final bool paymentRequired;
-  final int consultationFee;
+  final int? consultationFee;
   final String currency;
   final bool firstAppointmentFree;
   final bool isFirstAppointment;
@@ -10,8 +11,9 @@ class AppointmentBillingConfig extends Equatable {
   final bool? effectivePaymentRequired;
 
   const AppointmentBillingConfig({
-    this.paymentRequired = true,
-    this.consultationFee = 500,
+    this.configured = false,
+    this.paymentRequired = false,
+    this.consultationFee,
     this.currency = 'INR',
     this.firstAppointmentFree = false,
     this.isFirstAppointment = false,
@@ -22,8 +24,9 @@ class AppointmentBillingConfig extends Equatable {
   factory AppointmentBillingConfig.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const AppointmentBillingConfig();
     return AppointmentBillingConfig(
-      paymentRequired: json['payment_required'] != false,
-      consultationFee: (json['consultation_fee'] as num?)?.toInt() ?? 500,
+      configured: json['configured'] == true,
+      paymentRequired: json['payment_required'] == true,
+      consultationFee: (json['consultation_fee'] as num?)?.toInt(),
       currency: (json['currency'] as String?) ?? 'INR',
       firstAppointmentFree: json['first_appointment_free'] == true,
       isFirstAppointment: json['is_first_appointment'] == true,
@@ -33,6 +36,7 @@ class AppointmentBillingConfig extends Equatable {
   }
 
   Map<String, dynamic> toJson() => {
+    'configured': configured,
     'payment_required': paymentRequired,
     'consultation_fee': consultationFee,
     'currency': currency,
@@ -45,6 +49,7 @@ class AppointmentBillingConfig extends Equatable {
 
   @override
   List<Object?> get props => [
+    configured,
     paymentRequired,
     consultationFee,
     currency,
@@ -101,4 +106,3 @@ class AppConfigState extends Equatable {
   @override
   List<Object?> get props => [features, appointmentBilling, isLoading, error];
 }
-

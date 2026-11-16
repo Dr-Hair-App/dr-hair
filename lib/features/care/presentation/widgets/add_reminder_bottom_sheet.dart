@@ -10,6 +10,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_toast.dart';
 import '../../../auth/presentation/viewmodels/auth_cubit.dart';
 import '../../domain/models/care_models.dart';
+import '../../data/services/care_notification_service.dart';
 import '../viewmodels/care_cubit.dart';
 
 class _ReminderPreset {
@@ -327,13 +328,24 @@ class _AddReminderBottomSheetState extends State<AddReminderBottomSheet> {
       );
 
       if (mounted) {
+        final permissionStatus = context
+            .read<CareCubit>()
+            .state
+            .notificationPermissionStatus;
+        final alertScheduled =
+            _isEnabled &&
+            permissionStatus == NotificationPermissionStatus.granted;
         AppToast.show(
           context,
           SnackBar(
             content: Text(
-              _isEditing
-                  ? 'Care reminder updated successfully!'
-                  : 'Care reminder scheduled successfully!',
+              !_isEnabled
+                  ? 'Care reminder saved.'
+                  : alertScheduled
+                  ? (_isEditing
+                        ? 'Care reminder updated successfully!'
+                        : 'Care reminder scheduled successfully!')
+                  : 'Care reminder saved. Turn on notifications to receive alerts.',
             ),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,

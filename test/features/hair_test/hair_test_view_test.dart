@@ -5,7 +5,6 @@ import 'package:dr_hair/features/hair_test/presentation/views/hair_test_view.dar
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('shows branded custom-painted waiting screen during AI work', (
@@ -288,7 +287,6 @@ void main() {
   testWidgets(
     'HairTestView skip button marks assessment as skipped in local cache',
     (tester) async {
-      SharedPreferences.setMockInitialValues({});
       await AppLocalCache.instance.clearAll();
 
       final cubit = HairTestCubit();

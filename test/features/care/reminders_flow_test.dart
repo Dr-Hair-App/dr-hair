@@ -151,7 +151,7 @@ void main() {
 
     test('persists reminders across app restart via local cache', () async {
       // Add custom reminder
-      careCubit.addReminder(
+      await careCubit.addReminder(
         title: 'Ketoconazole 2% Wash',
         subtitle: 'Medicated Wash · Wed, Sat',
         time: const TimeOfDay(hour: 10, minute: 30),

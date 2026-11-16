@@ -86,6 +86,28 @@ void main() {
     expect(cache.getString('dr_hair_refresh_token_v1'), isNull);
   });
 
+  test('namespaced secure recovery values survive session changes until explicitly removed', () async {
+    final storage = _FakeSecretStorage();
+    final store = SecureSessionStore(
+      storage: storage,
+      cache: AppLocalCache.inMemory(),
+    );
+    await store.writeSession(token: 'access-1', login: '9876543210');
+    await store.writeSecret(
+      key: 'dr_hair_pending_checkout_v1',
+      value: '{"order_id":"ORD-1"}',
+    );
+
+    await store.clear();
+
+    expect(
+      await store.readSecret(key: 'dr_hair_pending_checkout_v1'),
+      '{"order_id":"ORD-1"}',
+    );
+    await store.deleteSecret(key: 'dr_hair_pending_checkout_v1');
+    expect(await store.readSecret(key: 'dr_hair_pending_checkout_v1'), isNull);
+  });
+
   test(
     'OTP verification stores access and refresh session credentials',
     () async {

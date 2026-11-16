@@ -39,10 +39,7 @@ class ProductDetailsState {
     bool isLoading = false,
     bool isNotFound = false,
   }) {
-    final prod = product ??
-        (isLoading || isNotFound
-            ? ProductItem.empty
-            : ProductItem.defaultProduct);
+    final prod = product ?? ProductItem.empty;
     final plans = ProductSupplyPlan.ensureThreePlans(prod.supplyPlans);
     return ProductDetailsState(
       product: prod,
@@ -58,16 +55,12 @@ class ProductDetailsState {
   ProductSupplyPlan get selectedSupplyPlan {
     final plans = supplyPlans;
     if (plans.isEmpty) {
-      return const ProductSupplyPlan(
-        title: '1 Month',
-        subtitle: '30 Days Supply',
-        price: 999,
-        mrp: 1299,
-      );
+      return const ProductSupplyPlan(title: '', subtitle: '', price: 0, mrp: 0);
     }
     final index = selectedSupplyIndex.clamp(0, plans.length - 1);
     return plans[index];
   }
+
   int get currentUnitPrice => selectedSupplyPlan.price;
   int get currentUnitMrp => selectedSupplyPlan.mrp;
   int get totalPrice => currentUnitPrice * quantity;

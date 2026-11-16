@@ -102,13 +102,5 @@ class CategoryItem {
 
   static List<CategoryItem> defaultProductCategories() => const [
     CategoryItem(id: 'all', name: 'All', slug: 'all', iconName: 'layout-grid'),
-    CategoryItem(id: 'hair', name: 'Hair', slug: 'hair', iconName: 'sparkles'),
-    CategoryItem(id: 'dandruff', name: 'Dandruff', slug: 'dandruff', iconName: 'shield-check'),
-    CategoryItem(id: 'gut', name: 'Gut', slug: 'gut', iconName: 'apple'),
-    CategoryItem(id: 'stress', name: 'Stress', slug: 'stress', iconName: 'brain'),
-    CategoryItem(id: 'thyroid', name: 'Thyroid', slug: 'thyroid', iconName: 'activity'),
-    CategoryItem(id: 'pcos', name: 'PCOS', slug: 'pcos', iconName: 'flower-2'),
-    CategoryItem(id: 'hormone', name: 'Hormone', slug: 'hormone', iconName: 'dna'),
   ];
 }
-

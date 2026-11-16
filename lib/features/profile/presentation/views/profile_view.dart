@@ -175,9 +175,17 @@ class ProfileView extends StatelessWidget {
                     iconColor: AppColors.primary,
                     iconBgColor: AppColors.primary5,
                     title: 'Clinic appointments',
-                    subtitle: 'Request a physical visit with Dr. Jai Bansal',
+                    subtitle: 'Request a visit at the configured clinic',
                     onTap: () => context.push(RouteNames.clinicAppointment),
                   ),
+                _ProfileMenuTile(
+                  icon: LucideIcons.sparkles,
+                  iconColor: const Color(0xFF0F766E),
+                  iconBgColor: const Color(0xFFF0FDFA),
+                  title: 'Dr. Hair AI Assistant',
+                  subtitle: 'Open your saved conversations',
+                  onTap: () => context.push(RouteNames.assistantHistory),
+                ),
                 _ProfileMenuTile(
                   icon: LucideIcons.clipboardPlus,
                   iconColor: AppColors.primary,
@@ -247,6 +255,14 @@ class ProfileView extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     _buildGroupedCard([
+                      _ProfileMenuTile(
+                        icon: LucideIcons.shoppingBag,
+                        iconColor: const Color(0xFF0284C7),
+                        iconBgColor: const Color(0xFFF0F9FF),
+                        title: 'Browse products',
+                        subtitle: 'Explore hair and scalp care products',
+                        onTap: () => context.push(RouteNames.products),
+                      ),
                       _ProfileMenuTile(
                         icon: LucideIcons.packageCheck,
                         iconColor: const Color(0xFF059669),
@@ -438,14 +454,10 @@ class ProfileView extends StatelessWidget {
     final authCubit = context.read<AuthCubit?>();
 
     Widget buildCard(UserModel? user) {
-      final previewUser = authCubit == null ? UserModel.demoPatient() : null;
-      final profile = user ?? previewUser;
-      final name = profile?.name.isNotEmpty == true
-          ? profile!.name
-          : 'Your profile';
-      final patientId = profile?.patientId.isNotEmpty == true
-          ? profile!.patientId
-          : 'Complete your profile';
+      final name = user?.name.isNotEmpty == true ? user!.name : 'Your profile';
+      final patientId = user?.patientId.isNotEmpty == true
+          ? user!.patientId
+          : null;
 
       final photoUrl = user?.photoUrl;
 
@@ -508,39 +520,48 @@ class ProfileView extends StatelessWidget {
                     ),
                   ),
                   // const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          'Patient ID: $patientId',
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: AppColors.secondaryDark,
+                  if (patientId != null)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Patient ID: $patientId',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AppColors.secondaryDark,
+                            ),
                           ),
                         ),
-                      ),
-                      Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            Clipboard.setData(ClipboardData(text: patientId));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Patient ID copied'),
-                              ),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(10),
-                          child: const Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Icon(Icons.copy, size: 12),
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: patientId));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Patient ID copied'),
+                                ),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Icon(Icons.copy, size: 12),
+                            ),
                           ),
                         ),
+                      ],
+                    )
+                  else
+                    const Text(
+                      'Sign in to view your patient ID',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.secondaryDark,
                       ),
-                    ],
-                  ),
+                    ),
                 ],
               ),
             ),

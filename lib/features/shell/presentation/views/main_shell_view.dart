@@ -1,4 +1,3 @@
-import 'package:dr_hair/features/hair_test/presentation/viewmodels/hair_test_cubit.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/rendering.dart';
@@ -9,6 +8,7 @@ import '../../../../core/routes/route_names.dart';
 import '../../../../core/widgets/custom_app_bar.dart';
 import '../../../../core/widgets/shell_tab_visibility.dart';
 import '../../../app_config/presentation/viewmodels/app_config_cubit.dart';
+import '../../../assistant_chat/presentation/views/assistant_chat_view.dart';
 import '../../../shop/presentation/viewmodels/cart_cubit.dart';
 import '../widgets/shell_bottom_nav_bar.dart';
 
@@ -115,16 +115,9 @@ class _MainShellViewState extends State<MainShellView> {
       bottomNavigationBar: ValueListenableBuilder<bool>(
         valueListenable: _isBottomNavHidden,
         builder: (context, isNavHidden, child) {
-          final isTestCompleted =
-              context.watch<HairTestCubit?>()?.state.isCompleted ?? false;
           final appConfig = context.watch<AppConfigCubit?>()?.state;
           final bool isShopEnabled =
               appConfig?.isFeatureEnabled('shop') ?? true;
-          final bool isAssessmentEnabled =
-              appConfig?.isFeatureEnabled('assessment') ?? true;
-          final bool showActionButton = isTestCompleted
-              ? isShopEnabled
-              : isAssessmentEnabled;
 
           return BlocBuilder<CartCubit, CartState>(
             builder: (context, cartState) => RepaintBoundary(
@@ -132,26 +125,14 @@ class _MainShellViewState extends State<MainShellView> {
                 currentIndex: widget.navigationShell.currentIndex,
                 cartItemCount: isShopEnabled ? cartState.itemCount : 0,
                 cartSubtotal: isShopEnabled ? cartState.subtotal : null,
-                isTestCompleted: isTestCompleted,
-                isProductEnabled: isShopEnabled,
-                showActionButton: showActionButton,
+                showActionButton: true,
                 isHidden: isNavHidden && !isVideosTab,
                 showBackground: !isVideosTab,
                 onTabSelected: _onTabSelected,
                 onCartPressed: isShopEnabled
                     ? () => context.push(RouteNames.cart)
                     : null,
-                onActionPressed: () {
-                  if (isTestCompleted) {
-                    if (isShopEnabled) {
-                      context.push(RouteNames.products);
-                    }
-                  } else {
-                    if (isAssessmentEnabled) {
-                      context.push(RouteNames.hairTest);
-                    }
-                  }
-                },
+                onActionPressed: () => showAssistantChatSheet(context),
               ),
             ),
           );

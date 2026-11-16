@@ -16,7 +16,7 @@ import 'care_state.dart';
 class CareCubit extends Cubit<CareState> {
   static const _routineHistoryKey = 'care_routine_completion_days_v1';
   static const _careDataClearedKey = 'care_personal_data_cleared_v1';
-  final CareNotificationService? _notificationService;
+  CareNotificationService? _notificationService;
   final PatientClinicalApi _clinicalApi;
   final PatientProgressApi _progressApi;
   final CommerceRemoteDataSource _commerceDataSource;
@@ -45,13 +45,19 @@ class CareCubit extends Cubit<CareState> {
       ? 'care_daily_events_outbox_${_patientId}_v1'
       : 'care_daily_events_outbox_v1';
 
+  String get _assistantDietPlanKey =>
+      _patientId != null && _patientId!.isNotEmpty
+      ? 'care_assistant_diet_plan_${_patientId}_v1'
+      : 'care_assistant_diet_plan_v1';
+
   CareCubit([
-    this._notificationService,
+    CareNotificationService? notificationService,
     PatientClinicalApi? clinicalApi,
     PatientProgressApi? progressApi,
     CommerceRemoteDataSource? commerceDataSource,
     PatientDietApi? dietApi,
-  ]) : _clinicalApi = clinicalApi ?? PatientClinicalApi(),
+  ]) : _notificationService = notificationService,
+       _clinicalApi = clinicalApi ?? PatientClinicalApi(),
        _progressApi = progressApi ?? PatientProgressApi(),
        _commerceDataSource = commerceDataSource ?? CommerceRemoteDataSource(),
        _dietApi = dietApi ?? PatientDietApi(),
@@ -84,8 +90,8 @@ class CareCubit extends Cubit<CareState> {
   }
 
   Future<void> _initPersistence() async {
-    final service =
-        _notificationService ?? await CareNotificationService.create();
+    final service = _notificationService ??=
+        await CareNotificationService.create();
     final status = service.getPermissionStatus();
     final persistedReminders = service.loadReminders();
     final cache = AppLocalCache.instance;
@@ -121,8 +127,12 @@ class CareCubit extends Cubit<CareState> {
     final todayCareEvents = (careEvents ?? state.careEvents)
         .where((event) => event.eventDate == today)
         .toList();
+    final assistantDietPlan = _readAssistantDietPlan(
+      cache.getString(_assistantDietPlanKey),
+    );
 
     if (isClosed) return;
+    await service.syncScheduledReminders(persistedReminders ?? state.reminders);
     emit(
       state.copyWith(
         notificationPermissionStatus: status,
@@ -131,6 +141,10 @@ class CareCubit extends Cubit<CareState> {
         checkIns: checkIns ?? state.checkIns,
         orders: orders ?? state.orders,
         routineCompletionDays: routineDays ?? state.routineCompletionDays,
+        assistantDietMeals:
+            assistantDietPlan?.meals ?? state.assistantDietMeals,
+        assistantDietTitle:
+            assistantDietPlan?.title ?? state.assistantDietTitle,
         careEvents: careEvents ?? state.careEvents,
         waterCups: _waterValueForDay(todayCareEvents),
       ),
@@ -445,6 +459,7 @@ class CareCubit extends Cubit<CareState> {
           subtitle: value['subtitle']?.toString() ?? '',
           category: value['category']?.toString() ?? 'Care',
           timeOfDay: value['time_of_day']?.toString() ?? 'Daily',
+          createdBy: value['created_by']?.toString() ?? 'clinician',
           isCompleted: event?.status == 'completed',
           isSkipped: event?.status == 'skipped',
           skipReason: event?.note ?? '',
@@ -520,6 +535,53 @@ class CareCubit extends Cubit<CareState> {
       if (!isClosed) {
         emit(state.copyWith(isLoadingDiet: false));
       }
+    }
+  }
+
+  Future<bool> saveAssistantDietPlan({
+    required String title,
+    required List<DietMeal> meals,
+  }) async {
+    final cleanTitle = title.trim();
+    final cleanMeals = meals
+        .where((meal) => meal.name.trim().isNotEmpty)
+        .take(12)
+        .toList(growable: false);
+    if (cleanTitle.isEmpty || cleanMeals.isEmpty || isClosed) return false;
+    emit(
+      state.copyWith(
+        assistantDietTitle: cleanTitle,
+        assistantDietMeals: cleanMeals,
+      ),
+    );
+    await AppLocalCache.instance.put(
+      _assistantDietPlanKey,
+      jsonEncode({
+        'title': cleanTitle,
+        'meals': cleanMeals.map((meal) => meal.toJson()).toList(),
+      }),
+    );
+    return true;
+  }
+
+  ({String title, List<DietMeal> meals})? _readAssistantDietPlan(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+      final items = decoded['meals'];
+      if (items is! List) return null;
+      final meals = items
+          .whereType<Map>()
+          .map((item) => DietMeal.fromJson(Map<String, dynamic>.from(item)))
+          .where((meal) => meal.name.trim().isNotEmpty)
+          .take(12)
+          .toList(growable: false);
+      final title = decoded['title']?.toString().trim() ?? '';
+      if (title.isEmpty || meals.isEmpty) return null;
+      return (title: title, meals: meals);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -838,6 +900,7 @@ class CareCubit extends Cubit<CareState> {
       subtitle: subtitle,
       category: category,
       timeOfDay: timeOfDay,
+      createdBy: 'patient',
       isCompleted: false,
     );
 
@@ -875,6 +938,7 @@ class CareCubit extends Cubit<CareState> {
                   subtitle: s['subtitle']?.toString() ?? '',
                   category: s['category']?.toString() ?? 'Lifestyle',
                   timeOfDay: s['time_of_day']?.toString() ?? 'Daily',
+                  createdBy: s['created_by']?.toString() ?? 'clinician',
                   isCompleted: completionMap[tTitle] ?? false,
                 );
               })
@@ -965,16 +1029,21 @@ class CareCubit extends Cubit<CareState> {
 
   // --- REMINDER ACTIONS ---
   Future<void> requestNotificationPermission() async {
-    final service =
-        _notificationService ?? await CareNotificationService.create();
+    final service = _notificationService ??=
+        await CareNotificationService.create();
     final status = await service.requestPermission();
     emit(state.copyWith(notificationPermissionStatus: status));
+    if (status == NotificationPermissionStatus.granted) {
+      await service.syncScheduledReminders(state.reminders);
+    }
   }
 
   Future<bool> saveReminder(
     CareReminder reminder, {
     String? sessionToken,
   }) async {
+    final notificationService = _notificationService ??=
+        await CareNotificationService.create();
     final token = sessionToken ?? _sessionToken;
     if (token != null && token.isNotEmpty) {
       await _clinicalApi.saveReminder(
@@ -994,11 +1063,11 @@ class CareCubit extends Cubit<CareState> {
       updated = [...state.reminders, reminder];
     }
     emit(state.copyWith(reminders: updated));
-    await _notificationService?.saveReminders(updated);
+    await notificationService.saveReminders(updated);
     if (reminder.isEnabled) {
-      await _notificationService?.scheduleReminder(reminder);
+      await notificationService.scheduleReminder(reminder);
     } else {
-      await _notificationService?.cancelReminder(reminder.id);
+      await notificationService.cancelReminder(reminder.id);
     }
     return true;
   }
@@ -1017,8 +1086,10 @@ class CareCubit extends Cubit<CareState> {
 
     final updated = state.reminders.where((r) => r.id != id).toList();
     emit(state.copyWith(reminders: updated));
-    await _notificationService?.saveReminders(updated);
-    await _notificationService?.cancelReminder(id);
+    final notificationService = _notificationService ??=
+        await CareNotificationService.create();
+    await notificationService.saveReminders(updated);
+    await notificationService.cancelReminder(id);
     return true;
   }
 
@@ -1056,7 +1127,7 @@ class CareCubit extends Cubit<CareState> {
     );
   }
 
-  void addReminder({
+  Future<void> addReminder({
     required String title,
     required String subtitle,
     required TimeOfDay time,
@@ -1064,7 +1135,7 @@ class CareCubit extends Cubit<CareState> {
     String treatmentType = 'Topical Serum',
     List<int> repeatDays = const [1, 2, 3, 4, 5, 6, 7],
     String notes = '',
-  }) {
+  }) async {
     final newReminder = CareReminder(
       id: 'rem_${DateTime.now().millisecondsSinceEpoch}',
       title: title,
@@ -1077,7 +1148,7 @@ class CareCubit extends Cubit<CareState> {
       isEnabled: true,
     );
 
-    saveReminder(newReminder);
+    await saveReminder(newReminder);
   }
 
   void saveLocalOrderPreview({
@@ -1295,6 +1366,37 @@ class CareCubit extends Cubit<CareState> {
       eventType: 'diet',
       eventKey: _dietEventKey(meal),
       status: meal.isCompleted ? 'completed' : 'pending',
+    );
+  }
+
+  Future<void> setWater(int count) async {
+    final value = count.clamp(0, 12);
+    emit(state.copyWith(waterCups: value));
+    await _recordCareEvent(
+      eventType: 'water',
+      eventKey: 'daily_water',
+      status: 'logged',
+      value: value,
+    );
+  }
+
+  Future<void> onNotificationActionTaken() async {
+    final updatedTasks = state.routineTasks
+        .map((task) => task.copyWith(isCompleted: true))
+        .toList();
+    emit(state.copyWith(routineTasks: updatedTasks));
+    _persistRoutineTasks();
+    _notificationService?.saveRoutineTasks(updatedTasks);
+    _recordRoutineCompletionIfDone(updatedTasks);
+  }
+
+  Future<void> onNotificationActionSnooze() async {
+    final snoozeTime = DateTime.now().add(const Duration(minutes: 15));
+    await _recordCareEvent(
+      eventType: 'routine_snooze',
+      eventKey: 'snooze_${DateTime.now().millisecondsSinceEpoch}',
+      status: 'snoozed',
+      value: snoozeTime.millisecondsSinceEpoch,
     );
   }
 

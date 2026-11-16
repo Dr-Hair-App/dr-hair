@@ -14,10 +14,14 @@ class _AvailabilityApi extends PatientAppointmentApi {
     required DateTime to,
   }) async => {
     'timezone': 'Asia/Kolkata',
+    'is_configured': true,
     'booking_window_days': 90,
+    'slot_interval_minutes': 30,
+    'appointment_duration_minutes': 30,
+    'appointment_services': ['Consultation'],
     'weekly_closed_weekdays': [7],
     'sessions': [
-      {'label': 'Morning Session', 'opens_at': '10:00', 'closes_at': '10:30'},
+      {'label': 'Morning Session', 'opens_at': '10:00', 'closes_at': '11:00'},
     ],
     'closed_dates': [],
     'booked_slots': [bookedSlot],

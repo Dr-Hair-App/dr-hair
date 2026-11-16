@@ -20,12 +20,15 @@ class AppDestination {
   factory AppDestination.fromJson(Map<String, dynamic> json) {
     final rawType = json['type'] ?? json['destination_type'];
     if (rawType == 'product') {
-      final id = json['entityId'] ?? json['entity_id'] ?? json['productId'] ?? '';
+      final id =
+          json['entityId'] ?? json['entity_id'] ?? json['productId'] ?? '';
       return AppDestination.product(id is String ? id : id.toString());
     }
     if (rawType == 'screen' || json.containsKey('screen')) {
       final screen = json['screen'] ?? json['target'] ?? '';
-      return AppDestination.screen(screen is String ? screen : screen.toString());
+      return AppDestination.screen(
+        screen is String ? screen : screen.toString(),
+      );
     }
     return const AppDestination.screen('');
   }
@@ -45,20 +48,40 @@ class AppDestination {
     final normalized = (screen ?? '').trim().toLowerCase().replaceAll('-', '_');
     return switch (normalized) {
       'home' || 'dashboard' || 'main' => RouteNames.mainShell,
-      'hair_test' || 'hairtest' || 'test' || 'assessment' => RouteNames.hairTest,
-      'product' || 'products' || 'shop' || 'store' || 'catalog' => RouteNames.products,
+      'hair_test' ||
+      'hairtest' ||
+      'test' ||
+      'assessment' => RouteNames.hairTest,
+      'product' ||
+      'products' ||
+      'shop' ||
+      'store' ||
+      'catalog' => RouteNames.products,
       'video' || 'videos' || 'reels' || 'stories' => RouteNames.videos,
       'review' || 'reviews' => RouteNames.reviews,
-      'notification' || 'notifications' || 'inbox' || 'alerts' => RouteNames.notifications,
-      'profile' || 'account' || 'routine' || 'care_plan' || 'careplan' => RouteNames.profile,
+      'notification' ||
+      'notifications' ||
+      'inbox' ||
+      'alerts' => RouteNames.notifications,
+      'profile' ||
+      'account' ||
+      'routine' ||
+      'care_plan' ||
+      'careplan' => RouteNames.profile,
       'order' || 'orders' || 'my_orders' => RouteNames.orders,
-      'appointment' || 'appointments' || 'clinic_appointment' || 'consultation' => RouteNames.clinicAppointment,
+      'appointment' ||
+      'appointments' ||
+      'clinic_appointment' ||
+      'consultation' => RouteNames.clinicAppointment,
       'cart' || 'bag' => RouteNames.cart,
       'reminder' || 'reminders' => RouteNames.reminders,
       'diet' || 'diet_plan' || 'dietplan' => RouteNames.dietPlan,
       'privacy' || 'privacy_policy' => RouteNames.privacyPolicy,
       'terms' || 'terms_and_conditions' => RouteNames.terms,
       'assessment_result' => RouteNames.assessmentResult,
+      'assistant_history' ||
+      'chat_history' ||
+      'previous_chats' => RouteNames.assistantHistory,
       _ => null,
     };
   }
@@ -85,7 +108,6 @@ class AppDestination {
     RouteNames.otp,
     RouteNames.completeProfile,
     RouteNames.about,
-    RouteNames.contact,
     RouteNames.routine,
     RouteNames.progress,
     RouteNames.clinicAppointment,
@@ -100,6 +122,7 @@ class AppDestination {
     RouteNames.cancellationPolicy,
     RouteNames.products,
     RouteNames.assessmentResult,
+    RouteNames.assistantHistory,
   };
 
   /// Validates whether a candidate URI path exists in the app's routing table.

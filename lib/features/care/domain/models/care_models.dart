@@ -117,6 +117,7 @@ class RoutineTask {
   final String subtitle;
   final String category;
   final String timeOfDay;
+  final String createdBy;
   final bool isCompleted;
   final bool isSkipped;
   final String skipReason;
@@ -127,6 +128,7 @@ class RoutineTask {
     required this.subtitle,
     required this.category,
     required this.timeOfDay,
+    this.createdBy = 'clinician',
     this.isCompleted = false,
     this.isSkipped = false,
     this.skipReason = '',
@@ -138,6 +140,7 @@ class RoutineTask {
     String? subtitle,
     String? category,
     String? timeOfDay,
+    String? createdBy,
     bool? isCompleted,
     bool? isSkipped,
     String? skipReason,
@@ -148,6 +151,7 @@ class RoutineTask {
       subtitle: subtitle ?? this.subtitle,
       category: category ?? this.category,
       timeOfDay: timeOfDay ?? this.timeOfDay,
+      createdBy: createdBy ?? this.createdBy,
       isCompleted: isCompleted ?? this.isCompleted,
       isSkipped: isSkipped ?? this.isSkipped,
       skipReason: skipReason ?? this.skipReason,
@@ -161,6 +165,7 @@ class RoutineTask {
       'subtitle': subtitle,
       'category': category,
       'timeOfDay': timeOfDay,
+      'createdBy': createdBy,
       'isCompleted': isCompleted,
       'isSkipped': isSkipped,
       'skipReason': skipReason,
@@ -174,6 +179,7 @@ class RoutineTask {
       subtitle: json['subtitle'] as String? ?? '',
       category: json['category'] as String? ?? '',
       timeOfDay: json['timeOfDay'] as String? ?? '',
+      createdBy: json['createdBy'] as String? ?? 'clinician',
       isCompleted: json['isCompleted'] as bool? ?? false,
       isSkipped: json['isSkipped'] as bool? ?? false,
       skipReason: json['skipReason'] as String? ?? '',

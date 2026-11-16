@@ -110,102 +110,13 @@ class _ProductsContentState extends State<_ProductsContent>
     List<ProductItem> source,
   ) {
     Iterable<ProductItem> products = source;
-
-    switch (categoryId) {
-      case 'hair':
-        products = products.where((p) {
-          final root = p.rootCause.toLowerCase();
-          final cat = p.category.toLowerCase();
-          final name = p.name.toLowerCase();
-          return root == 'hair' ||
-              cat.contains('hair') ||
-              name.contains('hair') ||
-              name.contains('follicle') ||
-              p.id.contains('regrowth') ||
-              p.id.contains('serum');
-        });
-        break;
-      case 'dandruff':
-        products = products.where((p) {
-          final root = p.rootCause.toLowerCase();
-          final cat = p.category.toLowerCase();
-          final name = p.name.toLowerCase();
-          final sub = p.subtitle.toLowerCase();
-          return root == 'dandruff' ||
-              cat.contains('dandruff') ||
-              name.contains('dandruff') ||
-              sub.contains('dandruff') ||
-              name.contains('shampoo') ||
-              sub.contains('ketoconazole') ||
-              p.id.contains('dandruff');
-        });
-        break;
-      case 'gut':
-        products = products.where((p) {
-          final root = p.rootCause.toLowerCase();
-          final name = p.name.toLowerCase();
-          final sub = p.subtitle.toLowerCase();
-          return root == 'gut' ||
-              name.contains('gut') ||
-              sub.contains('gut') ||
-              name.contains('triphala') ||
-              sub.contains('probiotics') ||
-              p.id.contains('gut');
-        });
-        break;
-      case 'stress':
-        products = products.where((p) {
-          final root = p.rootCause.toLowerCase();
-          final name = p.name.toLowerCase();
-          final sub = p.subtitle.toLowerCase();
-          return root == 'stress' ||
-              name.contains('stress') ||
-              sub.contains('stress') ||
-              name.contains('ashwagandha') ||
-              name.contains('shiro') ||
-              p.id.contains('calm');
-        });
-        break;
-      case 'thyroid':
-        products = products.where((p) {
-          final root = p.rootCause.toLowerCase();
-          final name = p.name.toLowerCase();
-          final sub = p.subtitle.toLowerCase();
-          return root == 'thyroid' ||
-              name.contains('thyro') ||
-              sub.contains('thyroid') ||
-              sub.contains('metabol') ||
-              p.id.contains('thyro');
-        });
-        break;
-      case 'pcos':
-        products = products.where((p) {
-          final root = p.rootCause.toLowerCase();
-          final name = p.name.toLowerCase();
-          final sub = p.subtitle.toLowerCase();
-          return root == 'pcos' ||
-              name.contains('pcos') ||
-              sub.contains('pcos') ||
-              sub.contains('inositol') ||
-              p.id.contains('pcos');
-        });
-        break;
-      case 'hormone':
-        products = products.where((p) {
-          final root = p.rootCause.toLowerCase();
-          final name = p.name.toLowerCase();
-          final sub = p.subtitle.toLowerCase();
-          return root == 'hormone' ||
-              name.contains('hormon') ||
-              name.contains('dht') ||
-              sub.contains('dht') ||
-              sub.contains('hormon') ||
-              p.id.contains('dht');
-        });
-        break;
-      case 'all':
-      default:
-        break;
+    final category = categoryId.trim().toLowerCase();
+    if (category.isNotEmpty && category != 'all') {
+      products = products.where(
+        (product) =>
+            product.rootCause.trim().toLowerCase() == category ||
+            product.category.trim().toLowerCase() == category,
+      );
     }
 
     final query = _searchQuery.trim().toLowerCase();
@@ -238,19 +149,28 @@ class _ProductsContentState extends State<_ProductsContent>
   }
 
   void _handleAddToCart(ProductItem product) {
-    final plan = product.supplyPlans.isNotEmpty
-        ? product.supplyPlans.first
-        : ProductSupplyPlan(
-            title: 'Standard',
-            subtitle: product.subtitle,
-            price: 999,
-            mrp: 1299,
-          );
+    if (product.supplyPlans.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This product has no purchase option yet.'),
+        ),
+      );
+      return;
+    }
+    final plan = product.supplyPlans.first;
 
     final cartCubit = context.read<CartCubit?>();
-    if (cartCubit != null) {
-      cartCubit.addProduct(product: product, plan: plan, quantity: 1);
+    if (cartCubit == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Cart is unavailable. Please reopen the shop and try again.',
+          ),
+        ),
+      );
+      return;
     }
+    cartCubit.addProduct(product: product, plan: plan, quantity: 1);
 
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
