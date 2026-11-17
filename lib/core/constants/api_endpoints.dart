@@ -16,7 +16,7 @@ class ApiEndpoints {
   /// Priority:
   /// 1. dart-define flag (DRHAIR_BACKEND_URL), for explicit build overrides
   /// 2. flutter_dotenv (.env file: DRHAIR_BACKEND_URL or API_BASE_URL)
-  /// 3. Live production fallback (https://backend-ten-kappa-69.vercel.app)
+  /// 3. Live production Worker fallback (https://dr-hair-backend-production.drhair-app.workers.dev)
   static const String _buildBackendUrl = String.fromEnvironment(
     'DRHAIR_BACKEND_URL',
   );
@@ -36,11 +36,11 @@ class ApiEndpoints {
     if (envUrl != null && envUrl.trim().isNotEmpty) {
       return envUrl.trim().replaceAll(RegExp(r'/+$'), '');
     }
-    return 'https://backend-ten-kappa-69.vercel.app';
+    return 'https://dr-hair-backend-production.drhair-app.workers.dev';
   }
 
-  static const int connectTimeout = 15000;
-  static const int receiveTimeout = 15000;
+  static const int connectTimeout = 30000;
+  static const int receiveTimeout = 30000;
 
   // ---------------------------------------------------------------------------
   // 1. Auth Endpoints (/api/v1/auth)
@@ -158,7 +158,6 @@ class ApiEndpoints {
   // 11. Care, Clinical & Diet Endpoints (/api/v1/patient)
   // ---------------------------------------------------------------------------
   static const String patientClinicalRecord = '/api/v1/patient/clinical-record';
-  static const String patientAssistantChat = '/api/v1/patient/assistant/chat';
   static const String patientHomeSummary = '/api/v1/patient/home-summary';
   static const String patientDietPlan = '/api/v1/patient/diet-plan';
   static const String patientRoutineSteps = '/api/v1/patient/routine-steps';

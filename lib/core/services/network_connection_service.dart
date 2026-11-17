@@ -54,7 +54,7 @@ class NetworkConnectionService {
 
       // Check candidate hosts via DNS
       final candidateHosts = <String>[
-        'backend-ten-kappa-69.vercel.app',
+        'api.drhairindia.com',
         'google.com',
         'one.one.one.one',
       ];

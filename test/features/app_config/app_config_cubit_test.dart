@@ -36,5 +36,23 @@ void main() {
       expect(state.isFeatureEnabled('clinic_appointment'), isTrue);
       expect(state.isFeatureEnabled('unknown_key', defaultValue: false), isFalse);
     });
+
+    test('parses server release decisions and store metadata', () {
+      final policy = AppVersionCheck.fromJson({
+        'updateRequired': true,
+        'updateAvailable': true,
+        'maintenanceMode': false,
+        'latestVersion': '1.2.0',
+        'minVersion': '1.1.0',
+        'downloadUrl': 'https://play.google.com/store/apps/details?id=com.drhair',
+        'releaseNotes': 'Security and reliability fixes.',
+        'updateMessage': 'Please update to continue safely.',
+      });
+
+      expect(policy.updateRequired, isTrue);
+      expect(policy.latestVersion, '1.2.0');
+      expect(policy.downloadUrl, startsWith('https://'));
+      expect(policy.updateMessage, contains('update'));
+    });
   });
 }

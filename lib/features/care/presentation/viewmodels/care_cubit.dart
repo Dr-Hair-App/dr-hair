@@ -90,6 +90,7 @@ class CareCubit extends Cubit<CareState> {
   }
 
   Future<void> _initPersistence() async {
+    final stateAtStart = state;
     final service = _notificationService ??=
         await CareNotificationService.create();
     final status = service.getPermissionStatus();
@@ -124,29 +125,65 @@ class CareCubit extends Cubit<CareState> {
       cache.getString(_careEventsCacheKey),
       CareEvent.fromJson,
     );
-    final todayCareEvents = (careEvents ?? state.careEvents)
-        .where((event) => event.eventDate == today)
-        .toList();
     final assistantDietPlan = _readAssistantDietPlan(
       cache.getString(_assistantDietPlanKey),
     );
 
-    if (isClosed) return;
     await service.syncScheduledReminders(persistedReminders ?? state.reminders);
+    if (isClosed) return;
+    final latestState = state;
+    final resolvedCareEvents = identical(
+      latestState.careEvents,
+      stateAtStart.careEvents,
+    )
+        ? (careEvents ?? latestState.careEvents)
+        : latestState.careEvents;
+    final todayResolvedEvents = resolvedCareEvents
+        .where((event) => event.eventDate == today)
+        .toList();
     emit(
-      state.copyWith(
+      latestState.copyWith(
         notificationPermissionStatus: status,
-        reminders: persistedReminders ?? state.reminders,
-        routineTasks: routineTasks,
-        checkIns: checkIns ?? state.checkIns,
-        orders: orders ?? state.orders,
-        routineCompletionDays: routineDays ?? state.routineCompletionDays,
+        reminders: identical(latestState.reminders, stateAtStart.reminders)
+            ? (persistedReminders ?? latestState.reminders)
+            : latestState.reminders,
+        routineTasks: identical(
+          latestState.routineTasks,
+          stateAtStart.routineTasks,
+        )
+            ? routineTasks
+            : latestState.routineTasks,
+        checkIns: identical(latestState.checkIns, stateAtStart.checkIns)
+            ? (checkIns ?? latestState.checkIns)
+            : latestState.checkIns,
+        orders: identical(latestState.orders, stateAtStart.orders)
+            ? (orders ?? latestState.orders)
+            : latestState.orders,
+        routineCompletionDays: identical(
+          latestState.routineCompletionDays,
+          stateAtStart.routineCompletionDays,
+        )
+            ? (routineDays ?? latestState.routineCompletionDays)
+            : latestState.routineCompletionDays,
         assistantDietMeals:
-            assistantDietPlan?.meals ?? state.assistantDietMeals,
+            identical(
+                  latestState.assistantDietMeals,
+                  stateAtStart.assistantDietMeals,
+                )
+                ? (assistantDietPlan?.meals ?? latestState.assistantDietMeals)
+                : latestState.assistantDietMeals,
         assistantDietTitle:
-            assistantDietPlan?.title ?? state.assistantDietTitle,
-        careEvents: careEvents ?? state.careEvents,
-        waterCups: _waterValueForDay(todayCareEvents),
+            latestState.assistantDietTitle == stateAtStart.assistantDietTitle
+                ? (assistantDietPlan?.title ?? latestState.assistantDietTitle)
+                : latestState.assistantDietTitle,
+        careEvents: resolvedCareEvents,
+        waterCups: !identical(
+                  latestState.careEvents,
+                  stateAtStart.careEvents,
+                ) ||
+                latestState.waterCups != stateAtStart.waterCups
+            ? latestState.waterCups
+            : _waterValueForDay(todayResolvedEvents),
       ),
     );
   }

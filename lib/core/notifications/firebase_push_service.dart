@@ -150,18 +150,18 @@ class FirebasePushService {
   static StreamSubscription<String>? _tokenRefreshSubscription;
 
   /// Synchronizes device token with the backend API.
-  static Future<void> syncDeviceTokenWithBackend({String? accessToken}) async {
-    if (isTesting) return;
+  static Future<bool> syncDeviceTokenWithBackend({String? accessToken}) async {
+    if (isTesting) return false;
 
     try {
       if (AppLocalCache.instance.getBool('push_notifications_enabled') ==
           false) {
-        return;
+        return false;
       }
       final token = await requestPermissionAndGetToken();
       if (token == null || token.trim().isEmpty) {
         debugPrint('⚠️ [FCM] Could not obtain device token.');
-        return;
+        return false;
       }
 
       final authToken = accessToken ?? await SecureSessionStore().readToken();
@@ -205,8 +205,10 @@ class FirebasePushService {
           } catch (_) {}
         }
       });
+      return true;
     } catch (e) {
       debugPrint('FirebasePushService syncDeviceTokenWithBackend error: $e');
+      return false;
     }
   }
 

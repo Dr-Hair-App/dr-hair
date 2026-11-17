@@ -4,11 +4,11 @@ import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_c
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_strings.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/session/session_coordinator.dart';
 import '../../../../core/widgets/app_button.dart';
@@ -104,7 +104,7 @@ class ProfileView extends StatelessWidget {
                     onPressed: () => Navigator.pop(modalContext),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: AppButton(
                     text: 'Sign Out',
@@ -178,14 +178,6 @@ class ProfileView extends StatelessWidget {
                     subtitle: 'Request a visit at the configured clinic',
                     onTap: () => context.push(RouteNames.clinicAppointment),
                   ),
-                _ProfileMenuTile(
-                  icon: LucideIcons.sparkles,
-                  iconColor: const Color(0xFF0F766E),
-                  iconBgColor: const Color(0xFFF0FDFA),
-                  title: 'Dr. Hair AI Assistant',
-                  subtitle: 'Open your saved conversations',
-                  onTap: () => context.push(RouteNames.assistantHistory),
-                ),
                 _ProfileMenuTile(
                   icon: LucideIcons.clipboardPlus,
                   iconColor: AppColors.primary,
@@ -293,7 +285,7 @@ class ProfileView extends StatelessWidget {
                       ),
                     ]),
                   ],
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 18),
                   _buildSectionHeader(
                     title: 'PREFERENCES',
                     subtitle:
@@ -311,29 +303,34 @@ class ProfileView extends StatelessWidget {
                       showDivider: false,
                     ),
                   ]),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 18),
                   _buildSignOutButton(context),
 
-                  const SizedBox(height: 60),
-                  const Center(
+                  const SizedBox(height: 45),
+                  Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
+                        const Text(
                           'Dr.Hair · Hair care, made personal',
                           style: TextStyle(
                             fontSize: 10,
                             color: AppColors.textMuted,
                           ),
                         ),
-                        SizedBox(height: 4),
-                        Text(
-                          'App Version ${AppStrings.appVersion}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textMuted,
-                            letterSpacing: 0.2,
+                        const SizedBox(height: 4),
+                        FutureBuilder<PackageInfo>(
+                          future: PackageInfo.fromPlatform(),
+                          builder: (context, snapshot) => Text(
+                            snapshot.hasData
+                                ? 'App Version ${snapshot.data!.version} (${snapshot.data!.buildNumber})'
+                                : 'App Version',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textMuted,
+                              letterSpacing: 0.2,
+                            ),
                           ),
                         ),
                       ],
@@ -419,7 +416,7 @@ class ProfileView extends StatelessWidget {
             Text(
               subtitle,
               style: const TextStyle(
-                fontSize: 11,
+                fontSize: 10,
                 color: AppColors.secondaryDark,
               ),
             ),
@@ -467,8 +464,8 @@ class ProfileView extends StatelessWidget {
           avatarWidget = ClipOval(
             child: CustomCachedImage(
               imageUrl: photoUrl,
-              width: 56,
-              height: 56,
+              width: 50,
+              height: 50,
               fit: BoxFit.cover,
             ),
           );
@@ -717,7 +714,7 @@ class _ProfileMenuTileState extends State<_ProfileMenuTile> {
                                 child: Text(
                                   widget.title,
                                   style: TextStyle(
-                                    fontSize: 14.5,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w700,
                                     color: widget.isDestructive
                                         ? AppColors.danger

@@ -1,4 +1,3 @@
-import 'package:dr_hair/core/constants/app_strings.dart';
 import 'package:dr_hair/features/app_config/data/app_config_repository.dart';
 import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_cubit.dart';
 import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_state.dart';
@@ -65,14 +64,12 @@ void main() {
     expect(find.text('Nutrition guide'), findsOneWidget);
     expect(find.text('Care reminders'), findsOneWidget);
     expect(find.text('Clinic appointments'), findsOneWidget);
-    expect(find.text('Dr. Hair AI Assistant'), findsOneWidget);
-    expect(find.text('Open your saved conversations'), findsOneWidget);
     expect(find.text('Browse products'), findsOneWidget);
     expect(find.text('My cart'), findsOneWidget);
     expect(find.text('Orders & delivery'), findsOneWidget);
     expect(find.text('Settings & preferences'), findsOneWidget);
     expect(find.text('Sign out'), findsOneWidget);
-    expect(find.text('App Version ${AppStrings.appVersion}'), findsOneWidget);
+    expect(find.textContaining('App Version'), findsOneWidget);
   });
 
   testWidgets(
@@ -167,7 +164,7 @@ void main() {
 
       expect(find.text('Settings & preferences'), findsOneWidget);
       expect(signOutFinder, findsOneWidget);
-      expect(find.text('App Version ${AppStrings.appVersion}'), findsOneWidget);
+      expect(find.textContaining('App Version'), findsOneWidget);
     },
   );
 }

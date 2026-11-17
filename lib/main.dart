@@ -18,6 +18,7 @@ import 'core/storage/app_local_cache.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/app_bloc_observer.dart';
 import 'features/app_config/presentation/viewmodels/app_config_cubit.dart';
+import 'features/app_config/presentation/widgets/app_config_update_gate.dart';
 import 'features/auth/presentation/viewmodels/auth_cubit.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/appointments/presentation/clinic_appointment_cubit.dart';
@@ -167,7 +168,7 @@ class _MyAppState extends State<MyApp> {
         return GestureDetector(
           onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
           behavior: HitTestBehavior.translucent,
-          child: child ?? const SizedBox.shrink(),
+          child: AppConfigUpdateGate(child: child ?? const SizedBox.shrink()),
         );
       },
     );

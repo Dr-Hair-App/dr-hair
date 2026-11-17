@@ -13,7 +13,6 @@ import '../../../../core/widgets/app_toast.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../../../core/widgets/photo_source_bottom_sheet.dart';
 import '../../../auth/presentation/viewmodels/auth_cubit.dart';
-import '../../../assistant_chat/presentation/views/assistant_chat_view.dart';
 import '../../domain/models/hair_photo_analysis.dart';
 import '../viewmodels/hair_test_cubit.dart';
 import '../viewmodels/hair_test_state.dart';
@@ -99,11 +98,6 @@ class _HairTestContent extends StatelessWidget {
                   )
                 : null,
             actions: [
-              IconButton(
-                tooltip: 'Open Dr. Hair Assistant',
-                onPressed: () => showAssistantChatSheet(context),
-                icon: const Icon(LucideIcons.messageCircleMore),
-              ),
               InkWell(
                 onTap: () async {
                   await context.read<HairTestCubit>().markAssessmentSkipped();

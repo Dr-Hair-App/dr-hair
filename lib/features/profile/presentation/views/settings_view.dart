@@ -54,13 +54,32 @@ class _SettingsViewState extends State<SettingsView> {
     try {
       await AppLocalCache.instance.put(_pushCacheKey, value);
       if (value) {
-        await FirebasePushService.syncDeviceTokenWithBackend();
+        final registered =
+            await FirebasePushService.syncDeviceTokenWithBackend();
+        if (!registered) {
+          await AppLocalCache.instance.put(_pushCacheKey, false);
+          if (mounted) {
+            setState(() => _pushNotificationsEnabled = false);
+            AppToast.show(
+              context,
+              const SnackBar(
+                backgroundColor: AppColors.danger,
+                content: Text(
+                  'Notifications could not be enabled. Check device permission and try again.',
+                ),
+              ),
+            );
+          }
+          return;
+        }
         if (mounted) {
           AppToast.show(
             context,
             const SnackBar(
               backgroundColor: AppColors.success,
-              content: Text('Push notifications enabled for care alerts.'),
+              content: Text(
+                'Push notifications enabled for orders and appointments.',
+              ),
             ),
           );
         }
@@ -359,7 +378,7 @@ class _SettingsViewState extends State<SettingsView> {
                           ),
                           SizedBox(height: 2),
                           Text(
-                            'Receive order, booking, and doctor updates. Care alerts are managed in Reminders.',
+                            'Receive order and appointment updates. Care alerts are managed in Reminders.',
                             style: TextStyle(
                               fontSize: 11.5,
                               color: AppColors.secondaryDark,

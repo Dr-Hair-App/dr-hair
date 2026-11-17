@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -110,9 +111,18 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didResolveSession) return;
-    _didResolveSession = true;
-    _checkAndLoadSession();
+    final auth = context.watch<AuthCubit?>()?.state;
+    final token = auth?.sessionToken;
+    if (token != null && token.isNotEmpty && auth?.isGuest != true) {
+      if (token != _accessToken) {
+        _accessToken = token;
+        _didResolveSession = true;
+        unawaited(_loadClinicalRecord(token));
+      }
+    } else if (!_didResolveSession) {
+      _didResolveSession = true;
+      _checkAndLoadSession();
+    }
   }
 
   void _checkAndLoadSession() {
@@ -204,11 +214,23 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
         _recordError = null;
       });
       _animController.forward(from: 0.0);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      final isAuthError = (e is DioException &&
+              (e.response?.statusCode == 401 ||
+                  e.response?.statusCode == 403)) ||
+          e.toString().toLowerCase().contains('401') ||
+          e.toString().toLowerCase().contains('auth');
       setState(() {
         _loadingRecord = false;
-        _recordError = 'Your clinic plan could not be loaded. Check your connection and try again.';
+        if (isAuthError) {
+          _accessToken = null;
+          _recordError =
+              'Sign in to view care plans and reports shared by your clinic.';
+        } else {
+          _recordError =
+              'Your clinic plan could not be loaded. Check your connection and try again.';
+        }
       });
     }
   }
@@ -431,11 +453,11 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
             _recordError!,
             isAuthPrompt: _recordError!.contains('Sign in'),
             onRetry: () {
-              final token = _accessToken;
-              if (token != null) {
-                unawaited(_loadClinicalRecord(token));
-              } else {
+              if (_recordError?.contains('Sign in') == true ||
+                  _accessToken == null) {
                 context.push(RouteNames.signin);
+              } else {
+                unawaited(_loadClinicalRecord(_accessToken!));
               }
             },
           ),
@@ -1145,11 +1167,11 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
             _recordError!,
             isAuthPrompt: _recordError!.contains('Sign in'),
             onRetry: () {
-              final token = _accessToken;
-              if (token != null) {
-                unawaited(_loadClinicalRecord(token));
-              } else {
+              if (_recordError?.contains('Sign in') == true ||
+                  _accessToken == null) {
                 context.push(RouteNames.signin);
+              } else {
+                unawaited(_loadClinicalRecord(_accessToken!));
               }
             },
           ),

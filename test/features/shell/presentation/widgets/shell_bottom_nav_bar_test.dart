@@ -6,7 +6,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 void main() {
   testWidgets('selects tabs through the shell navigation bar', (tester) async {
     int selectedIndex = 0;
-    bool actionPressed = false;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -15,7 +14,6 @@ void main() {
             child: ShellBottomNavBar(
               currentIndex: selectedIndex,
               onTabSelected: (index) => selectedIndex = index,
-              onActionPressed: () => actionPressed = true,
             ),
           ),
         ),
@@ -26,9 +24,7 @@ void main() {
     await tester.tap(find.byIcon(LucideIcons.circlePlay));
     expect(selectedIndex, 2);
 
-    // Tap AI Action button on the right
-    await tester.tap(find.byTooltip('AI Hair Assistant'));
-    expect(actionPressed, true);
+    expect(find.byTooltip('AI Hair Assistant'), findsNothing);
   });
 
   testWidgets('renders and handles taps on cart summary bar', (tester) async {
@@ -83,85 +79,26 @@ void main() {
     expect(find.byKey(const ValueKey('cart-summary')), findsNothing);
     expect(find.byKey(const ValueKey('cart-summary-hidden')), findsOneWidget);
   });
-  testWidgets('shows the AI Assistant action regardless of assessment state', (
+  testWidgets('keeps the navigation pill centered with no assistant action', (
     tester,
   ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: ShellBottomNavBar(
-            currentIndex: 0,
-            onTabSelected: (_) {},
-            onActionPressed: () {},
-          ),
+          body: ShellBottomNavBar(currentIndex: 0, onTabSelected: (_) {}),
         ),
       ),
     );
 
+    expect(find.byTooltip('AI Hair Assistant'), findsNothing);
+    expect(find.byTooltip('Products'), findsNothing);
+    final constrainedBoxFinder = find.byWidgetPredicate(
+      (w) => w is ConstrainedBox && w.constraints.maxWidth == 300,
+    );
+    expect(constrainedBoxFinder, findsOneWidget);
     expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is Image &&
-            widget.image is AssetImage &&
-            (widget.image as AssetImage).assetName ==
-                'assets/images/WhiteLogo.png',
-      ),
+      find.ancestor(of: constrainedBoxFinder, matching: find.byType(Center)),
       findsOneWidget,
     );
-    expect(find.byTooltip('AI Hair Assistant'), findsOneWidget);
   });
-
-  testWidgets(
-    'hides circular action button and centers pill when showActionButton is false',
-    (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ShellBottomNavBar(
-              currentIndex: 0,
-              showActionButton: false,
-              onTabSelected: (_) {},
-            ),
-          ),
-        ),
-      );
-
-      expect(find.byTooltip('AI Hair Assistant'), findsNothing);
-
-      // Verify it is centered and constrained (not expanding to full screen width)
-      final constrainedBoxFinder = find.byWidgetPredicate(
-        (w) => w is ConstrainedBox && w.constraints.maxWidth == 300,
-      );
-      expect(constrainedBoxFinder, findsOneWidget);
-      expect(
-        find.ancestor(of: constrainedBoxFinder, matching: find.byType(Center)),
-        findsOneWidget,
-      );
-    },
-  );
-
-  testWidgets(
-    'AI Assistant action remains available when products are disabled',
-    (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ShellBottomNavBar(currentIndex: 0, onTabSelected: (_) {}),
-          ),
-        ),
-      );
-
-      expect(
-        find.byWidgetPredicate(
-          (widget) =>
-              widget is Image &&
-              widget.image is AssetImage &&
-              (widget.image as AssetImage).assetName ==
-                  'assets/images/WhiteLogo.png',
-        ),
-        findsOneWidget,
-      );
-      expect(find.byTooltip('AI Hair Assistant'), findsOneWidget);
-    },
-  );
 }

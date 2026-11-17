@@ -28,6 +28,7 @@ class AppConfigCubit extends Cubit<AppConfigState> {
         state.copyWith(
           features: bundle.features,
           appointmentBilling: bundle.appointmentBilling,
+          versionCheck: bundle.versionCheck,
           isLoading: false,
         ),
       );

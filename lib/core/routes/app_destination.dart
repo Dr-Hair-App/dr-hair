@@ -79,9 +79,6 @@ class AppDestination {
       'privacy' || 'privacy_policy' => RouteNames.privacyPolicy,
       'terms' || 'terms_and_conditions' => RouteNames.terms,
       'assessment_result' => RouteNames.assessmentResult,
-      'assistant_history' ||
-      'chat_history' ||
-      'previous_chats' => RouteNames.assistantHistory,
       _ => null,
     };
   }
@@ -122,7 +119,6 @@ class AppDestination {
     RouteNames.cancellationPolicy,
     RouteNames.products,
     RouteNames.assessmentResult,
-    RouteNames.assistantHistory,
   };
 
   /// Validates whether a candidate URI path exists in the app's routing table.

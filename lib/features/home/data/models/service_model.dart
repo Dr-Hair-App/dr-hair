@@ -14,12 +14,13 @@ class ServiceModel extends ServiceEntity {
   factory ServiceModel.fromJson(Map<String, dynamic> json) {
     return ServiceModel(
       id: json['id'] as String? ?? '',
-      title: json['title'] as String? ?? '',
+      title: json['title'] as String? ?? json['name'] as String? ?? '',
       description: json['description'] as String? ?? '',
-      imageUrl: json['imageUrl'] as String? ?? '',
+      imageUrl:
+          json['imageUrl'] as String? ?? json['image_url'] as String? ?? '',
       rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
-      reviewsCount: json['reviewsCount'] as int? ?? 0,
-      price: json['price'] as String? ?? '',
+      reviewsCount: (json['reviewsCount'] as num?)?.toInt() ?? 0,
+      price: json['price']?.toString() ?? '',
     );
   }
 

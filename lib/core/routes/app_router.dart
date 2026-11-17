@@ -5,7 +5,6 @@ import '../../features/auth/presentation/views/signin_view.dart';
 import '../../features/auth/presentation/views/complete_profile_view.dart';
 import '../../features/appointments/presentation/clinic_appointment_view.dart';
 import '../../features/auth/presentation/views/splash_view.dart';
-import '../../features/assistant_chat/presentation/views/assistant_chat_history_view.dart';
 import '../../features/hair_test/presentation/views/assessment_result_view.dart';
 import '../../features/hair_test/presentation/views/hair_test_view.dart';
 import '../../features/home/presentation/views/home_view.dart';
@@ -118,13 +117,6 @@ class AppRouter {
         path: RouteNames.assessmentResult,
         builder: (context, state) =>
             AssessmentRequiredRoute(child: const AssessmentResultView()),
-      ),
-      GoRoute(
-        path: RouteNames.assistantHistory,
-        builder: (context, state) => const AuthRequiredRoute(
-          routePath: RouteNames.assistantHistory,
-          child: AssistantChatHistoryView(),
-        ),
       ),
       GoRoute(
         path: RouteNames.updateProfile,

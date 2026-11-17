@@ -4,9 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
 
-/// Modern bottom navigation bar inspired by the dual-element design:
-/// - A sleek floating pill with a fluid sliding capsule indicator for active tabs.
-/// - A standalone circular action button on the right for the AI assistant sheet.
+/// Floating navigation pill with a fluid sliding capsule indicator for active tabs.
 class ShellBottomNavBar extends StatefulWidget {
   final int currentIndex;
   final bool isHidden;
@@ -15,8 +13,6 @@ class ShellBottomNavBar extends StatefulWidget {
   final VoidCallback? onCartPressed;
   final int cartItemCount;
   final int? cartSubtotal;
-  final VoidCallback? onActionPressed;
-  final bool showActionButton;
 
   const ShellBottomNavBar({
     super.key,
@@ -27,8 +23,6 @@ class ShellBottomNavBar extends StatefulWidget {
     this.onCartPressed,
     this.cartItemCount = 0,
     this.cartSubtotal,
-    this.onActionPressed,
-    this.showActionButton = true,
   });
 
   @override
@@ -37,7 +31,6 @@ class ShellBottomNavBar extends StatefulWidget {
 
 class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
   int? _pressedTabIndex;
-  bool _isActionPressed = false;
   int _lastPillIndex = 0;
 
   int? _getPillIndex(int tabIndex) {
@@ -52,13 +45,6 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
     widget.onTabSelected(index);
   }
 
-  void _handleActionTap() {
-    HapticFeedback.mediumImpact();
-    if (widget.onActionPressed != null) {
-      widget.onActionPressed!();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final bool disableMotion = MediaQuery.disableAnimationsOf(context);
@@ -67,7 +53,6 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
         ? Duration.zero
         : const Duration(milliseconds: 180);
     final double barHeight = isIOS ? 53 : 55;
-    final double actionSize = isIOS ? 53 : 55;
 
     final int? currentPillIndex = _getPillIndex(widget.currentIndex);
     if (currentPillIndex != null) {
@@ -138,57 +123,21 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
               else
                 const SizedBox.shrink(key: ValueKey('cart-summary-hidden')),
 
-              // 2. Navigation Row (Pill + Standalone Action Button)
+              // 2. Floating navigation pill
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16)
                     .copyWith(bottom: isIOS ? 0 : 10),
-                child: widget.showActionButton
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          // Floating Pill with Navigation Tabs & Sliding Capsule Indicator
-                          Expanded(
-                            child: _buildPill(
-                              barHeight: barHeight,
-                              motionDuration: motionDuration,
-                              targetSlotIndex: targetSlotIndex,
-                              isPillIndicatorVisible: isPillIndicatorVisible,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-
-                          // Standalone Circular Action Button
-                          IgnorePointer(
-                            ignoring: widget.isHidden,
-                            child: AnimatedSlide(
-                              duration: motionDuration,
-                              curve: Curves.easeInOutCubic,
-                              offset: Offset(widget.isHidden ? 1.5 : 0, 0),
-                              child: AnimatedOpacity(
-                                duration: motionDuration,
-                                curve: Curves.easeInOutCubic,
-                                opacity: widget.isHidden ? 0 : 1,
-                                child: _buildCircularActionButton(
-                                  isSelected: false,
-                                  motionDuration: motionDuration,
-                                  size: actionSize,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      )
-                    : Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 300),
-                          child: _buildPill(
-                            barHeight: barHeight,
-                            motionDuration: motionDuration,
-                            targetSlotIndex: targetSlotIndex,
-                            isPillIndicatorVisible: isPillIndicatorVisible,
-                          ),
-                        ),
-                      ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 300),
+                    child: _buildPill(
+                      barHeight: barHeight,
+                      motionDuration: motionDuration,
+                      targetSlotIndex: targetSlotIndex,
+                      isPillIndicatorVisible: isPillIndicatorVisible,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -460,75 +409,6 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
                 ),
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCircularActionButton({
-    bool isSelected = false,
-    required Duration motionDuration,
-    required double size,
-  }) {
-    const String label = 'AI Hair Assistant';
-
-    return Semantics(
-      button: true,
-      label: label,
-      selected: isSelected,
-      excludeSemantics: true,
-      child: Tooltip(
-        message: label,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTapDown: (_) => setState(() => _isActionPressed = true),
-          onTapUp: (_) => setState(() => _isActionPressed = false),
-          onTapCancel: () => setState(() => _isActionPressed = false),
-          onTap: _handleActionTap,
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-          child: TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 0.0, end: _isActionPressed ? 1.0 : 0.0),
-            duration: motionDuration,
-            curve: Curves.easeOutCubic,
-            builder: (context, pressProgress, child) {
-              final double baseScale = isSelected ? 1.04 : 1.0;
-              final double scale = baseScale - (0.12 * pressProgress);
-              final double iconScale =
-                  (isSelected ? 1.0 : 0.92) - (0.05 * pressProgress);
-              final double iconAngle = -0.05 * pressProgress;
-
-              final Color activeBg = AppColors.primary;
-
-              return Transform.scale(
-                scale: scale,
-                child: Container(
-                  width: size,
-                  height: size,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: activeBg,
-                  ),
-                  padding: const EdgeInsets.only(bottom: 6, left: 4),
-                  child: Center(
-                    child: Transform.rotate(
-                      angle: iconAngle,
-                      child: Transform.scale(
-                        scale: iconScale,
-                        child: Image.asset(
-                          'assets/images/WhiteLogo.png',
-                          // width: 26,
-                          height: 38,
-                          fit: BoxFit.contain,
-                          semanticLabel: 'Dr. Hair logo',
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
           ),
         ),
       ),

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:dio/dio.dart';
 
 import '../../../../core/constants/api_endpoints.dart';
@@ -26,8 +28,15 @@ class CartRemoteDataSource {
       return {'Authorization': 'Bearer ${token.trim()}'};
     }
     var guestId = _cache.getString(_guestKey);
-    if (guestId == null || guestId.isEmpty) {
-      guestId = 'guest_${DateTime.now().millisecondsSinceEpoch}';
+    if (guestId == null ||
+        !RegExp(
+          r'^guest_[a-f0-9]{64}$',
+          caseSensitive: false,
+        ).hasMatch(guestId)) {
+      final secureRandom = Random.secure();
+      final entropy = List<int>.generate(32, (_) => secureRandom.nextInt(256));
+      guestId =
+          'guest_${entropy.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join()}';
       await _cache.put(_guestKey, guestId);
     }
     return {'x-guest-session-id': guestId};

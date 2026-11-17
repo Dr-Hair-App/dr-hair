@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../../core/constants/api_endpoints.dart';
 import '../../../../core/network/dio_client.dart';
@@ -10,10 +11,12 @@ import '../presentation/viewmodels/app_config_state.dart';
 class AppConfigBundle {
   final Map<String, bool> features;
   final AppointmentBillingConfig appointmentBilling;
+  final AppVersionCheck versionCheck;
 
   const AppConfigBundle({
     required this.features,
     required this.appointmentBilling,
+    this.versionCheck = const AppVersionCheck(),
   });
 }
 
@@ -81,13 +84,25 @@ class AppConfigRepository {
   /// Synchronizes with backend `/api/v1/app/config` and updates local cache.
   Future<AppConfigBundle> fetchAppConfig() async {
     try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final platform = kIsWeb
+          ? 'web'
+          : defaultTargetPlatform == TargetPlatform.iOS
+          ? 'ios'
+          : 'android';
       final response = await _dioClient.dio.get<Map<String, dynamic>>(
         ApiEndpoints.appConfig,
+        queryParameters: {
+          'platform': platform,
+          'version': packageInfo.version,
+          'build': packageInfo.buildNumber,
+        },
       );
       final body = response.data;
       if (body != null && body['data'] != null) {
         final featuresData = body['data']['features'];
         final billingData = body['data']['appointment_billing'];
+        final versionData = body['data']['versionCheck'];
 
         final featuresResult = Map<String, bool>.from(defaultFeatures);
         if (featuresData is Map) {
@@ -112,6 +127,7 @@ class AppConfigRepository {
         return AppConfigBundle(
           features: featuresResult,
           appointmentBilling: billingResult,
+          versionCheck: AppVersionCheck.fromJson(versionData is Map ? Map<String, dynamic>.from(versionData) : null),
         );
       }
     } catch (e) {
@@ -120,6 +136,7 @@ class AppConfigRepository {
     return AppConfigBundle(
       features: getCachedFeatures(),
       appointmentBilling: getCachedBillingConfig(),
+      versionCheck: const AppVersionCheck(),
     );
   }
 

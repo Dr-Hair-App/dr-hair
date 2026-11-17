@@ -14,8 +14,14 @@ class HomeRemoteDataSourceImpl implements HomeRemoteDataSource {
   @override
   Future<List<ServiceModel>> fetchServices() async {
     final response = await dioClient.dio.get(ApiEndpoints.services);
-    if (response.statusCode == 200 && response.data is List) {
-      return (response.data as List)
+    final responseData = response.data;
+    final services = responseData is List
+        ? responseData
+        : responseData is Map
+        ? (responseData['data'] is List ? responseData['data'] as List : null)
+        : null;
+    if (response.statusCode == 200 && services != null) {
+      return services
           .map((item) => ServiceModel.fromJson(item as Map<String, dynamic>))
           .toList();
     }

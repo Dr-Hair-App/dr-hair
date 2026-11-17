@@ -12,7 +12,6 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../../../core/widgets/photo_source_bottom_sheet.dart';
 import '../../../care/presentation/viewmodels/care_cubit.dart';
-import '../../../assistant_chat/presentation/views/assistant_chat_view.dart';
 import '../../../shop/data/models/product_model.dart';
 import '../../../shop/presentation/viewmodels/cart_cubit.dart';
 import '../../data/services/assessment_pdf_generator.dart';
@@ -182,11 +181,6 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               ),
             ),
             actions: [
-              IconButton(
-                tooltip: 'Open Dr. Hair Assistant',
-                onPressed: () => showAssistantChatSheet(context),
-                icon: const Icon(LucideIcons.messageCircleMore),
-              ),
               TextButton(
                 onPressed: () {
                   context.read<HairTestCubit>().startRetest();

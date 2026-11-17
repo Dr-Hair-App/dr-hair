@@ -79,7 +79,9 @@ class DioClient {
             _printYellow(
               '==================== [DIO REQUEST] ====================',
             );
-            _printYellow('🚀 METHOD: ${options.method} | URL: ${options.uri}');
+            _printYellow(
+              '🚀 METHOD: ${options.method} | URL: ${options.uri.replace(query: '')}',
+            );
             if (options.headers.isNotEmpty) {
               final safeHeaders = Map<String, dynamic>.from(options.headers)
                 ..removeWhere((key, _) => key.toLowerCase() == 'authorization');
@@ -105,7 +107,7 @@ class DioClient {
             _printYellow(
               '✅ STATUS: ${response.statusCode} | URL: ${response.requestOptions.uri}',
             );
-            _printYellow('📄 DATA: ${response.data}');
+            _printYellow('📄 DATA: ${_sanitizePayload(response.data)}');
             _printYellow(
               '=======================================================',
             );
@@ -119,10 +121,12 @@ class DioClient {
 
           final statusCode = err.response?.statusCode;
           final dynamic errorData = err.response?.data;
-          final errorCode =
-              errorData is Map ? errorData['code']?.toString() : null;
-          final errorMsg =
-              errorData is Map ? errorData['message']?.toString() : null;
+          final errorCode = errorData is Map
+              ? errorData['code']?.toString()
+              : null;
+          final errorMsg = errorData is Map
+              ? errorData['message']?.toString()
+              : null;
 
           if (statusCode == 401 &&
               (errorCode == 'ACCOUNT_DELETED' ||
@@ -137,10 +141,9 @@ class DioClient {
                       errorMsg.toLowerCase().contains(
                         'suspended by clinic administration',
                       )))) {
-            final details =
-                errorData is Map && errorData['details'] is Map
-                    ? errorData['details'] as Map
-                    : null;
+            final details = errorData is Map && errorData['details'] is Map
+                ? errorData['details'] as Map
+                : null;
             final supportPhone = details?['support_phone']?.toString();
             final supportEmail = details?['support_email']?.toString();
             SessionCoordinator.instance.showAccountBlockedDialog(
@@ -155,11 +158,17 @@ class DioClient {
               '==================== [DIO ERROR] ======================',
             );
             _printYellow(
-              '⚠️ STATUS: ${err.response?.statusCode ?? 'NETWORK/TIMEOUT'} | URL: ${err.requestOptions.uri}',
+              '⚠️ STATUS: ${err.response?.statusCode ?? 'NETWORK/TIMEOUT'} | URL: ${err.requestOptions.uri.replace(query: '')}',
             );
             _printYellow('❌ MESSAGE: ${err.message}');
+            final requestId = err.response?.headers.value('x-request-id');
+            if (requestId != null && requestId.isNotEmpty) {
+              _printYellow('🧾 REQUEST ID: $requestId');
+            }
             if (err.response?.data != null) {
-              _printYellow('📄 ERROR DATA: ${err.response?.data}');
+              _printYellow(
+                '📄 ERROR DATA: ${_sanitizePayload(err.response?.data)}',
+              );
             }
             _printYellow(
               '=======================================================',
@@ -173,15 +182,39 @@ class DioClient {
 
   static dynamic _sanitizePayload(dynamic data) {
     if (data is Map) {
-      final sanitized = Map<dynamic, dynamic>.from(data);
-      for (final key in sanitized.keys.toList()) {
-        final keyLower = key.toString().toLowerCase();
-        if (keyLower.contains('password')) {
-          sanitized[key] = '***';
-        }
-      }
-      return sanitized;
+      return data.map<dynamic, dynamic>((key, value) {
+        final keyLower = key.toString().toLowerCase().replaceAll(
+          RegExp(r'[^a-z0-9]'),
+          '',
+        );
+        const sensitiveKeys = {
+          'password',
+          'newpassword',
+          'refreshtoken',
+          'token',
+          'accesstoken',
+          'idtoken',
+          'providertoken',
+          'providerid',
+          'authorization',
+          'otp',
+          'phone',
+          'mobile',
+          'email',
+          'name',
+          'sessionid',
+          'deviceid',
+        };
+        final isSensitive =
+            sensitiveKeys.contains(keyLower) ||
+            keyLower.contains('token') ||
+            keyLower.contains('password') ||
+            keyLower.contains('secret') ||
+            keyLower.contains('authorization');
+        return MapEntry(key, isSensitive ? '***' : _sanitizePayload(value));
+      });
     }
+    if (data is List) return data.map(_sanitizePayload).toList(growable: false);
     return data;
   }
 

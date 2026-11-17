@@ -56,7 +56,7 @@ class AuthCubit extends Cubit<AuthState> {
       unawaited(
         FirebasePushService.syncDeviceTokenWithBackend(
           accessToken: result.token,
-        ),
+        ).then<void>((_) {}),
       );
     }
     return true;
@@ -412,9 +412,7 @@ class AuthCubit extends Cubit<AuthState> {
     try {
       final repo = repository;
       if (repo == null) {
-        throw const AuthRepositoryException(
-          'Authentication is not configured.',
-        );
+        throw const AuthRepositoryException('Authentication is not configured.');
       }
       final result = await repo.verifySocialSignup(
         phone: phone.trim(),
@@ -442,7 +440,9 @@ class AuthCubit extends Cubit<AuthState> {
     try {
       final repo = repository;
       if (repo == null) {
-        throw const AuthRepositoryException('Authentication is not configured.');
+        throw const AuthRepositoryException(
+          'Authentication is not configured.',
+        );
       }
       await repo.forgotPassword(login.trim());
       emit(state.copyWith(status: AuthStatus.unauthenticated, clearError: true));
@@ -527,7 +527,7 @@ class AuthCubit extends Cubit<AuthState> {
         unawaited(
           FirebasePushService.syncDeviceTokenWithBackend(
             accessToken: state.sessionToken,
-          ),
+          ).then<void>((_) {}),
         );
       }
       return true;
