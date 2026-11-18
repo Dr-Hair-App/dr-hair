@@ -224,6 +224,92 @@ void main() {
       },
     );
 
+    test('restarts pending polling for the newly bound patient after account switch', () async {
+      final secondPatientStatusRead = Completer<void>();
+      final dio = Dio(BaseOptions(baseUrl: 'https://test.drhair.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            if (options.path == '/api/v1/patient/clinical-record') {
+              final isSecondPatient =
+                  options.headers['Authorization'] == 'Bearer token-B';
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: {
+                    'data': {
+                      'assessments': [
+                        {
+                          'reference_no': isSecondPatient
+                              ? 'HT-PATIENT-B'
+                              : 'HT-PATIENT-A',
+                          'status': 'submitted',
+                          'full_name': isSecondPatient
+                              ? 'Patient B'
+                              : 'Patient A',
+                          'hair_loss_stage': 'Reported thinning',
+                          'ai_assessment_status': 'queued',
+                        },
+                      ],
+                      'reports': [],
+                      'care_plans': [],
+                    },
+                  },
+                ),
+              );
+              return;
+            }
+            if (options.path ==
+                '/api/v1/hair-tests/HT-PATIENT-B/ai_assessment/status') {
+              if (!secondPatientStatusRead.isCompleted) {
+                secondPatientStatusRead.complete();
+              }
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: {
+                    'data': {
+                      'status': 'ready',
+                      'ai_assessment': {
+                        'ai_status': 'available',
+                        'scalp_health_score': 78,
+                        'stage_classification': 'Reported pattern',
+                        'summary': 'Patient B result.',
+                      },
+                    },
+                  },
+                ),
+              );
+              return;
+            }
+            handler.reject(DioException(requestOptions: options));
+          },
+        ),
+      );
+      final cubit = HairTestCubit(dio: dio, cache: AppLocalCache.inMemory());
+      final secondPatientResult = Completer<void>();
+      final subscription = cubit.stream.listen((state) {
+        if (state.aiAssessment?.summary == 'Patient B result.' &&
+            !secondPatientResult.isCompleted) {
+          secondPatientResult.complete();
+        }
+      });
+
+      await cubit.bindPatient('patient-A', sessionToken: 'token-A');
+      await cubit.bindPatient('patient-B', sessionToken: 'token-B');
+
+      await secondPatientStatusRead.future.timeout(const Duration(seconds: 5));
+      await secondPatientResult.future.timeout(const Duration(seconds: 5));
+      expect(cubit.state.referenceNo, 'HT-PATIENT-B');
+      expect(cubit.state.aiAssessment?.summary, 'Patient B result.');
+      expect(cubit.state.isSubmitting, isFalse);
+
+      await subscription.cancel();
+      await cubit.close();
+    });
+
     test(
       'submits answers and both image variants in one multipart request',
       () async {
@@ -339,6 +425,15 @@ void main() {
         expect(
           (cachedResult['ai_assessment'] as Map)['scalp_photo_verification'],
           isA<List>(),
+        );
+        expect(
+          (cachedResult['local_photo_paths'] as Map)['Front Hairline'],
+          cubit.state.photos['Front Hairline'],
+        );
+        expect(
+          (cachedResult['local_optimized_photo_paths']
+              as Map)['Front Hairline'],
+          cubit.state.optimizedPhotos['Front Hairline'],
         );
         await progressSubscription.cancel();
         await cubit.close();
@@ -467,6 +562,49 @@ void main() {
         expect(cubit.state.referenceNo, 'HT-CACHED-0077');
         expect(cubit.state.aiAssessment?.summary, 'Cached assessment summary.');
         await cubit.close();
+      },
+    );
+
+    test(
+      'restores cached local result photos and deletes them on sign-out',
+      () async {
+        final temp = await Directory.systemTemp.createTemp(
+          'hair_cached_result_photos_',
+        );
+        final original = File('${temp.path}/front.original.jpg')
+          ..writeAsBytesSync([0xff, 0xd8, 0xff, 0xd9]);
+        final optimized = File('${temp.path}/front.upload.webp')
+          ..writeAsBytesSync([0x52, 0x49, 0x46, 0x46]);
+        final cache = AppLocalCache.inMemory({
+          'hair_test_submission_result_patient-photos': jsonEncode({
+            'reference_no': 'HT-CACHED-PHOTO-001',
+            'ai_assessment_status': 'ready',
+            'local_photo_paths': {'Front Hairline': original.path},
+            'local_optimized_photo_paths': {'Front Hairline': optimized.path},
+            'test': {'scalp_photos': []},
+          }),
+        });
+        final cubit = HairTestCubit(
+          cache: cache,
+          imageUploadService: _testImageUploadService(),
+        );
+
+        await cubit.bindPatient('patient-photos');
+        expect(cubit.state.photos['Front Hairline'], original.path);
+        expect(cubit.state.optimizedPhotos['Front Hairline'], optimized.path);
+        expect(File(original.path).existsSync(), isTrue);
+        expect(File(optimized.path).existsSync(), isTrue);
+
+        await cubit.bindPatient(null);
+        expect(File(original.path).existsSync(), isFalse);
+        expect(File(optimized.path).existsSync(), isFalse);
+        expect(
+          cache.containsKey('hair_test_submission_result_patient-photos'),
+          isFalse,
+        );
+
+        await cubit.close();
+        await temp.delete(recursive: true);
       },
     );
 

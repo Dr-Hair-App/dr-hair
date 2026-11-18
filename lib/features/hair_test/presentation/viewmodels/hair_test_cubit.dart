@@ -32,7 +32,7 @@ class HairTestCubit extends Cubit<HairTestState> {
   final PatientClinicalApi _clinicalApi;
   String? _patientId;
   String? _sessionToken;
-  bool _aiStatusPolling = false;
+  final Set<String> _aiStatusPollingReferences = <String>{};
   final Map<String, int> _photoCheckGeneration = {};
 
   String get _draftKey => _patientId != null && _patientId!.isNotEmpty
@@ -267,9 +267,7 @@ class HairTestCubit extends Cubit<HairTestState> {
       final useLegacyCache = _patientId == null;
       final hasCompleted =
           _cache.getBool(_completedKey) ??
-          (useLegacyCache
-              ? _cache.getBool('has_completed_hair_test')
-              : null) ??
+          (useLegacyCache ? _cache.getBool('has_completed_hair_test') : null) ??
           false;
       var restored = state;
       final rawDraft =
@@ -351,12 +349,14 @@ class HairTestCubit extends Cubit<HairTestState> {
           _cache.getString(_nameKey) ??
           (useLegacyCache ? _cache.getString('hair_test_name') : null) ??
           '';
-      final savedAge = _cache.getString(_ageKey) ??
+      final savedAge =
+          _cache.getString(_ageKey) ??
           (useLegacyCache ? _cache.getString('hair_test_age') : null) ??
           '';
 
       AiAssessmentModel? savedAiModel;
-      final rawAiString = _cache.getString(_aiAssessmentKey) ??
+      final rawAiString =
+          _cache.getString(_aiAssessmentKey) ??
           (useLegacyCache ? _cache.getString('hair_test_ai_assessment') : null);
       if (rawAiString != null && rawAiString.isNotEmpty) {
         try {
@@ -370,7 +370,8 @@ class HairTestCubit extends Cubit<HairTestState> {
       }
 
       Map<String, dynamic>? savedSubmission;
-      final rawSubmission = _cache.getString(_submissionResultKey) ??
+      final rawSubmission =
+          _cache.getString(_submissionResultKey) ??
           (useLegacyCache
               ? _cache.getString('hair_test_submission_result')
               : null);
@@ -398,10 +399,16 @@ class HairTestCubit extends Cubit<HairTestState> {
         final photoRecords = cachedTest['scalp_photos'] is List
             ? List<dynamic>.from(cachedTest['scalp_photos'] as List)
             : const <dynamic>[];
-        final restoredPhotos = _photosFromScalpPhotoRecords(
-          photoRecords,
-          restored.photos,
+        final localPhotos = await _existingLocalPhotoPaths(
+          savedSubmission['local_photo_paths'],
         );
+        final localOptimizedPhotos = await _existingLocalPhotoPaths(
+          savedSubmission['local_optimized_photo_paths'],
+        );
+        final restoredPhotos = _photosFromScalpPhotoRecords(photoRecords, {
+          ...restored.photos,
+          ...localPhotos,
+        });
         emit(
           restored.copyWith(
             isCompleted: true,
@@ -415,6 +422,10 @@ class HairTestCubit extends Cubit<HairTestState> {
             age: savedAge,
             aiAssessment: savedAiModel,
             photos: restoredPhotos,
+            optimizedPhotos: {
+              ...restored.optimizedPhotos,
+              ...localOptimizedPhotos,
+            },
             photoAnalysis: _photoVerificationForAssessment(
               savedAiModel,
               markMissingUnavailable:
@@ -685,10 +696,15 @@ class HairTestCubit extends Cubit<HairTestState> {
             response.data?['reference_no']?.toString() ??
             response.data?['data']?['reference_no']?.toString() ??
             response.data?['data']?['test']?['reference_no']?.toString();
-        await _cache.put(
-          _submissionResultKey,
-          jsonEncode(response.data?['data'] ?? response.data ?? const {}),
+        final responseData = response.data?['data'];
+        final cachedSubmission = responseData is Map
+            ? Map<String, dynamic>.from(responseData)
+            : Map<String, dynamic>.from(response.data ?? const {});
+        cachedSubmission['local_photo_paths'] = _localPhotoPaths(state.photos);
+        cachedSubmission['local_optimized_photo_paths'] = _localPhotoPaths(
+          state.optimizedPhotos,
         );
+        await _cache.put(_submissionResultKey, jsonEncode(cachedSubmission));
 
         final rawAi =
             response.data?['data']?['ai_assessment'] ??
@@ -1401,8 +1417,11 @@ class HairTestCubit extends Cubit<HairTestState> {
   };
 
   Future<void> _pollAiAssessmentStatus(String referenceNo, String token) async {
-    if (_aiStatusPolling || token.isEmpty || referenceNo.isEmpty) return;
-    _aiStatusPolling = true;
+    if (token.isEmpty ||
+        referenceNo.isEmpty ||
+        !_aiStatusPollingReferences.add(referenceNo)) {
+      return;
+    }
     try {
       final dioToUse =
           _dio ??
@@ -1513,8 +1532,35 @@ class HairTestCubit extends Cubit<HairTestState> {
         );
       }
     } finally {
-      _aiStatusPolling = false;
+      _aiStatusPollingReferences.remove(referenceNo);
     }
+  }
+
+  Map<String, String> _localPhotoPaths(Map<String, String> paths) => {
+    for (final entry in paths.entries)
+      if (entry.value.trim().isNotEmpty &&
+          !entry.value.startsWith('http://') &&
+          !entry.value.startsWith('https://'))
+        entry.key: entry.value,
+  };
+
+  Future<Map<String, String>> _existingLocalPhotoPaths(dynamic value) async {
+    if (value is! Map) return const {};
+    final existing = <String, String>{};
+    for (final entry in value.entries) {
+      final label = entry.key.toString();
+      final path = entry.value?.toString() ?? '';
+      if (label.isEmpty ||
+          path.isEmpty ||
+          path.startsWith('http://') ||
+          path.startsWith('https://')) {
+        continue;
+      }
+      try {
+        if (await File(path).exists()) existing[label] = path;
+      } catch (_) {}
+    }
+    return existing;
   }
 
   Future<void> _cacheAssessmentResult(
