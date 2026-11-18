@@ -114,8 +114,11 @@ class _MyAppState extends State<MyApp> {
         _notificationsCubit.onForegroundNotificationReceived(
           title: title,
           body: body,
-          id: message.messageId,
+          id: _notificationId(message),
           data: message.data,
+        );
+        SessionCoordinator.instance.refreshHomeSummaryForReportNotification(
+          message.data,
         );
 
         // 2. Tactile haptic feedback
@@ -132,6 +135,9 @@ class _MyAppState extends State<MyApp> {
 
   void _navigateFromMessage(RemoteMessage message) {
     try {
+      SessionCoordinator.instance.refreshHomeSummaryForReportNotification(
+        message.data,
+      );
       final location = FirebasePushService.resolveMessageLocation(message);
       final safeLocation = AppDestination.resolveSafeLocation(
         location,
@@ -146,6 +152,15 @@ class _MyAppState extends State<MyApp> {
         AppRouter.router.go(RouteNames.mainShell);
       }
     }
+  }
+
+  String? _notificationId(RemoteMessage message) {
+    final id =
+        message.data['notification_id'] ??
+        message.data['notificationId'] ??
+        message.messageId;
+    final normalized = id?.toString().trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
   }
 
   @override

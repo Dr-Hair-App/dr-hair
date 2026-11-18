@@ -101,4 +101,27 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('renders right-side shop button when isShopEnabled is true', (
+    tester,
+  ) async {
+    bool shopTapped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ShellBottomNavBar(
+            currentIndex: 0,
+            onTabSelected: (_) {},
+            isShopEnabled: true,
+            onShopPressed: () => shopTapped = true,
+          ),
+        ),
+      ),
+    );
+
+    final shopButton = find.byIcon(LucideIcons.shoppingBag);
+    expect(shopButton, findsOneWidget);
+    await tester.tap(shopButton);
+    expect(shopTapped, isTrue);
+  });
 }

@@ -83,11 +83,21 @@ class NotificationsCubit extends Cubit<NotificationsState> {
       id: notificationId,
       title: title,
       body: body,
-      type: type ?? (data?['type']?.toString() ?? 'general'),
+      type:
+          type ??
+          (data?['type']?.toString() ??
+              data?['destination_type']?.toString() ??
+              'general'),
       destination: NotificationItemModel.fromJson({
-        'type': data?['type'] ?? type ?? 'general',
+        'type': data?['type'] ?? data?['destination_type'] ?? type ?? 'general',
+        'destination_type': data?['destination_type'],
         'screen': data?['screen'],
         'entity_id': data?['entity_id'] ?? data?['entityId'],
+        'report_id': data?['report_id'] ?? data?['reportId'],
+        'notification_id':
+            data?['notification_id'] ??
+            data?['notificationId'] ??
+            notificationId,
       }).destination,
       data: data ?? const {},
       isRead: false,

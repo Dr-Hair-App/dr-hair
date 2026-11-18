@@ -8,6 +8,7 @@ import '../../../../core/routes/route_names.dart';
 import '../../../../core/widgets/custom_app_bar.dart';
 import '../../../../core/widgets/shell_tab_visibility.dart';
 import '../../../app_config/presentation/viewmodels/app_config_cubit.dart';
+import '../../../hair_test/presentation/viewmodels/hair_test_cubit.dart';
 import '../../../shop/presentation/viewmodels/cart_cubit.dart';
 import '../widgets/shell_bottom_nav_bar.dart';
 
@@ -115,8 +116,17 @@ class _MainShellViewState extends State<MainShellView> {
         valueListenable: _isBottomNavHidden,
         builder: (context, isNavHidden, child) {
           final appConfig = context.watch<AppConfigCubit?>()?.state;
-          final bool isShopEnabled =
+          final hairState = context.watch<HairTestCubit?>()?.state;
+          final bool featureEnabled =
               appConfig?.isFeatureEnabled('shop') ?? true;
+          final bool isAssessmentCritical =
+              hairState?.aiAssessment?.isCritical == true ||
+              hairState?.aiAssessment?.nextStepType == 'doctor_appointment';
+          final bool shopAllowed =
+              hairState?.aiAssessment == null ||
+              hairState!.aiAssessment!.shopEnabled;
+          final bool isShopEnabled =
+              featureEnabled && !isAssessmentCritical && shopAllowed;
 
           return BlocBuilder<CartCubit, CartState>(
             builder: (context, cartState) => RepaintBoundary(
@@ -126,9 +136,13 @@ class _MainShellViewState extends State<MainShellView> {
                 cartSubtotal: isShopEnabled ? cartState.subtotal : null,
                 isHidden: isNavHidden && !isVideosTab,
                 showBackground: !isVideosTab,
+                isShopEnabled: isShopEnabled,
                 onTabSelected: _onTabSelected,
                 onCartPressed: isShopEnabled
                     ? () => context.push(RouteNames.cart)
+                    : null,
+                onShopPressed: isShopEnabled
+                    ? () => context.push(RouteNames.products)
                     : null,
               ),
             ),

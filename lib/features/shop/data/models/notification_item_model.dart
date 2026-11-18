@@ -28,12 +28,28 @@ class NotificationItemModel {
 
   factory NotificationItemModel.fromJson(Map<String, dynamic> json) {
     final rawDest = json['destination'];
-    final destMap = rawDest is Map<String, dynamic>
-        ? rawDest
+    final outerType = json['type']?.toString().toLowerCase();
+    final rawReportId =
+        json['report_id'] ??
+        json['reportId'] ??
+        (json['data'] is Map ? (json['data'] as Map)['report_id'] : null) ??
+        (json['data'] is Map ? (json['data'] as Map)['reportId'] : null);
+    final destMap = rawDest is Map
+        ? <String, dynamic>{
+            ...Map<String, dynamic>.from(rawDest),
+            if ({
+              'report',
+              'clinical_report',
+              'report_shared',
+            }.contains(outerType))
+              'type': outerType,
+            'report_id': ?rawReportId,
+          }
         : <String, dynamic>{
             'destination_type': json['type'],
             'screen': json['screen'],
             'entity_id': json['entity_id'] ?? json['entityId'],
+            'report_id': ?rawReportId,
           };
 
     return NotificationItemModel(
@@ -76,6 +92,7 @@ class NotificationItemModel {
       'order' => LucideIcons.packageCheck,
       'product' => LucideIcons.shoppingBag,
       'treatment' => LucideIcons.stethoscope,
+      'report' || 'clinical_report' || 'report_shared' => LucideIcons.fileText,
       'reminder' => LucideIcons.sparkles,
       'announcement' => LucideIcons.megaphone,
       _ => LucideIcons.bell,
@@ -88,6 +105,9 @@ class NotificationItemModel {
       'order' => const Color(0xFF0F9F8F),
       'product' => const Color(0xFF3876C5),
       'treatment' => const Color(0xFF3876C5),
+      'report' ||
+      'clinical_report' ||
+      'report_shared' => const Color(0xFF059669),
       'reminder' => const Color(0xFF9A69C7),
       'announcement' => const Color(0xFFD97706),
       _ => const Color(0xFF64748B),

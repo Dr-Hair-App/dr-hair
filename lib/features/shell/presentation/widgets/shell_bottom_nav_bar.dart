@@ -13,6 +13,8 @@ class ShellBottomNavBar extends StatefulWidget {
   final VoidCallback? onCartPressed;
   final int cartItemCount;
   final int? cartSubtotal;
+  final bool isShopEnabled;
+  final VoidCallback? onShopPressed;
 
   const ShellBottomNavBar({
     super.key,
@@ -23,6 +25,8 @@ class ShellBottomNavBar extends StatefulWidget {
     this.onCartPressed,
     this.cartItemCount = 0,
     this.cartSubtotal,
+    this.isShopEnabled = false,
+    this.onShopPressed,
   });
 
   @override
@@ -123,20 +127,41 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
               else
                 const SizedBox.shrink(key: ValueKey('cart-summary-hidden')),
 
-              // 2. Floating navigation pill
+              // 2. Floating navigation pill & Optional Right-side Product Screen Button
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16)
                     .copyWith(bottom: isIOS ? 0 : 10),
                 child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 300),
-                    child: _buildPill(
-                      barHeight: barHeight,
-                      motionDuration: motionDuration,
-                      targetSlotIndex: targetSlotIndex,
-                      isPillIndicatorVisible: isPillIndicatorVisible,
-                    ),
-                  ),
+                  child: widget.isShopEnabled
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 300),
+                              child: _buildPill(
+                                barHeight: barHeight,
+                                motionDuration: motionDuration,
+                                targetSlotIndex: targetSlotIndex,
+                                isPillIndicatorVisible: isPillIndicatorVisible,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildShopActionButton(
+                              barHeight: barHeight,
+                              motionDuration: motionDuration,
+                            ),
+                          ],
+                        )
+                      : ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 300),
+                          child: _buildPill(
+                            barHeight: barHeight,
+                            motionDuration: motionDuration,
+                            targetSlotIndex: targetSlotIndex,
+                            isPillIndicatorVisible: isPillIndicatorVisible,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -405,6 +430,58 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
                       //   child: Text(label, textAlign: TextAlign.center),
                       // ),
                     ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShopActionButton({
+    required double barHeight,
+    required Duration motionDuration,
+  }) {
+    return IgnorePointer(
+      ignoring: widget.isHidden,
+      child: AnimatedSlide(
+        duration: motionDuration,
+        curve: Curves.easeInOutCubic,
+        offset: Offset(0, widget.isHidden ? 1.5 : 0),
+        child: AnimatedOpacity(
+          duration: motionDuration,
+          curve: Curves.easeInOutCubic,
+          opacity: widget.isHidden ? 0 : 1,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                widget.onShopPressed?.call();
+              },
+              borderRadius: BorderRadius.circular(36),
+              child: Container(
+                width: barHeight,
+                height: barHeight,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.35),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: Icon(
+                    LucideIcons.shoppingBag,
+                    size: 20,
+                    color: Colors.white,
                   ),
                 ),
               ),

@@ -17,8 +17,24 @@ class AppDestination {
       screen = null,
       entityId = id;
 
+  const AppDestination.report(String id)
+    : type = 'report',
+      screen = null,
+      entityId = id;
+
   factory AppDestination.fromJson(Map<String, dynamic> json) {
     final rawType = json['type'] ?? json['destination_type'];
+    final normalizedType = rawType?.toString().trim().toLowerCase();
+    final reportId = json['report_id'] ?? json['reportId'];
+    if ({
+          'report',
+          'clinical_report',
+          'report_shared',
+        }.contains(normalizedType) ||
+        (reportId is String && reportId.trim().isNotEmpty)) {
+      final id = reportId ?? json['entityId'] ?? json['entity_id'] ?? '';
+      return AppDestination.report(id is String ? id : id.toString());
+    }
     if (rawType == 'product') {
       final id =
           json['entityId'] ?? json['entity_id'] ?? json['productId'] ?? '';
@@ -38,6 +54,13 @@ class AppDestination {
   }
 
   String? get location {
+    if (type == 'report') {
+      final id = entityId?.trim() ?? '';
+      if (id.isEmpty || !RegExp(r'^[a-zA-Z0-9_-]{1,128}$').hasMatch(id)) {
+        return RouteNames.treatmentDetails;
+      }
+      return '${RouteNames.treatmentDetails}?report_id=${Uri.encodeQueryComponent(id)}';
+    }
     if (type == 'product') {
       final id = entityId;
       if (id == null || !RegExp(r'^[a-zA-Z0-9_\-]+$').hasMatch(id)) {
@@ -74,6 +97,12 @@ class AppDestination {
       'clinic_appointment' ||
       'consultation' => RouteNames.clinicAppointment,
       'cart' || 'bag' => RouteNames.cart,
+      'report' ||
+      'reports' ||
+      'clinical_report' ||
+      'clinical_reports' ||
+      'clinical_record' ||
+      'treatment_details' => RouteNames.treatmentDetails,
       'reminder' || 'reminders' => RouteNames.reminders,
       'diet' || 'diet_plan' || 'dietplan' => RouteNames.dietPlan,
       'privacy' || 'privacy_policy' => RouteNames.privacyPolicy,
@@ -83,8 +112,11 @@ class AppDestination {
     };
   }
 
-  String get fallbackLocation =>
-      type == 'product' ? RouteNames.products : RouteNames.mainShell;
+  String get fallbackLocation => type == 'product'
+      ? RouteNames.products
+      : type == 'report'
+      ? RouteNames.treatmentDetails
+      : RouteNames.mainShell;
 
   static final Set<String> _knownStaticRoutes = {
     RouteNames.mainShell,
@@ -126,6 +158,13 @@ class AppDestination {
     if (path == null || path.trim().isEmpty) return false;
     final clean = path.trim();
     if (_knownStaticRoutes.contains(clean)) return true;
+    final uri = Uri.tryParse(clean);
+    if (uri?.path == RouteNames.treatmentDetails &&
+        uri!.queryParameters.length == 1) {
+      final reportId = uri.queryParameters['report_id'];
+      return reportId != null &&
+          RegExp(r'^[a-zA-Z0-9_-]{1,128}$').hasMatch(reportId);
+    }
     if (clean.startsWith('/products/')) {
       final id = clean.substring('/products/'.length);
       return id.isNotEmpty && RegExp(r'^[a-zA-Z0-9_\-]+$').hasMatch(id);

@@ -30,6 +30,8 @@ class SessionCoordinator {
   final AppLocalCache _cache;
   StreamSubscription<AuthState>? _authSubscription;
   String? _lastBoundPatientId;
+  HomeSummaryCubit? _homeSummaryCubit;
+  final Set<String> _refreshedReportNotificationKeys = {};
 
   AuthCubit? _authCubit;
   CareCubit? _careCubit;
@@ -53,6 +55,7 @@ class SessionCoordinator {
     _cartCubit = cartCubit;
     _appointmentCubit = appointmentCubit;
     _hairTestCubit = hairTestCubit;
+    _homeSummaryCubit = homeSummaryCubit;
 
     _authSubscription?.cancel();
     _authSubscription = authCubit.stream.listen((state) {
@@ -79,6 +82,56 @@ class SessionCoordinator {
     );
   }
 
+  /// Refreshes the home action cards once for a newly shared report push.
+  /// The app does not poll; signed report URLs are still fetched only on tap.
+  void refreshHomeSummaryForReportNotification(Map<String, dynamic> data) {
+    final type = (data['type'] ?? data['notification_type'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final destinationType = (data['destination_type'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    final isReportType =
+        {'report', 'clinical_report', 'report_shared'}.contains(type) ||
+        {
+          'report',
+          'clinical_report',
+          'report_shared',
+        }.contains(destinationType);
+    final reportId =
+        (data['report_id'] ??
+                data['reportId'] ??
+                (isReportType ? data['entity_id'] ?? data['entityId'] : null))
+            ?.toString()
+            .trim();
+    final isReport = isReportType || (reportId?.isNotEmpty ?? false);
+    if (!isReport) return;
+
+    final notificationId =
+        (data['notification_id'] ?? data['notificationId'] ?? '')
+            .toString()
+            .trim();
+    final dedupeKey = notificationId.isNotEmpty
+        ? 'notification:$notificationId'
+        : reportId?.isNotEmpty == true
+        ? 'report:$reportId'
+        : null;
+    if (dedupeKey != null && !_refreshedReportNotificationKeys.add(dedupeKey)) {
+      return;
+    }
+    if (_refreshedReportNotificationKeys.length > 100) {
+      _refreshedReportNotificationKeys.clear();
+      if (dedupeKey != null) _refreshedReportNotificationKeys.add(dedupeKey);
+    }
+
+    final homeCubit = _homeSummaryCubit;
+    if (homeCubit?.sessionToken?.trim().isNotEmpty == true) {
+      unawaited(homeCubit!.refresh());
+    }
+  }
+
   void _handleAuthStateChange({
     required AuthState state,
     required CareCubit careCubit,
@@ -94,6 +147,7 @@ class SessionCoordinator {
           patientId.isNotEmpty &&
           patientId != _lastBoundPatientId) {
         _lastBoundPatientId = patientId;
+        _refreshedReportNotificationKeys.clear();
         unawaited(CrashlyticsService.setPatientIdentifier(patientId));
         final token = state.sessionToken;
         careCubit.bindPatient(patientId, sessionToken: token);
@@ -110,6 +164,7 @@ class SessionCoordinator {
         _lastBoundPatientId != null) {
       final oldPatientId = _lastBoundPatientId!;
       _lastBoundPatientId = null;
+      _refreshedReportNotificationKeys.clear();
       notificationsCubit?.reset();
       unawaited(CrashlyticsService.clearPatientIdentifier());
       homeSummaryCubit?.clearPatient();
@@ -453,5 +508,7 @@ class SessionCoordinator {
     _authSubscription?.cancel();
     _authSubscription = null;
     _lastBoundPatientId = null;
+    _homeSummaryCubit = null;
+    _refreshedReportNotificationKeys.clear();
   }
 }

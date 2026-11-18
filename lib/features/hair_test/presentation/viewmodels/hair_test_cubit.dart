@@ -112,6 +112,9 @@ class HairTestCubit extends Cubit<HairTestState> {
     _patientId = patientId;
     _sessionToken = sessionToken;
     await loadSavedState();
+    if (!isClosed && state.patientId != patientId) {
+      emit(state.copyWith(patientId: patientId));
+    }
     if (sessionToken != null && sessionToken.isNotEmpty) {
       await _syncWithBackend(sessionToken);
     }
@@ -1684,6 +1687,54 @@ class HairTestCubit extends Cubit<HairTestState> {
           state.copyWith(
             isGeneratingDietPlan: false,
             dietPlanError: 'The meal plan could not be created right now. Please try again.',
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<bool> generatePersonalizedRoutine() async {
+    final ref = state.referenceNo;
+    final token = _sessionToken;
+    if (ref == null ||
+        ref.isEmpty ||
+        token == null ||
+        token.isEmpty ||
+        state.isGeneratingRoutine) {
+      return false;
+    }
+    emit(state.copyWith(isGeneratingRoutine: true, clearRoutineError: true));
+    try {
+      final dioToUse =
+          _dio ??
+          DioClient(
+            baseUrl: ApiEndpoints.backendBaseUrl,
+            enableDebugLogging: false,
+          ).dio;
+      final response = await dioToUse.post<Map<String, dynamic>>(
+        ApiEndpoints.hairTestRoutine(ref),
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
+      final rawAi = response.data?['data']?['ai_assessment'];
+      if (rawAi is! Map) throw StateError('Care routine response is missing.');
+      final aiModel = AiAssessmentModel.fromJson(
+        Map<String, dynamic>.from(rawAi),
+      );
+      await _cache.put(_aiAssessmentKey, jsonEncode(aiModel.toJson()));
+      if (!isClosed) {
+        emit(
+          state.copyWith(aiAssessment: aiModel, isGeneratingRoutine: false),
+        );
+      }
+      return true;
+    } catch (_) {
+      if (!isClosed) {
+        emit(
+          state.copyWith(
+            isGeneratingRoutine: false,
+            routineError:
+                'The care routine could not be created right now. Please try again.',
           ),
         );
       }

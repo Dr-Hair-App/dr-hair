@@ -198,12 +198,16 @@ class AiAssessmentModel {
   final String nextStepType;
   final String nextStepReason;
   final bool isAvailable;
+  final bool isCritical;
+  final String? patientId;
+  final String? patientCode;
   final String generatedBy;
   final String? generatedAt;
   final List<Map<String, dynamic>> availableProducts;
   final String productAvailabilityStatus;
   final bool shopEnabled;
   final Map<String, dynamic>? customMealPlan;
+  final Map<String, dynamic>? customRoutine;
   final bool requiresClinician;
   final List<Map<String, dynamic>> scalpPhotoVerification;
 
@@ -218,12 +222,16 @@ class AiAssessmentModel {
     this.nextStepType = '',
     this.nextStepReason = '',
     this.isAvailable = true,
+    this.isCritical = false,
+    this.patientId,
+    this.patientCode,
     this.generatedBy = 'Dr. Hair Assistant',
     this.generatedAt,
     this.availableProducts = const [],
     this.productAvailabilityStatus = 'checked',
     this.shopEnabled = false,
     this.customMealPlan,
+    this.customRoutine,
     this.requiresClinician = false,
     this.scalpPhotoVerification = const [],
   });
@@ -247,13 +255,12 @@ class AiAssessmentModel {
           ).hasMatch(legacyStage)
         ? 'doctor_appointment'
         : '';
-    final requiresClinician =
-        statusRequiresClinician || nextStepType == 'doctor_appointment';
-    final isAvailable =
-        json['ai_status']?.toString() != 'unavailable' &&
-        !requiresClinician &&
-        generator != 'unavailable' &&
-        generator != 'clinical-rules-engine';
+    final isCritical = (nextStep is Map && nextStep['is_critical'] == true) ||
+        nextStepType == 'doctor_appointment' ||
+        statusRequiresClinician;
+    final requiresClinician = statusRequiresClinician || isCritical;
+    final isAvailable = json['ai_status']?.toString() != 'unavailable' &&
+        generator != 'unavailable';
     final regimen = json['recommended_regimen'] is Map
         ? AiRecommendedRegimen.fromJson(
             Map<String, dynamic>.from(json['recommended_regimen']),
@@ -263,33 +270,40 @@ class AiAssessmentModel {
         ? Map<String, dynamic>.from(json['product_availability'])
         : const <String, dynamic>{};
 
+    final parsedScore = int.tryParse(json['scalp_health_score']?.toString() ?? '');
+    final scalpHealthScore = isAvailable
+        ? (parsedScore ?? (isCritical ? 55 : 70))
+        : 0;
+
+    final parsedStage = json['stage_classification']?.toString();
+    final stageClassification = isAvailable
+        ? ((parsedStage != null && parsedStage.isNotEmpty)
+            ? parsedStage
+            : (isCritical ? 'Stage 3 - Noticeable Thinning' : 'Stage 2 - Early Thinning'))
+        : '';
+
     return AiAssessmentModel(
-      scalpHealthScore: isAvailable
-          ? int.tryParse(json['scalp_health_score']?.toString() ?? '') ?? 70
-          : 0,
-      stageClassification: isAvailable
-          ? json['stage_classification']?.toString() ??
-                'Stage 2 - Early Thinning'
-          : '',
-      summary: json['summary']?.toString() ?? '',
-      rootCauses: rawCauses is List
+      scalpHealthScore: scalpHealthScore,
+      stageClassification: stageClassification,
+      summary: isAvailable ? (json['summary']?.toString() ?? '') : '',
+      rootCauses: isAvailable && rawCauses is List
           ? rawCauses
                 .whereType<Map>()
                 .map((m) => AiRootCause.fromJson(Map<String, dynamic>.from(m)))
                 .toList()
           : const [],
-      dietPlan: json['diet_plan'] is Map
+      dietPlan: isAvailable && json['diet_plan'] is Map
           ? AiDietPlan.fromJson(Map<String, dynamic>.from(json['diet_plan']))
           : const AiDietPlan(),
-      lifestyleGuidance: json['lifestyle_guidance'] is Map
+      lifestyleGuidance: isAvailable && json['lifestyle_guidance'] is Map
           ? AiLifestyleGuidance.fromJson(
               Map<String, dynamic>.from(json['lifestyle_guidance']),
             )
           : const AiLifestyleGuidance(),
-      recommendedRegimen: nextStepType == 'doctor_appointment'
+      recommendedRegimen: (!isAvailable || isCritical)
           ? AiRecommendedRegimen(
-              summary: regimen.summary,
-              dailySteps: regimen.dailySteps,
+              summary: isAvailable ? regimen.summary : '',
+              dailySteps: isAvailable ? regimen.dailySteps : const [],
             )
           : regimen,
       nextStepType: nextStepType,
@@ -297,6 +311,9 @@ class AiAssessmentModel {
           ? nextStep['reason']?.toString() ?? ''
           : '',
       isAvailable: isAvailable,
+      isCritical: isCritical,
+      patientId: json['patient_id']?.toString() ?? json['patientId']?.toString(),
+      patientCode: json['patient_code']?.toString() ?? json['patientCode']?.toString(),
       generatedBy: generator.isNotEmpty ? generator : 'Dr. Hair Assistant',
       generatedAt: json['generated_at']?.toString(),
       availableProducts: json['available_products'] is List
@@ -310,6 +327,9 @@ class AiAssessmentModel {
       shopEnabled: availability['shop_enabled'] == true,
       customMealPlan: json['custom_meal_plan'] is Map
           ? Map<String, dynamic>.from(json['custom_meal_plan'])
+          : null,
+      customRoutine: json['custom_routine'] is Map
+          ? Map<String, dynamic>.from(json['custom_routine'])
           : null,
       requiresClinician: requiresClinician,
       scalpPhotoVerification: json['scalp_photo_verification'] is List
@@ -331,9 +351,12 @@ class AiAssessmentModel {
     'recommended_regimen': recommendedRegimen.toJson(),
     'next_step_recommendation': {
       'type': nextStepType,
+      'is_critical': isCritical,
       'reason': nextStepReason,
     },
     'ai_status': isAvailable ? 'available' : 'unavailable',
+    if (patientId != null) 'patient_id': patientId,
+    if (patientCode != null) 'patient_code': patientCode,
     'generated_by': generatedBy,
     'generated_at': generatedAt,
     'available_products': availableProducts,
@@ -342,6 +365,7 @@ class AiAssessmentModel {
       'shop_enabled': shopEnabled,
     },
     if (customMealPlan != null) 'custom_meal_plan': customMealPlan,
+    if (customRoutine != null) 'custom_routine': customRoutine,
     'scalp_photo_verification': scalpPhotoVerification,
     if (requiresClinician) 'ai_status': 'clinician_review_required',
   };

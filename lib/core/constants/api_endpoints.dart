@@ -146,6 +146,8 @@ class ApiEndpoints {
   static const String hairTestSubmitForm = '/api/v1/hair-tests/submit_form';
   static String hairTestDietPlan(String referenceNo) =>
       '/api/v1/hair-tests/${Uri.encodeComponent(referenceNo)}/diet_plan';
+  static String hairTestRoutine(String referenceNo) =>
+      '/api/v1/hair-tests/${Uri.encodeComponent(referenceNo)}/routine';
   static String hairTestAiAssessmentStatus(String referenceNo) =>
       '/api/v1/hair-tests/${Uri.encodeComponent(referenceNo)}/ai_assessment/status';
   static String hairTestAiAssessmentRetry(String referenceNo) =>

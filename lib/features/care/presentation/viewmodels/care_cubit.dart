@@ -993,6 +993,45 @@ class CareCubit extends Cubit<CareState> {
     return true;
   }
 
+  /// Bulk add multiple routine tasks (e.g. from AI Assessment generation)
+  /// ignoring duplicate titles to prevent repetitive tasks.
+  Future<int> addMultipleRoutineTasks(List<RoutineTask> newTasks) async {
+    if (newTasks.isEmpty || isClosed) return 0;
+    final existingTitles = state.routineTasks
+        .map((t) => t.title.toLowerCase().trim())
+        .toSet();
+    final toAdd = newTasks
+        .where((t) => !existingTitles.contains(t.title.toLowerCase().trim()))
+        .toList();
+    if (toAdd.isEmpty) return 0;
+
+    final updated = [...state.routineTasks, ...toAdd];
+    emit(state.copyWith(routineTasks: updated));
+    _persistRoutineTasks();
+    _notificationService?.saveRoutineTasks(updated);
+    _saveRoutineDay();
+    return toAdd.length;
+  }
+
+  /// Applies personalized assessment regimen and meal recommendations directly into
+  /// the patient's daily tracker.
+  Future<bool> applyAssessmentRegimen({
+    required List<RoutineTask> routineTasks,
+    List<DietMeal> dietMeals = const [],
+    String? dietTitle,
+  }) async {
+    if (routineTasks.isNotEmpty) {
+      await addMultipleRoutineTasks(routineTasks);
+    }
+    if (dietMeals.isNotEmpty) {
+      await saveAssistantDietPlan(
+        title: dietTitle ?? 'AI Assessment Nutrition Regimen',
+        meals: dietMeals,
+      );
+    }
+    return true;
+  }
+
   Future<bool> removeRoutineTask(
     RoutineTask task, {
     String? sessionToken,

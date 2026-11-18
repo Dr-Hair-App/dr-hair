@@ -6,6 +6,7 @@ import 'package:dr_hair/features/shop/presentation/viewmodels/notifications_stat
 import 'package:dr_hair/features/shop/presentation/views/notifications_view.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
 class MockNotificationsRepository implements NotificationsRepository {
@@ -16,14 +17,16 @@ class MockNotificationsRepository implements NotificationsRepository {
 
   @override
   Future<({List<NotificationItemModel> items, int unreadCount, bool hasMore})>
-      getNotifications({int page = 1, int limit = 20}) async {
+  getNotifications({int page = 1, int limit = 20}) async {
     return (items: items, unreadCount: unreadCount, hasMore: false);
   }
 
   @override
   Future<bool> markAsRead(String id) async {
     markAsReadCalled = true;
-    items = items.map((i) => i.id == id ? i.copyWith(isRead: true) : i).toList();
+    items = items
+        .map((i) => i.id == id ? i.copyWith(isRead: true) : i)
+        .toList();
     unreadCount = items.where((i) => !i.isRead).length;
     return true;
   }
@@ -39,16 +42,19 @@ class MockNotificationsRepository implements NotificationsRepository {
 
 void main() {
   group('AppDestination & Push Notification Payload Routing', () {
-    test('resolves product notification payload to exact product details path', () {
-      final dest = AppDestination.fromNotificationData({
-        'destination_type': 'product',
-        'entity_id': 'prod-anti-dandruff-shampoo',
-      });
+    test(
+      'resolves product notification payload to exact product details path',
+      () {
+        final dest = AppDestination.fromNotificationData({
+          'destination_type': 'product',
+          'entity_id': 'prod-anti-dandruff-shampoo',
+        });
 
-      expect(dest.type, 'product');
-      expect(dest.entityId, 'prod-anti-dandruff-shampoo');
-      expect(dest.location, '/products/prod-anti-dandruff-shampoo');
-    });
+        expect(dest.type, 'product');
+        expect(dest.entityId, 'prod-anti-dandruff-shampoo');
+        expect(dest.location, '/products/prod-anti-dandruff-shampoo');
+      },
+    );
 
     test('resolves clinic appointment booking payload', () {
       final dest = AppDestination.fromNotificationData({
@@ -87,10 +93,7 @@ void main() {
         'title': 'Appointment Confirmed',
         'body': 'Your clinic sitting is confirmed for OPD Token #12.',
         'type': 'appointment',
-        'destination': {
-          'type': 'screen',
-          'screen': 'clinic_appointment',
-        },
+        'destination': {'type': 'screen', 'screen': 'clinic_appointment'},
         'isRead': false,
         'created_at': DateTime.now().toIso8601String(),
       });
@@ -102,6 +105,29 @@ void main() {
       expect(model.formattedTime, 'Just now');
       expect(model.destination.location, '/clinic-appointment');
     });
+
+    test(
+      'report notification opens the report tab even if destination is stale',
+      () {
+        final model = NotificationItemModel.fromJson({
+          'id': 'notification-report-1',
+          'title': 'Your clinical report is ready',
+          'body': 'The clinic shared a report with you.',
+          'type': 'report',
+          'destination': {'type': 'screen', 'screen': 'assessment_result'},
+          'data': {'report_id': 'rep-789'},
+          'is_read': false,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+
+        expect(model.type, 'report');
+        expect(model.iconData, LucideIcons.fileText);
+        expect(
+          model.destination.location,
+          '/treatment-details?report_id=rep-789',
+        );
+      },
+    );
   });
 
   group('NotificationsCubit', () {
@@ -165,10 +191,36 @@ void main() {
       expect(repo.markAllAsReadCalled, true);
       cubit.close();
     });
+
+    test('foreground report push preserves report notification routing', () {
+      final cubit = NotificationsCubit(repository: repo);
+      cubit.onForegroundNotificationReceived(
+        title: 'New report',
+        body: 'Your doctor shared a report.',
+        id: 'notification-42',
+        data: const {
+          'notification_id': 'notification-42',
+          'destination_type': 'report',
+          'report_id': 'report-abc',
+        },
+      );
+
+      final item = cubit.state.notifications.first;
+      expect(item.id, 'notification-42');
+      expect(item.type, 'report');
+      expect(item.destination.entityId, 'report-abc');
+      expect(
+        item.destination.location,
+        '/treatment-details?report_id=report-abc',
+      );
+      cubit.close();
+    });
   });
 
   group('NotificationsView Widget Tests', () {
-    testWidgets('renders notifications and allows Read all action', (tester) async {
+    testWidgets('renders notifications and allows Read all action', (
+      tester,
+    ) async {
       final notif1 = NotificationItemModel(
         id: 'n1',
         title: 'Your order is on its way',
@@ -199,9 +251,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: NotificationsView(cubit: cubit),
-        ),
+        MaterialApp(home: NotificationsView(cubit: cubit)),
       );
       await tester.pumpAndSettle();
 
@@ -221,34 +271,36 @@ void main() {
       cubit.close();
     });
 
-    testWidgets('uses Skeletonizer shimmer during loading without CircularProgressIndicator',
-        (tester) async {
-      final mockRepo = MockNotificationsRepository();
-      final cubit = NotificationsCubit(
-        repository: mockRepo,
-        initialState: const NotificationsState(
-          isLoading: true,
-          notifications: [],
-        ),
-      );
+    testWidgets(
+      'uses Skeletonizer shimmer during loading without CircularProgressIndicator',
+      (tester) async {
+        final mockRepo = MockNotificationsRepository();
+        final cubit = NotificationsCubit(
+          repository: mockRepo,
+          initialState: const NotificationsState(
+            isLoading: true,
+            notifications: [],
+          ),
+        );
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: NotificationsView(cubit: cubit),
-        ),
-      );
-      await tester.pump();
+        await tester.pumpWidget(
+          MaterialApp(home: NotificationsView(cubit: cubit)),
+        );
+        await tester.pump();
 
-      expect(
-        find.byWidgetPredicate((widget) => widget is Skeletonizer),
-        findsAtLeastNWidgets(1),
-      );
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+        expect(
+          find.byWidgetPredicate((widget) => widget is Skeletonizer),
+          findsAtLeastNWidgets(1),
+        );
+        expect(find.byType(CircularProgressIndicator), findsNothing);
 
-      cubit.close();
-    });
+        cubit.close();
+      },
+    );
 
-    testWidgets('renders empty state when there are no notifications', (tester) async {
+    testWidgets('renders empty state when there are no notifications', (
+      tester,
+    ) async {
       final cubit = NotificationsCubit(
         initialState: const NotificationsState(
           isLoading: false,
@@ -258,9 +310,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: NotificationsView(cubit: cubit),
-        ),
+        MaterialApp(home: NotificationsView(cubit: cubit)),
       );
       await tester.pumpAndSettle();
 

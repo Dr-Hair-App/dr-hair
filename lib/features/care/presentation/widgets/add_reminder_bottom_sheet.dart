@@ -35,12 +35,30 @@ class _ReminderPreset {
 /// with active clinical presets, responsive timing, and direct backend API synchronization.
 class AddReminderBottomSheet extends StatefulWidget {
   final CareReminder? reminderToEdit;
+  final String? initialTitle;
+  final String? initialTreatmentType;
+  final TimeOfDay? initialTime;
+  final String? initialNotes;
+  final List<int>? initialRepeatDays;
 
-  const AddReminderBottomSheet({super.key, this.reminderToEdit});
+  const AddReminderBottomSheet({
+    super.key,
+    this.reminderToEdit,
+    this.initialTitle,
+    this.initialTreatmentType,
+    this.initialTime,
+    this.initialNotes,
+    this.initialRepeatDays,
+  });
 
   static Future<void> show(
     BuildContext context, {
     CareReminder? reminderToEdit,
+    String? initialTitle,
+    String? initialTreatmentType,
+    TimeOfDay? initialTime,
+    String? initialNotes,
+    List<int>? initialRepeatDays,
   }) {
     final careCubit = context.read<CareCubit>();
     return showModalBottomSheet(
@@ -49,7 +67,14 @@ class AddReminderBottomSheet extends StatefulWidget {
       backgroundColor: Colors.transparent,
       builder: (modalContext) => BlocProvider<CareCubit>.value(
         value: careCubit,
-        child: AddReminderBottomSheet(reminderToEdit: reminderToEdit),
+        child: AddReminderBottomSheet(
+          reminderToEdit: reminderToEdit,
+          initialTitle: initialTitle,
+          initialTreatmentType: initialTreatmentType,
+          initialTime: initialTime,
+          initialNotes: initialNotes,
+          initialRepeatDays: initialRepeatDays,
+        ),
       ),
     );
   }
@@ -199,14 +224,22 @@ class _AddReminderBottomSheetState extends State<AddReminderBottomSheet> {
   void initState() {
     super.initState();
     final rem = widget.reminderToEdit;
-    _titleController = TextEditingController(text: rem?.title ?? '');
-    _notesController = TextEditingController(text: rem?.notes ?? '');
+    _titleController = TextEditingController(
+      text: rem?.title ?? widget.initialTitle ?? '',
+    );
+    _notesController = TextEditingController(
+      text: rem?.notes ?? widget.initialNotes ?? '',
+    );
     _titleFocus = FocusNode();
-    _selectedTime = rem?.time ?? const TimeOfDay(hour: 20, minute: 0);
-    _treatmentType = rem?.treatmentType ?? 'Topical Serum';
+    _selectedTime =
+        rem?.time ?? widget.initialTime ?? const TimeOfDay(hour: 20, minute: 0);
+    _treatmentType =
+        rem?.treatmentType ?? widget.initialTreatmentType ?? 'Topical Serum';
     _selectedDays = rem != null
         ? List<int>.from(rem.repeatDays)
-        : [1, 2, 3, 4, 5, 6, 7];
+        : (widget.initialRepeatDays != null
+              ? List<int>.from(widget.initialRepeatDays!)
+              : [1, 2, 3, 4, 5, 6, 7]);
     _isEnabled = rem?.isEnabled ?? true;
   }
 

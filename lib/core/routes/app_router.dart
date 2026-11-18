@@ -135,8 +135,10 @@ class AppRouter {
       GoRoute(
         path: RouteNames.treatmentDetails,
         builder: (context, state) => AuthRequiredRoute(
-          routePath: RouteNames.treatmentDetails,
-          child: AssessmentRequiredRoute(child: const TreatmentDetailsView()),
+          routePath: state.uri.toString(),
+          child: TreatmentDetailsView(
+            initialReportId: state.uri.queryParameters['report_id'],
+          ),
         ),
       ),
       GoRoute(

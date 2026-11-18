@@ -43,6 +43,38 @@ void main() {
     );
   });
 
+  test(
+    'report pushes open the clinical reports tab with the report selected',
+    () {
+      final destination = AppDestination.fromNotificationData({
+        'destination_type': 'report',
+        'report_id': 'rep-123',
+      });
+
+      expect(destination.type, 'report');
+      expect(destination.entityId, 'rep-123');
+      expect(destination.location, '/treatment-details?report_id=rep-123');
+      expect(
+        AppDestination.resolveSafeLocation(destination.location),
+        '/treatment-details?report_id=rep-123',
+      );
+    },
+  );
+
+  test('report id overrides an obsolete assessment-result screen target', () {
+    final destination = AppDestination.fromNotificationData({
+      'destination_type': 'screen',
+      'screen': 'assessment_result',
+      'report_id': 'rep-456',
+    });
+
+    expect(destination.location, '/treatment-details?report_id=rep-456');
+    expect(
+      AppDestination.isValidRoute('/treatment-details?report_id=../profile'),
+      isFalse,
+    );
+  });
+
   test('screen aliases resolve correctly to canonical routes', () {
     expect(
       AppDestination.fromJson({'screen': 'consultation'}).location,
@@ -52,10 +84,7 @@ void main() {
       AppDestination.fromJson({'screen': 'appointments'}).location,
       '/clinic-appointment',
     );
-    expect(
-      AppDestination.fromJson({'screen': 'reels'}).location,
-      '/videos',
-    );
+    expect(AppDestination.fromJson({'screen': 'reels'}).location, '/videos');
     expect(
       AppDestination.fromJson({'screen': 'care_plan'}).location,
       '/profile',
@@ -88,13 +117,7 @@ void main() {
       AppDestination.resolveSafeLocation('/unknown/screen/does_not_exist'),
       '/notifications',
     );
-    expect(
-      AppDestination.resolveSafeLocation(null),
-      '/notifications',
-    );
-    expect(
-      AppDestination.resolveSafeLocation('', fallback: '/'),
-      '/',
-    );
+    expect(AppDestination.resolveSafeLocation(null), '/notifications');
+    expect(AppDestination.resolveSafeLocation('', fallback: '/'), '/');
   });
 }

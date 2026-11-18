@@ -63,7 +63,12 @@ class PrescribedMedicine {
 class TreatmentDetailsView extends StatefulWidget {
   final PatientClinicalApi? clinicalApi;
   final String? initialReportId;
-  const TreatmentDetailsView({super.key, this.clinicalApi, this.initialReportId});
+
+  const TreatmentDetailsView({
+    super.key,
+    this.clinicalApi,
+    this.initialReportId,
+  });
 
   @override
   State<TreatmentDetailsView> createState() => _TreatmentDetailsViewState();
@@ -221,7 +226,8 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
       _animController.forward(from: 0.0);
     } catch (e) {
       if (!mounted) return;
-      final isAuthError = (e is DioException &&
+      final isAuthError =
+          (e is DioException &&
               (e.response?.statusCode == 401 ||
                   e.response?.statusCode == 403)) ||
           e.toString().toLowerCase().contains('401') ||
@@ -233,8 +239,7 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
           _recordError =
               'Sign in to view care plans and reports shared by your clinic.';
         } else {
-          _recordError =
-              'Your clinic plan could not be loaded. Check your connection and try again.';
+          _recordError = 'Your clinic plan could not be loaded. Check your connection and try again.';
         }
       });
     }
@@ -398,13 +403,18 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(LucideIcons.pill, size: 14),
-                      SizedBox(width: 6),
-                      Text(
-                        'Prescription Details',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.1,
+                      SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Prescription',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.1,
+                          ),
                         ),
                       ),
                     ],
@@ -416,13 +426,18 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(LucideIcons.fileText, size: 14),
-                      SizedBox(width: 6),
-                      Text(
-                        'Medical Reports',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.1,
+                      SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          'Reports',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.1,
+                          ),
                         ),
                       ),
                     ],

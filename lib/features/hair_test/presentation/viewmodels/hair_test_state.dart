@@ -38,6 +38,9 @@ class HairTestState {
   final AiAssessmentModel? aiAssessment;
   final bool isGeneratingDietPlan;
   final String? dietPlanError;
+  final bool isGeneratingRoutine;
+  final String? routineError;
+  final String? patientId;
 
   const HairTestState({
     this.currentStep = 0,
@@ -75,6 +78,9 @@ class HairTestState {
     this.aiAssessment,
     this.isGeneratingDietPlan = false,
     this.dietPlanError,
+    this.isGeneratingRoutine = false,
+    this.routineError,
+    this.patientId,
   });
 
   HairTestState copyWith({
@@ -121,6 +127,11 @@ class HairTestState {
     bool? isGeneratingDietPlan,
     String? dietPlanError,
     bool clearDietPlanError = false,
+    bool? isGeneratingRoutine,
+    String? routineError,
+    bool clearRoutineError = false,
+    String? patientId,
+    bool clearPatientId = false,
   }) {
     return HairTestState(
       currentStep: currentStep ?? this.currentStep,
@@ -171,6 +182,11 @@ class HairTestState {
       dietPlanError: clearDietPlanError
           ? null
           : dietPlanError ?? this.dietPlanError,
+      isGeneratingRoutine: isGeneratingRoutine ?? this.isGeneratingRoutine,
+      routineError: clearRoutineError
+          ? null
+          : routineError ?? this.routineError,
+      patientId: clearPatientId ? null : patientId ?? this.patientId,
     );
   }
 
