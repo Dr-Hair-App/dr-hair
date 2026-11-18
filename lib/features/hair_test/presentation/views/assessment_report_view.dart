@@ -8,9 +8,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
+import '../../../../core/utils/whatsapp_launcher.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../../../core/widgets/photo_source_bottom_sheet.dart';
+import '../../../auth/presentation/viewmodels/auth_cubit.dart';
 import '../../../care/presentation/viewmodels/care_cubit.dart';
 import '../../../shop/data/models/product_model.dart';
 import '../../../shop/presentation/viewmodels/cart_cubit.dart';
@@ -20,6 +22,7 @@ import '../viewmodels/hair_test_cubit.dart';
 import '../viewmodels/hair_test_state.dart';
 import '../widgets/ai_analysis_loading_overlay.dart';
 import '../widgets/ai_assessment_cards.dart';
+import '../widgets/assessment_recommendation_card.dart';
 
 /// The Clinical Assessment Report View displaying the patient's hair test diagnosis,
 /// verified doctor reports, uploaded scalp photos, personalized recommended products,
@@ -68,30 +71,45 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
     }
   }
 
-  Future<void> _contactDoctorOnWhatsApp() async {
-    const phoneNumber = '917240005000';
-    const message =
-        'Hello, I completed the Dr. Hair assessment and would like guidance on my next steps.';
-    final uri = Uri.parse(
-      'https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}',
+  Future<void> _contactDoctorOnWhatsApp([HairTestState? stateOverride]) async {
+    final state = stateOverride ?? widget.state;
+    final aiAssessment = state.aiAssessment;
+    final authUser = context.read<AuthCubit?>()?.state.user;
+    final patientId = (state.patientId?.trim().isNotEmpty == true)
+        ? state.patientId!.trim()
+        : (aiAssessment?.patientCode?.trim().isNotEmpty == true
+            ? aiAssessment!.patientCode!.trim()
+            : (aiAssessment?.patientId?.trim().isNotEmpty == true
+                ? aiAssessment!.patientId!.trim()
+                : (authUser?.patientId.trim().isNotEmpty == true
+                    ? authUser!.patientId.trim()
+                    : (state.referenceNo ?? 'Patient'))));
+    final patientName =
+        state.name.trim().isNotEmpty ? state.name.trim() : 'Patient';
+    final stage = aiAssessment?.stageClassification.isNotEmpty == true
+        ? aiAssessment!.stageClassification
+        : (state.stage ?? 'Initial');
+    final score = aiAssessment?.scalpHealthScore ?? 70;
+    final concern = state.primaryConcern?.trim().isNotEmpty == true
+        ? state.primaryConcern!.trim()
+        : 'Hair fall & scalp health';
+
+    final success = await WhatsAppLauncher.launchAssessmentGuidance(
+      patientName: patientName,
+      patientId: patientId,
+      referenceNo: state.referenceNo ?? 'N/A',
+      stage: stage,
+      scalpScore: score,
+      concern: concern,
+      phoneNumber: '918058056789',
     );
-    try {
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
-          mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open WhatsApp. Please try again.'),
-          ),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open WhatsApp. Please try again.'),
-          ),
-        );
-      }
+
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open WhatsApp. Please try again.'),
+        ),
+      );
     }
   }
 
@@ -141,11 +159,11 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
             state.doctorCarePlan != null;
         final isUnderReview = state.assessmentStatus == 'under_review';
         final aiUnavailable = aiAssessment == null || !aiAssessment.isAvailable;
-        final hideAiAnalysis = aiUnavailable || aiAssessment.requiresClinician;
-        final aiNeedsClinician = !isReviewed && hideAiAnalysis;
-        final aiRecommendsDoctor =
-            !isReviewed &&
-            state.aiAssessment?.nextStepType == 'doctor_appointment';
+        final bool isCritical = !aiUnavailable &&
+            (aiAssessment.isCritical ||
+                state.aiAssessment?.nextStepType == 'doctor_appointment');
+        final bool aiRecommendsDoctor =
+            isCritical || state.aiAssessment?.nextStepType == 'doctor_appointment';
         final List<AiRegimenStep> careRoutineSteps =
             state.aiAssessment?.isAvailable == true
             ? state.aiAssessment!.recommendedRegimen.dailySteps
@@ -202,7 +220,11 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
             child: RefreshIndicator(
               color: AppColors.primary,
               onRefresh: () async {
-                await context.read<HairTestCubit?>()?.refreshClinicalReports();
+                final cubit = context.read<HairTestCubit?>();
+                await Future.wait([
+                  cubit?.refreshClinicalReports() ?? Future.value(),
+                  cubit?.fetchAiAssessment(forceRefresh: true) ?? Future.value(),
+                ]);
               },
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -230,34 +252,78 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                         const SizedBox(height: 16),
 
                         // 2. Main Diagnosis Card
-                        if (aiNeedsClinician)
-                          _buildClinicianOnlyNotice(
-                            showClinicContact: !aiRecommendsDoctor,
-                          )
-                        else
-                          _buildMainDiagnosisCard(
-                            state,
-                            selectedPattern,
-                            displayName,
+                        _buildMainDiagnosisCard(
+                          state,
+                          selectedPattern,
+                          displayName,
+                        ),
+
+                        if (aiUnavailable)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: _buildClinicianOnlyNotice(
+                              showClinicContact: !isCritical,
+                            ),
                           ),
 
                         // AI Clinical Trichology & Recommendations
-                        if (state.aiAssessment != null && !hideAiAnalysis) ...[
+                        if (state.aiAssessment != null &&
+                            state.aiAssessment!.isAvailable) ...[
                           const SizedBox(height: 20),
                           AiAssessmentCards(
                             aiAssessment: state.aiAssessment!,
                             assessmentReferenceNo: state.referenceNo,
                             onRefresh: _retryAiAssessment,
                             isRefreshing: _isRequestingAi,
-                            onGenerateDietPlan: aiRecommendsDoctor
-                                ? null
-                                : () async {
-                                    await context
-                                        .read<HairTestCubit>()
-                                        .generatePersonalizedDietPlan();
-                                  },
+                            onGenerateDietPlan: () async {
+                              await context
+                                  .read<HairTestCubit>()
+                                  .generatePersonalizedDietPlan();
+                            },
                             isGeneratingDietPlan: state.isGeneratingDietPlan,
                             dietPlanError: state.dietPlanError,
+                            onGenerateRoutine: () async {
+                              await context
+                                  .read<HairTestCubit>()
+                                  .generatePersonalizedRoutine();
+                            },
+                            isGeneratingRoutine: state.isGeneratingRoutine,
+                            routineError: state.routineError,
+                          ),
+                          const SizedBox(height: 20),
+                          AssessmentRecommendationCard(
+                            state: state,
+                            aiAssessment: state.aiAssessment!,
+                            recommendedProducts: recommendedProducts,
+                            onConnectWhatsApp: () =>
+                                _contactDoctorOnWhatsApp(state),
+                            onAddToCart: (product) {
+                              final cartCubit = context.read<CartCubit?>();
+                              if (cartCubit != null) {
+                                final plan = product.supplyPlans.isNotEmpty
+                                    ? product.supplyPlans.first
+                                    : const ProductSupplyPlan(
+                                        title: '1 Month',
+                                        subtitle: 'Monthly Supply',
+                                        price: 499,
+                                        mrp: 599,
+                                      );
+                                cartCubit.addProduct(
+                                  product: product,
+                                  plan: plan,
+                                  quantity: 1,
+                                );
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '${product.name} added to cart',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
                           ),
                           const SizedBox(height: 14),
                           Container(
@@ -457,7 +523,9 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                         _buildScalpPhotosSection(context, state),
 
                         // Keep clinician guidance and daily care ahead of optional products.
-                        if (aiRecommendsDoctor) ...[
+                        if (aiRecommendsDoctor &&
+                            (state.aiAssessment == null ||
+                                !state.aiAssessment!.isAvailable)) ...[
                           const SizedBox(height: 20),
                           _buildDoctorAppointmentCard(
                             context,
@@ -479,23 +547,8 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                         const SizedBox(height: 24),
 
                         // 10. Next steps & routine setup
-                        if (!aiNeedsClinician)
+                        if (!isCritical)
                           _buildPostAssessmentNextSteps(context, state),
-
-                        // Products are optional support, shown after the care plan.
-                        if (!aiNeedsClinician &&
-                            state.aiAssessment?.isAvailable == true) ...[
-                          const SizedBox(height: 20),
-                          _buildRecommendedProductsSection(
-                            context,
-                            recommendedProducts,
-                            isCheckingAvailability: false,
-                            availabilityError:
-                                aiAssessment?.productAvailabilityStatus ==
-                                'unavailable',
-                            shopEnabled: aiAssessment?.shopEnabled == true,
-                          ),
-                        ],
 
                         const SizedBox(height: 20),
 
@@ -542,7 +595,22 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (aiRecommendsDoctor || aiUnavailable)
+                  if (isCritical) ...[
+                    AppButton(
+                      height: 48,
+                      text: 'Book In-Clinic Consultation',
+                      variant: AppButtonVariant.filled,
+                      backgroundColor: const Color(0xFFD97706),
+                      foregroundColor: Colors.white,
+                      icon: const Icon(
+                        LucideIcons.calendarCheck,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      onPressed: () =>
+                          context.push(RouteNames.clinicAppointment),
+                    ),
+                  ] else if (aiUnavailable) ...[
                     AppButton(
                       height: 48,
                       text: 'Contact doctor on WhatsApp',
@@ -554,9 +622,9 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                         size: 16,
                         color: Colors.white,
                       ),
-                      onPressed: _contactDoctorOnWhatsApp,
-                    )
-                  else
+                      onPressed: () => _contactDoctorOnWhatsApp(state),
+                    ),
+                  ] else ...[
                     AppButton(
                       height: 48,
                       text: _isAddingRoutine
@@ -577,14 +645,12 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                               careRoutineSteps,
                             ),
                     ),
-                  if (!aiRecommendsDoctor &&
-                      state.aiAssessment?.isAvailable == true) ...[
                     const SizedBox(height: 2),
                     Row(
                       children: [
                         Expanded(
                           child: TextButton.icon(
-                            onPressed: _contactDoctorOnWhatsApp,
+                            onPressed: () => _contactDoctorOnWhatsApp(state),
                             icon: const Icon(
                               LucideIcons.messageCircle,
                               size: 15,
@@ -613,63 +679,63 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () =>
-                                AssessmentPdfGenerator.downloadOrPrint(
-                                  widget.state,
-                                ),
-                            icon: const Icon(LucideIcons.fileDown, size: 14),
-                            label: const Text(
-                              'Download PDF',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(color: AppColors.primary),
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () =>
-                                AssessmentPdfGenerator.sharePdf(widget.state),
-                            icon: const Icon(LucideIcons.share2, size: 14),
-                            label: const Text(
-                              'Share Summary',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primaryDark,
-                              side: const BorderSide(color: AppColors.border),
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () =>
+                              AssessmentPdfGenerator.downloadOrPrint(
+                                widget.state,
+                              ),
+                          icon: const Icon(LucideIcons.fileDown, size: 14),
+                          label: const Text(
+                            'Download PDF',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () =>
+                              AssessmentPdfGenerator.sharePdf(widget.state),
+                          icon: const Icon(LucideIcons.share2, size: 14),
+                          label: const Text(
+                            'Share Summary',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primaryDark,
+                            side: const BorderSide(color: AppColors.border),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -1638,310 +1704,6 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
       context,
       title: 'Upload $angle photo',
       onSelectSource: (source) => cubit.pickPhoto(label: angle, source: source),
-    );
-  }
-
-  Widget _buildRecommendedProductsSection(
-    BuildContext context,
-    List<ProductItem> products, {
-    required bool isCheckingAvailability,
-    required bool availabilityError,
-    required bool shopEnabled,
-  }) {
-    const stageTitle = 'Optional products';
-    const stageSubtitle =
-        'Only consider these alongside your care plan, if they suit you.';
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary5,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  LucideIcons.sparkles,
-                  color: AppColors.primary,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Optional suggestions',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.6,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      stageTitle,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      stageSubtitle,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppColors.secondaryDark,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (isCheckingAvailability)
-            const Row(
-              children: [
-                SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                SizedBox(width: 10),
-                Text(
-                  'Checking current stock…',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.secondaryDark,
-                  ),
-                ),
-              ],
-            )
-          else if (availabilityError)
-            const Text(
-              'We couldn’t confirm current stock, so no products are being suggested. You can contact the clinic for guidance.',
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.4,
-                color: AppColors.secondaryDark,
-              ),
-            )
-          else if (products.isEmpty)
-            Text(
-              shopEnabled
-                  ? 'No matching in-stock products are available right now. Your care steps remain available above.'
-                  : 'Product suggestions are currently turned off. Your care steps remain available above.',
-              style: const TextStyle(
-                fontSize: 12,
-                height: 1.4,
-                color: AppColors.secondaryDark,
-              ),
-            ),
-          if (products.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            for (final product in products) ...[
-              _buildProductCard(context, product),
-              const SizedBox(height: 12),
-            ],
-          ],
-          if (!shopEnabled || availabilityError || products.isEmpty) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _contactDoctorOnWhatsApp,
-                icon: const Icon(LucideIcons.messageCircle, size: 16),
-                label: const Text('Ask the clinic for guidance'),
-              ),
-            ),
-          ] else ...[
-            const SizedBox(height: 4),
-            Center(
-              child: TextButton.icon(
-                onPressed: () => context.push(RouteNames.products),
-                icon: const Icon(
-                  LucideIcons.shoppingBag,
-                  size: 14,
-                  color: AppColors.primary,
-                ),
-                label: const Text(
-                  'Browse the catalog',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductCard(BuildContext context, ProductItem product) {
-    final plan = product.supplyPlans.isNotEmpty
-        ? product.supplyPlans.first
-        : ProductSupplyPlan(
-            title: 'Standard',
-            subtitle: product.subtitle,
-            price: 999,
-            mrp: 1299,
-          );
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.primary5.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: SizedBox(
-              width: 58,
-              height: 58,
-              child: CustomCachedImage(
-                imageUrl: product.images.isNotEmpty ? product.images.first : '',
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primaryDark,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  product.subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 6,
-                  children: [
-                    Text(
-                      '₹${plan.price.toInt()}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    if (plan.mrp > plan.price)
-                      Text(
-                        '₹${plan.mrp.toInt()}',
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          decoration: TextDecoration.lineThrough,
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: () {
-              if (!product.inStock) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'This item is no longer in stock. Contact the clinic for guidance.',
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-                return;
-              }
-              final cart = context.read<CartCubit?>();
-              if (cart != null) {
-                cart.addProduct(product: product, plan: plan, quantity: 1);
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('${product.name} added to cart!'),
-                    backgroundColor: AppColors.success,
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 2),
-                    action: SnackBarAction(
-                      label: 'View Cart',
-                      textColor: Colors.white,
-                      onPressed: () => context.push(RouteNames.cart),
-                    ),
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              elevation: 0,
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(LucideIcons.plus, size: 12),
-                SizedBox(width: 4),
-                Text(
-                  'Add',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 

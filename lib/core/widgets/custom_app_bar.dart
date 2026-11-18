@@ -3,12 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../features/shop/presentation/viewmodels/notifications_cubit.dart';
 import '../../features/shop/presentation/viewmodels/notifications_state.dart';
 import '../constants/app_colors.dart';
 import '../routes/route_names.dart';
+import '../utils/whatsapp_launcher.dart';
 
 /// Clean, medical-grade top navigation bar for Dr.Hair app.
 /// Supports smooth transparency transition on scroll via [scrollProgress] (0.0 = transparent, 1.0 = solid white).
@@ -32,20 +32,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   Future<void> _launchWhatsapp() async {
-    HapticFeedback.lightImpact();
-    const phoneNumber = '918058056789';
-    const message =
-        'Hello! I’m seeking a professional consultation for my hair. Do you provide digital or in-person consultations?';
-    final uri = Uri.parse(
-      'https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}',
-    );
-    try {
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        debugPrint('Could not launch WhatsApp');
-      }
-    } catch (e) {
-      debugPrint('Error launching WhatsApp: $e');
-    }
+    await WhatsAppLauncher.launchGeneralConsultation();
   }
 
   @override

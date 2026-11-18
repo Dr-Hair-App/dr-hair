@@ -7,6 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/utils/whatsapp_launcher.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_toast.dart';
 import '../../domain/models/care_models.dart';
@@ -743,19 +744,12 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      onPressed: () async {
-                        HapticFeedback.lightImpact();
-                        final uri = Uri.parse(
-                          'https://wa.me/918058056789?text=Hi%20DrHair,%20I%20have%20an%20inquiry%20regarding%20my%20Order%20%23${order.orderId}',
+                      onPressed: () {
+                        WhatsAppLauncher.launchOrderInquiry(
+                          orderId: order.orderId,
+                          status: order.status,
+                          trackingNumber: order.trackingNumber,
                         );
-                        try {
-                          await launchUrl(
-                            uri,
-                            mode: LaunchMode.externalApplication,
-                          );
-                        } catch (e) {
-                          debugPrint('Could not launch WhatsApp: $e');
-                        }
                       },
                       icon: Image.asset(
                         'assets/icons/whatsapp.png',

@@ -62,7 +62,8 @@ class PrescribedMedicine {
 
 class TreatmentDetailsView extends StatefulWidget {
   final PatientClinicalApi? clinicalApi;
-  const TreatmentDetailsView({super.key, this.clinicalApi});
+  final String? initialReportId;
+  const TreatmentDetailsView({super.key, this.clinicalApi, this.initialReportId});
 
   @override
   State<TreatmentDetailsView> createState() => _TreatmentDetailsViewState();
@@ -93,7 +94,11 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialReportId?.trim().isNotEmpty == true ? 1 : 0,
+    );
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 450),
@@ -748,10 +753,9 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
                           side: const BorderSide(color: Color(0xFF25D366)),
                         ),
                         onPressed: () {
-                          HapticFeedback.lightImpact();
-                          WhatsAppLauncher.launch(
-                            message:
-                                'Hello Dr. Hair Clinic, I have a clinical question regarding my care plan ($treatmentName${refNo.isNotEmpty ? ' · Ref: $refNo' : ''}).',
+                          WhatsAppLauncher.launchCarePlanInquiry(
+                            treatmentName: treatmentName,
+                            referenceNo: refNo.isNotEmpty ? refNo : null,
                           );
                         },
                         icon: const Icon(
@@ -1352,6 +1356,7 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
 
   Widget _buildReportCard(ClinicalReportItem report) {
     final isDownloading = _downloadingReportId == report.id;
+    final openedFromNotification = report.id == widget.initialReportId;
     final (icon, color, badge) = switch (report.format) {
       DocumentFormat.pdf => (
         LucideIcons.fileText,
@@ -1372,7 +1377,10 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: openedFromNotification ? AppColors.primary : AppColors.border,
+          width: openedFromNotification ? 1.5 : 1,
+        ),
       ),
       child: Row(
         children: [
@@ -1410,6 +1418,18 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
                         ),
                       ),
                     ),
+                    if (openedFromNotification) ...[
+                      const SizedBox(width: 6),
+                      const Text(
+                        'NEW',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 5),
@@ -1698,9 +1718,8 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
                     side: const BorderSide(color: Color(0xFF25D366)),
                   ),
                   onPressed: () {
-                    HapticFeedback.lightImpact();
-                    WhatsAppLauncher.launch(
-                      message: 'Hello Dr. Hair Clinic, I would like to consult about getting a clinical care plan.',
+                    WhatsAppLauncher.launchCarePlanInquiry(
+                      treatmentName: 'Personalized Clinical Care Plan',
                     );
                   },
                   child: const Text(

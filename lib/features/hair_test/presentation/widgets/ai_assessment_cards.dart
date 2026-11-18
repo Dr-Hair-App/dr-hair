@@ -13,6 +13,9 @@ class AiAssessmentCards extends StatefulWidget {
   final Future<void> Function()? onGenerateDietPlan;
   final bool isGeneratingDietPlan;
   final String? dietPlanError;
+  final Future<void> Function()? onGenerateRoutine;
+  final bool isGeneratingRoutine;
+  final String? routineError;
   final String? assessmentReferenceNo;
 
   const AiAssessmentCards({
@@ -23,6 +26,9 @@ class AiAssessmentCards extends StatefulWidget {
     this.onGenerateDietPlan,
     this.isGeneratingDietPlan = false,
     this.dietPlanError,
+    this.onGenerateRoutine,
+    this.isGeneratingRoutine = false,
+    this.routineError,
     this.assessmentReferenceNo,
   });
 
@@ -298,14 +304,11 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
   }
 
   Widget _buildNavigationTabs(AiAssessmentModel ai) {
-    final tabs = <({int id, String title, IconData icon})>[
+    const tabs = <({int id, String title, IconData icon})>[
       (id: 0, title: 'Possible factors', icon: LucideIcons.activity),
-      if (ai.nextStepType != 'doctor_appointment')
-        (id: 1, title: 'Diet Plan', icon: LucideIcons.utensils),
-      if (ai.nextStepType != 'doctor_appointment') ...[
-        (id: 2, title: 'Lifestyle', icon: LucideIcons.shieldCheck),
-        (id: 3, title: 'Regimen', icon: LucideIcons.clock),
-      ],
+      (id: 1, title: 'Diet Plan', icon: LucideIcons.utensils),
+      (id: 2, title: 'Lifestyle', icon: LucideIcons.shieldCheck),
+      (id: 3, title: 'Regimen', icon: LucideIcons.clock),
     ];
 
     return SingleChildScrollView(
@@ -382,9 +385,6 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
   }
 
   Widget _buildActiveTabContent(AiAssessmentModel ai) {
-    if (_selectedTab != 0 && ai.nextStepType == 'doctor_appointment') {
-      return _buildRootCausesTab(ai.rootCauses);
-    }
     switch (_selectedTab) {
       case 0:
         return _buildRootCausesTab(ai.rootCauses);
@@ -394,7 +394,7 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
         return _buildLifestyleTab(ai.lifestyleGuidance);
       case 3:
       default:
-        return _buildRegimenTab(ai.recommendedRegimen);
+        return _buildRegimenTab(ai);
     }
   }
 
@@ -765,10 +765,16 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
             ),
           const SizedBox(height: 6),
           TextButton.icon(
-            onPressed: () => WhatsAppLauncher.launch(
-              message:
-                  'I would like a clinician to review my AI meal plan because it may not be suitable for me. Assessment reference: ${widget.assessmentReferenceNo ?? 'not available'}.',
-            ),
+            onPressed: () {
+              final ref = widget.assessmentReferenceNo?.trim() ?? '';
+              final link = ref.isNotEmpty
+                  ? 'https://admin.drhairindia.com/patients/patient/assessments/$ref'
+                  : 'https://drhairindia.com';
+              WhatsAppLauncher.launch(
+                message:
+                    'Hello Dr. Hair Clinician,\n\nI would like a review of my AI nutrition & meal plan as it may need clinical adjustment.\n• Assessment Ref: ${ref.isNotEmpty ? ref : "N/A"}\n• Record Link: $link\n\nPlease advise. Thank you!',
+              );
+            },
             icon: const Icon(LucideIcons.flag, size: 15),
             label: const Text('Report a plan that seems unsuitable'),
           ),
@@ -894,7 +900,13 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
     );
   }
 
-  Widget _buildRegimenTab(AiRecommendedRegimen regimen) {
+  Widget _buildRegimenTab(AiAssessmentModel ai) {
+    final regimen = ai.recommendedRegimen;
+    final customRoutine = ai.customRoutine;
+    final List<dynamic> customSteps = customRoutine?['steps'] is List
+        ? (customRoutine!['steps'] as List)
+        : const [];
+
     return Column(
       key: const ValueKey('regimen_tab'),
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -918,64 +930,168 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(
-                    LucideIcons.calendarCheck2,
-                    color: AppColors.primary,
-                    size: 16,
-                  ),
-                  SizedBox(width: 6),
-                  Text(
-                    'Daily care starter plan',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              ...regimen.dailySteps.map((step) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          step.step,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                          ),
-                        ),
+                      Icon(
+                        LucideIcons.calendarCheck2,
+                        color: AppColors.primary,
+                        size: 16,
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          step.instruction,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            height: 1.4,
-                            color: Color(0xFF334155),
-                          ),
+                      SizedBox(width: 6),
+                      Text(
+                        'Daily care starter plan',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
                         ),
                       ),
                     ],
                   ),
-                );
-              }),
+                  if (widget.onGenerateRoutine != null)
+                    TextButton.icon(
+                      onPressed: widget.isGeneratingRoutine
+                          ? null
+                          : widget.onGenerateRoutine,
+                      icon: widget.isGeneratingRoutine
+                          ? const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.primary,
+                              ),
+                            )
+                          : const Icon(
+                              LucideIcons.sparkles,
+                              size: 14,
+                              color: AppColors.primary,
+                            ),
+                      label: Text(
+                        widget.isGeneratingRoutine
+                            ? 'Generating...'
+                            : 'AI Daily Routine',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (widget.routineError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  widget.routineError!,
+                  style: const TextStyle(fontSize: 11.5, color: Colors.red),
+                ),
+              ],
+              const SizedBox(height: 12),
+              if (customSteps.isNotEmpty) ...[
+                ...customSteps.map((step) {
+                  final title = step['title']?.toString() ?? 'Care Step';
+                  final subtitle = step['subtitle']?.toString() ?? '';
+                  final timeOfDay =
+                      step['time_of_day']?.toString() ?? 'Daily';
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            timeOfDay,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                              if (subtitle.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  subtitle,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    height: 1.35,
+                                    color: Color(0xFF475569),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ] else ...[
+                ...regimen.dailySteps.map((step) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            step.step,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            step.instruction,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              height: 1.4,
+                              color: Color(0xFF334155),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
             ],
           ),
         ),

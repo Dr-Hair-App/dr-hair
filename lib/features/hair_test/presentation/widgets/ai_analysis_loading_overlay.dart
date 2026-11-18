@@ -3,9 +3,9 @@ import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/utils/whatsapp_launcher.dart';
 
 /// Branded, full-screen waiting state while the assessment pathway is prepared.
 class AiAnalysisLoadingOverlay extends StatefulWidget {
@@ -68,29 +68,16 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
   }
 
   Future<void> _contactClinic() async {
-    const phoneNumber = '917240005000';
-    const message =
-        'Hello, my Dr. Hair assessment is taking longer to prepare. Can you guide me?';
-    final uri = Uri.parse(
-      'https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}',
+    final success = await WhatsAppLauncher.launch(
+      message:
+          'Hello Dr. Hair Clinical Support, my assessment is taking longer than usual to prepare. Could you please assist me?\n• Portal: https://drhairindia.com',
     );
-    try {
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
-          mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open WhatsApp. Please retry.'),
-          ),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open WhatsApp. Please retry.'),
-          ),
-        );
-      }
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open WhatsApp. Please retry.'),
+        ),
+      );
     }
   }
 

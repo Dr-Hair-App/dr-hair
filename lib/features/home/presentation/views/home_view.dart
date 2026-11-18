@@ -5,16 +5,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:skeletonizer/skeletonizer.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
+import '../../../../core/utils/whatsapp_launcher.dart';
 import '../../../../core/routes/app_destination.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../../care/presentation/viewmodels/care_cubit.dart';
 import '../../../care/presentation/viewmodels/care_state.dart';
 import '../../../hair_test/presentation/viewmodels/hair_test_cubit.dart';
 import '../../../hair_test/presentation/viewmodels/hair_test_state.dart';
+import '../../../hair_test/presentation/widgets/assessment_summary_card.dart';
 import '../../../shop/data/models/product_model.dart';
 import '../../../shop/data/repositories/product_repository_impl.dart';
 import '../../../shop/domain/repositories/product_repository.dart';
@@ -177,32 +178,13 @@ class _HomeViewState extends State<HomeView>
   }
 
   Future<void> _launchWhatsapp() async {
-    const phoneNumber = '918058056789';
-    const message =
-        'Hello! I’m seeking a professional consultation for my hair. Do you provide digital or in-person consultations?';
-    final uri = Uri.parse(
-      'https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}',
-    );
-    try {
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        debugPrint('Could not launch WhatsApp');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not open WhatsApp. Please try again.'),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('Error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open WhatsApp. Please try again.'),
-          ),
-        );
-      }
+    final success = await WhatsAppLauncher.launchGeneralConsultation();
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open WhatsApp. Please try again.'),
+        ),
+      );
     }
   }
 
@@ -222,9 +204,15 @@ class _HomeViewState extends State<HomeView>
             ? widget.homeSummaryCubit!.state
             : context.watch<HomeSummaryCubit?>()?.state;
         final hasDynamicCards = homeSummaryState?.hasCards ?? false;
+        final bool isAssessmentCritical =
+            hairState.aiAssessment?.isCritical == true ||
+            hairState.aiAssessment?.nextStepType == 'doctor_appointment';
         final suppressProducts =
-            homeSummaryState?.actionCards.any((c) => c.isClinicianUrgent) ??
-            false;
+            (homeSummaryState?.actionCards.any((c) => c.isClinicianUrgent) ??
+                false) ||
+            isAssessmentCritical ||
+            (hairState.aiAssessment != null &&
+                !hairState.aiAssessment!.shopEnabled);
         final showPendingStepper =
             !completed &&
             !(homeSummaryState?.actionCards.any((c) => c.isPendingAssessment) ??
@@ -266,6 +254,12 @@ class _HomeViewState extends State<HomeView>
 
                 if (completed) ...[
                   const SizedBox(height: 16),
+                  AssessmentSummaryCard(
+                    state: hairState,
+                    onViewReport: () =>
+                        context.push(RouteNames.assessmentResult),
+                  ),
+                  const SizedBox(height: 16),
                   _buildTodayCard(context),
                 ],
 
@@ -274,7 +268,7 @@ class _HomeViewState extends State<HomeView>
                   _revealSection(2, _buildEssentialProducts(context)),
                 ],
 
-                if (showClinicAppointment && !suppressProducts) ...[
+                if (showClinicAppointment) ...[
                   const SizedBox(height: 20),
                   _revealSection(3, _buildClinicAppointmentCard(context)),
                 ],
@@ -1814,65 +1808,22 @@ class _EssentialProductsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Section Header
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final appConfig = context.watch<AppConfigCubit?>()?.state;
+    final bool isShopEnabled = appConfig?.isFeatureEnabled('shop') ?? true;
+    if (!isShopEnabled) return const SizedBox.shrink();
+
+    return FutureBuilder<List<ProductItem>>(
+      future: productsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Essential Products',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Doctor-approved formulations & therapies',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => context.push(RouteNames.products),
-                child: const Text(
-                  'See All',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        // Medicines Horizontal List
-        SizedBox(
-          height: 260,
-          child: FutureBuilder<List<ProductItem>>(
-            future: productsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Skeletonizer(
+              _buildHeader(context),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 260,
+                child: Skeletonizer(
                   enabled: true,
                   effect: _kHomeShimmerEffect,
                   containersColor: Colors.white,
@@ -1885,36 +1836,31 @@ class _EssentialProductsSection extends StatelessWidget {
                     itemBuilder: (context, index) =>
                         const _MedicineCardSkeleton(),
                   ),
-                );
-              }
-              if (snapshot.hasError) {
-                return const Center(
-                  child: Text(
-                    'Products are temporarily unavailable.',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                );
-              }
-              final products = snapshot.data ?? const <ProductItem>[];
-              if (products.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'No products are available yet.',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                );
-              }
-              return ListView.separated(
+                ),
+              ),
+            ],
+          );
+        }
+        if (snapshot.hasError) {
+          return const SizedBox.shrink();
+        }
+        final products = snapshot.data ?? const <ProductItem>[];
+        if (products.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(context),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 260,
+              child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 scrollDirection: Axis.horizontal,
                 itemCount: products.length,
-                separatorBuilder: (context, index) => const SizedBox(width: 14),
+                separatorBuilder: (context, index) =>
+                    const SizedBox(width: 14),
                 itemBuilder: (context, index) {
                   final item = products[index];
                   return MedicineCard(
@@ -1936,11 +1882,58 @@ class _EssentialProductsSection extends StatelessWidget {
                     ),
                   );
                 },
-              );
-            },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Essential Products',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primaryDark,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Doctor-approved formulations & therapies',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => context.push(RouteNames.products),
+            child: const Text(
+              'See All',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
