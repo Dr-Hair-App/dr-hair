@@ -20,10 +20,12 @@ class HairTestState {
   final String? currentMedicationsStatus;
   final String currentMedications;
   final Map<String, String> photos;
+  final Map<String, String> optimizedPhotos;
   final Map<String, HairPhotoAnalysis> photoAnalysis;
   final bool isSubmitted;
   final bool isCompleted;
   final bool isSubmitting;
+  final double? uploadProgress;
   final String? referenceNo;
   final bool isRetesting;
   final bool isPickingImage;
@@ -55,10 +57,12 @@ class HairTestState {
     this.currentMedicationsStatus,
     this.currentMedications = '',
     this.photos = const {},
+    this.optimizedPhotos = const {},
     this.photoAnalysis = const {},
     this.isSubmitted = false,
     this.isCompleted = false,
     this.isSubmitting = false,
+    this.uploadProgress,
     this.referenceNo,
     this.isRetesting = false,
     this.isPickingImage = false,
@@ -92,10 +96,13 @@ class HairTestState {
     String? currentMedicationsStatus,
     String? currentMedications,
     Map<String, String>? photos,
+    Map<String, String>? optimizedPhotos,
     Map<String, HairPhotoAnalysis>? photoAnalysis,
     bool? isSubmitted,
     bool? isCompleted,
     bool? isSubmitting,
+    double? uploadProgress,
+    bool clearUploadProgress = false,
     String? referenceNo,
     bool clearReferenceNo = false,
     bool? isRetesting,
@@ -134,10 +141,14 @@ class HairTestState {
           currentMedicationsStatus ?? this.currentMedicationsStatus,
       currentMedications: currentMedications ?? this.currentMedications,
       photos: photos ?? this.photos,
+      optimizedPhotos: optimizedPhotos ?? this.optimizedPhotos,
       photoAnalysis: photoAnalysis ?? this.photoAnalysis,
       isSubmitted: isSubmitted ?? this.isSubmitted,
       isCompleted: isCompleted ?? this.isCompleted,
       isSubmitting: isSubmitting ?? this.isSubmitting,
+      uploadProgress: clearUploadProgress
+          ? null
+          : uploadProgress ?? this.uploadProgress,
       referenceNo: clearReferenceNo ? null : referenceNo ?? this.referenceNo,
       isRetesting: isRetesting ?? this.isRetesting,
       isPickingImage: isPickingImage ?? this.isPickingImage,

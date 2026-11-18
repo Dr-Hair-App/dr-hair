@@ -350,7 +350,10 @@ class AuthRepositoryImpl implements AuthRepository {
         nextStep: 'ASSESSMENT',
       );
     } on DioException catch (error) {
-      throw _mapError(error, fallback: 'Verification code is invalid.');
+      throw _mapError(
+        error,
+        fallback: 'Could not complete signup right now. Please request a new code and try again.',
+      );
     }
   }
 
@@ -708,11 +711,15 @@ class AuthRepositoryImpl implements AuthRepository {
     DioException error, {
     required String fallback,
   }) {
+    final statusCode = error.response?.statusCode;
+    if (statusCode != null && statusCode >= 500) {
+      return AuthRepositoryException(fallback, statusCode: statusCode);
+    }
     final response = _mapValue(error.response?.data);
     final message = response?['message']?.toString();
     return AuthRepositoryException(
       message?.isNotEmpty == true ? message! : fallback,
-      statusCode: error.response?.statusCode,
+      statusCode: statusCode,
     );
   }
 

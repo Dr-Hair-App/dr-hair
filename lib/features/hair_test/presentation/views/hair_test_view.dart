@@ -62,7 +62,7 @@ class _HairTestContent extends StatelessWidget {
       },
       builder: (context, state) {
         if (state.isSubmitting) {
-          return const AiAnalysisLoadingOverlay();
+          return AiAnalysisLoadingOverlay(uploadProgress: state.uploadProgress);
         }
 
         // Show report only once after the assessment is submitted in the current session
@@ -665,6 +665,7 @@ class _HairTestContent extends StatelessWidget {
     HairTestState state,
   ) {
     final photoPath = state.getPhoto(label);
+    final previewPath = state.optimizedPhotos[label] ?? photoPath;
     final hasPhoto = photoPath != null && photoPath.isNotEmpty;
     final analysis = state.getAnalysis(label);
 
@@ -698,14 +699,14 @@ class _HairTestContent extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 if (hasPhoto)
-                  photoPath.startsWith('http://') ||
-                          photoPath.startsWith('https://')
+                  previewPath!.startsWith('http://') ||
+                          previewPath.startsWith('https://')
                       ? CustomCachedImage(
-                          imageUrl: photoPath,
+                          imageUrl: previewPath,
                           fit: BoxFit.cover,
                         )
                       : Image.file(
-                          File(photoPath),
+                          File(previewPath),
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) => Center(
                             child: Icon(
@@ -766,7 +767,7 @@ class _HairTestContent extends StatelessWidget {
                   Positioned(
                     left: 8,
                     bottom: 8,
-                    child: _buildDetectionBadge(analysis),
+                    child: _buildDetectionBadge(context, label, analysis),
                   ),
                   Positioned(
                     right: 8,
@@ -807,7 +808,11 @@ class _HairTestContent extends StatelessWidget {
     child: child,
   );
 
-  Widget _buildDetectionBadge(HairPhotoAnalysis? analysis) {
+  Widget _buildDetectionBadge(
+    BuildContext context,
+    String label,
+    HairPhotoAnalysis? analysis,
+  ) {
     if (analysis == null || analysis.isAnalyzing) {
       return _statusPill(
         const SizedBox.square(
@@ -819,6 +824,13 @@ class _HairTestContent extends StatelessWidget {
         ),
         'Checking',
         const Color(0xFF374151),
+      );
+    }
+    if (analysis.status == HairDetectionStatus.awaitingAssessment) {
+      return _statusPill(
+        const Icon(LucideIcons.sparkles, size: 11, color: Colors.white),
+        'AI review on submit',
+        const Color(0xFF4B5563),
       );
     }
     if (analysis.isHair) {
@@ -836,10 +848,18 @@ class _HairTestContent extends StatelessWidget {
       );
     }
     if (analysis.isVerificationUnavailable) {
-      return _statusPill(
-        const Icon(LucideIcons.wifiOff, size: 11, color: Colors.white),
-        'Check unavailable',
-        const Color(0xFF4B5563),
+      return Material(
+        color: const Color(0xFF4B5563),
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: () => context.read<HairTestCubit>().retryPhotoAnalysis(label),
+          borderRadius: BorderRadius.circular(20),
+          child: _statusPill(
+            const Icon(LucideIcons.refreshCw, size: 11, color: Colors.white),
+            'Retry AI check',
+            const Color(0xFF4B5563),
+          ),
+        ),
       );
     }
     return _statusPill(

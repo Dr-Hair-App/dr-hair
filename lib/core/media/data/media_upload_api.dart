@@ -15,12 +15,32 @@ class MediaUploadApi {
     required String token,
     required String purpose,
     required List<MultipartFile> files,
+    ProgressCallback? onSendProgress,
+    CancelToken? cancelToken,
   }) async {
-    if (files.isEmpty || files.length > 5) {
+    if (files.isEmpty || files.length > 10) {
       throw ArgumentError.value(
         files.length,
         'files',
-        'Upload between 1 and 5 files.',
+        'Upload between 1 and 10 files.',
+      );
+    }
+    final oversized = files.indexWhere(
+      (file) => file.length > 25 * 1024 * 1024,
+    );
+    if (oversized >= 0) {
+      throw ArgumentError.value(
+        files[oversized].length,
+        'files[$oversized]',
+        'Each upload must be 25 MiB or smaller.',
+      );
+    }
+    final totalBytes = files.fold<int>(0, (total, file) => total + file.length);
+    if (totalBytes > 89 * 1024 * 1024) {
+      throw ArgumentError.value(
+        totalBytes,
+        'files',
+        'The combined upload must be 89 MiB or smaller to leave room for multipart data.',
       );
     }
 
@@ -30,6 +50,8 @@ class MediaUploadApi {
       options: Options(
         headers: {'Authorization': 'Bearer $token', 'X-Media-Purpose': purpose},
       ),
+      onSendProgress: onSendProgress,
+      cancelToken: cancelToken,
     );
 
     final data = response.data?['data'];

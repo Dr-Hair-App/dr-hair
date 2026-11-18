@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 
 import '../../../../core/constants/api_endpoints.dart';
-import '../../../../core/media/data/media_upload_api.dart';
+import '../../../../core/media/data/smart_image_upload_service.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/storage/app_local_cache.dart';
 import '../../../treatment/data/patient_clinical_api.dart';
@@ -26,12 +27,13 @@ const _unavailableAiAssessment = AiAssessmentModel(
 class HairTestCubit extends Cubit<HairTestState> {
   final ImagePicker _imagePicker;
   final AppLocalCache _cache;
-  final MediaUploadApi? _mediaUploadApi;
+  final SmartImageUploadService _imageUploadService;
   final Dio? _dio;
   final PatientClinicalApi _clinicalApi;
   String? _patientId;
   String? _sessionToken;
   bool _aiStatusPolling = false;
+  final Map<String, int> _photoCheckGeneration = {};
 
   String get _draftKey => _patientId != null && _patientId!.isNotEmpty
       ? 'hair_test_draft_${_patientId}_v2'
@@ -57,17 +59,21 @@ class HairTestCubit extends Cubit<HairTestState> {
   String get _aiAssessmentKey => _patientId != null && _patientId!.isNotEmpty
       ? 'hair_test_ai_assessment_$_patientId'
       : 'hair_test_ai_assessment';
+  String get _submissionResultKey =>
+      _patientId != null && _patientId!.isNotEmpty
+      ? 'hair_test_submission_result_$_patientId'
+      : 'hair_test_submission_result';
 
   HairTestCubit({
     ImagePicker? imagePicker,
     AppLocalCache? cache,
-    MediaUploadApi? mediaUploadApi,
+    SmartImageUploadService? imageUploadService,
     Dio? dio,
     PatientClinicalApi? clinicalApi,
   }) : _imagePicker = imagePicker ?? ImagePicker(),
        _cache = cache ?? AppLocalCache.instance,
-       // ignore: prefer_initializing_formals
-       _mediaUploadApi = mediaUploadApi,
+       _imageUploadService =
+           imageUploadService ?? const SmartImageUploadService(),
        // ignore: prefer_initializing_formals
        _dio = dio,
        _clinicalApi =
@@ -83,6 +89,20 @@ class HairTestCubit extends Cubit<HairTestState> {
        super(const HairTestState());
 
   Future<void> bindPatient(String? patientId, {String? sessionToken}) async {
+    final previousPatientId = _patientId;
+    final identityChanged = previousPatientId != patientId;
+    if (identityChanged &&
+        (previousPatientId != null ||
+            (patientId != null && patientId.isNotEmpty))) {
+      final previousState = state;
+      // Clear visible patient data before any asynchronous cleanup or load for
+      // the next identity, so a new account can never briefly see the old draft.
+      emit(const HairTestState());
+      _patientId = null;
+      _sessionToken = null;
+      await _clearPatientScopedData(previousPatientId, previousState);
+      if (isClosed) return;
+    }
     if (patientId == null || patientId.isEmpty) {
       _patientId = null;
       _sessionToken = null;
@@ -94,6 +114,52 @@ class HairTestCubit extends Cubit<HairTestState> {
     await loadSavedState();
     if (sessionToken != null && sessionToken.isNotEmpty) {
       await _syncWithBackend(sessionToken);
+    }
+  }
+
+  Future<void> _clearPatientScopedData(
+    String? patientId,
+    HairTestState previousState,
+  ) async {
+    final photoDeletes = <Future<void>>[];
+    for (final entry in previousState.photos.entries) {
+      final path = entry.value;
+      if (path.startsWith('http://') || path.startsWith('https://')) continue;
+      photoDeletes.add(
+        _imageUploadService.deletePrepared(
+          path,
+          previousState.optimizedPhotos[entry.key],
+        ),
+      );
+    }
+    await Future.wait(photoDeletes);
+    final scopedKeys = patientId == null || patientId.isEmpty
+        ? const <String>[]
+        : [
+            'hair_test_draft_${patientId}_v2',
+            'hair_test_draft_${patientId}_v1',
+            'has_completed_hair_test_$patientId',
+            'hair_test_stage_$patientId',
+            'hair_test_dandruff_$patientId',
+            'hair_test_name_$patientId',
+            'hair_test_age_$patientId',
+            'hair_test_ai_assessment_$patientId',
+            'hair_test_submission_result_$patientId',
+          ];
+    for (final key in [
+      ...scopedKeys,
+      'hair_test_draft_v2',
+      'hair_test_draft_v1',
+      'has_completed_hair_test',
+      'has_skipped_hair_test',
+      'hair_test_stage',
+      'hair_test_dandruff',
+      'hair_test_name',
+      'hair_test_age',
+      'hair_test_ai_assessment',
+      'hair_test_submission_result',
+    ]) {
+      await _cache.remove(key);
     }
   }
 
@@ -144,6 +210,19 @@ class HairTestCubit extends Cubit<HairTestState> {
             latest?['ai_assessment_status']?.toString() ??
             (aiModel != null ? 'ready' : 'idle');
         final aiPending = aiStatus == 'queued' || aiStatus == 'processing';
+        final photoRecords = latest?['scalp_photos'] is List
+            ? List<dynamic>.from(latest!['scalp_photos'] as List)
+            : const <dynamic>[];
+        final serverPhotos = _photosFromScalpPhotoRecords(
+          photoRecords,
+          state.photos,
+        );
+        final photoAnalysis = _photoVerificationForAssessment(
+          aiModel,
+          markMissingUnavailable: !aiPending,
+          sourcePhotos: serverPhotos,
+          photoRecords: photoRecords,
+        );
 
         if (!isClosed) {
           emit(
@@ -162,6 +241,8 @@ class HairTestCubit extends Cubit<HairTestState> {
               doctorCarePlan: activeCarePlan,
               aiAssessment: aiModel,
               clearAiAssessment: aiModel == null,
+              photos: serverPhotos,
+              photoAnalysis: photoAnalysis,
             ),
           );
         }
@@ -176,86 +257,24 @@ class HairTestCubit extends Cubit<HairTestState> {
       }
     } catch (_) {}
 
-    try {
-      final dioToUse =
-          _dio ??
-          DioClient(
-            baseUrl: ApiEndpoints.backendBaseUrl,
-            enableDebugLogging: false,
-          ).dio;
-      final response = await dioToUse.get<Map<String, dynamic>>(
-        ApiEndpoints.patientAssessmentDraft,
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-      );
-      final draft = response.data?['data']?['draft'];
-      if (draft is Map && draft['formData'] is Map && !isClosed) {
-        final formData = Map<String, dynamic>.from(draft['formData'] as Map);
-        final step = (draft['step'] as num?)?.toInt() ?? 0;
-        emit(
-          state.copyWith(
-            currentStep: step.clamp(0, state.totalSteps - 1),
-            name:
-                formData['full_name']?.toString() ??
-                formData['name']?.toString() ??
-                state.name,
-            age: formData['age']?.toString() ?? state.age,
-            selectedGender:
-                formData['gender']?.toString() ??
-                formData['selectedGender']?.toString() ??
-                state.selectedGender,
-            stage: formData['stage']?.toString() ?? state.stage,
-            primaryConcern:
-                formData['primary_concern']?.toString() ??
-                formData['primaryConcern']?.toString() ??
-                formData['main_concern']?.toString() ??
-                state.primaryConcern,
-            duration: formData['duration']?.toString() ?? state.duration,
-            dandruff: formData['dandruff']?.toString() ?? state.dandruff,
-            gutHealth:
-                formData['gut_health']?.toString() ??
-                formData['gutHealth']?.toString() ??
-                state.gutHealth,
-            stressLevel:
-                formData['stress_level']?.toString() ??
-                formData['stressLevel']?.toString() ??
-                state.stressLevel,
-            familyHistory:
-                formData['family_history']?.toString() ??
-                formData['familyHistory']?.toString() ??
-                state.familyHistory,
-            allergyStatus:
-                formData['allergy_status']?.toString() ??
-                formData['allergyStatus']?.toString() ??
-                state.allergyStatus,
-            allergyDetails:
-                formData['allergy_details']?.toString() ??
-                formData['allergyDetails']?.toString() ??
-                state.allergyDetails,
-            currentMedicationsStatus:
-                formData['current_medications_status']?.toString() ??
-                formData['currentMedicationsStatus']?.toString() ??
-                state.currentMedicationsStatus,
-            currentMedications:
-                formData['current_medications']?.toString() ??
-                formData['currentMedications']?.toString() ??
-                state.currentMedications,
-          ),
-        );
-        _cache.put(_draftKey, jsonEncode(_draftJson()));
-      }
-    } catch (_) {}
+    // In-progress answers/photos are intentionally local Hive drafts. The
+    // backend is called once, with the final multipart submission.
   }
 
   Future<void> loadSavedState() async {
     try {
       await _cache.remove(_legacyDraftKey);
+      final useLegacyCache = _patientId == null;
       final hasCompleted =
           _cache.getBool(_completedKey) ??
-          _cache.getBool('has_completed_hair_test') ??
+          (useLegacyCache
+              ? _cache.getBool('has_completed_hair_test')
+              : null) ??
           false;
       var restored = state;
       final rawDraft =
-          _cache.getString(_draftKey) ?? _cache.getString('hair_test_draft_v2');
+          _cache.getString(_draftKey) ??
+          (useLegacyCache ? _cache.getString('hair_test_draft_v2') : null);
       if (rawDraft != null) {
         try {
           final draft = jsonDecode(rawDraft) as Map<String, dynamic>;
@@ -284,6 +303,11 @@ class HairTestCubit extends Cubit<HairTestState> {
                   (key, value) => MapEntry(key.toString(), value.toString()),
                 ) ??
                 const {},
+            optimizedPhotos:
+                (draft['optimizedPhotos'] as Map?)?.map(
+                  (key, value) => MapEntry(key.toString(), value.toString()),
+                ) ??
+                const {},
             photoAnalysis:
                 (draft['photoAnalysis'] as Map?)?.map(
                   (key, value) => MapEntry(
@@ -299,20 +323,41 @@ class HairTestCubit extends Cubit<HairTestState> {
           await _cache.remove(_draftKey);
         }
       }
+      // Migrate in-progress per-photo checks from older app versions. New
+      // drafts defer image review to the combined assessment submission.
+      final recoveredAnalysis = Map<String, HairPhotoAnalysis>.from(
+        restored.photoAnalysis,
+      );
+      for (final entry in recoveredAnalysis.entries.toList()) {
+        if (entry.value.isAnalyzing) {
+          recoveredAnalysis[entry.key] = HairPhotoAnalysis(
+            label: entry.value.label,
+            photoPath: entry.value.photoPath,
+            status: HairDetectionStatus.awaitingAssessment,
+            confidence: 0,
+            message: 'Your photo will be reviewed with the assessment.',
+            details: 'Image review is combined with assessment submission.',
+          );
+        }
+      }
+      restored = restored.copyWith(photoAnalysis: recoveredAnalysis);
       final savedStage =
-          _cache.getString(_stageKey) ?? _cache.getString('hair_test_stage');
+          _cache.getString(_stageKey) ??
+          (useLegacyCache ? _cache.getString('hair_test_stage') : null);
       final savedDandruff =
           _cache.getString(_dandruffKey) ??
-          _cache.getString('hair_test_dandruff');
+          (useLegacyCache ? _cache.getString('hair_test_dandruff') : null);
       final savedName =
           _cache.getString(_nameKey) ??
-          _cache.getString('hair_test_name') ??
+          (useLegacyCache ? _cache.getString('hair_test_name') : null) ??
           '';
-      final savedAge =
-          _cache.getString(_ageKey) ?? _cache.getString('hair_test_age') ?? '';
+      final savedAge = _cache.getString(_ageKey) ??
+          (useLegacyCache ? _cache.getString('hair_test_age') : null) ??
+          '';
 
       AiAssessmentModel? savedAiModel;
-      final rawAiString = _cache.getString(_aiAssessmentKey);
+      final rawAiString = _cache.getString(_aiAssessmentKey) ??
+          (useLegacyCache ? _cache.getString('hair_test_ai_assessment') : null);
       if (rawAiString != null && rawAiString.isNotEmpty) {
         try {
           final decoded = jsonDecode(rawAiString);
@@ -324,7 +369,64 @@ class HairTestCubit extends Cubit<HairTestState> {
         } catch (_) {}
       }
 
-      if (hasCompleted) {
+      Map<String, dynamic>? savedSubmission;
+      final rawSubmission = _cache.getString(_submissionResultKey) ??
+          (useLegacyCache
+              ? _cache.getString('hair_test_submission_result')
+              : null);
+      if (rawSubmission != null && rawSubmission.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(rawSubmission);
+          if (decoded is Map) {
+            savedSubmission = Map<String, dynamic>.from(decoded);
+          }
+        } catch (_) {}
+      }
+
+      if (savedSubmission != null) {
+        final rawCachedAi = savedSubmission['ai_assessment'];
+        if (rawCachedAi is Map) {
+          try {
+            savedAiModel = AiAssessmentModel.fromJson(
+              Map<String, dynamic>.from(rawCachedAi),
+            );
+          } catch (_) {}
+        }
+        final cachedTest = savedSubmission['test'] is Map
+            ? Map<String, dynamic>.from(savedSubmission['test'] as Map)
+            : const <String, dynamic>{};
+        final photoRecords = cachedTest['scalp_photos'] is List
+            ? List<dynamic>.from(cachedTest['scalp_photos'] as List)
+            : const <dynamic>[];
+        final restoredPhotos = _photosFromScalpPhotoRecords(
+          photoRecords,
+          restored.photos,
+        );
+        emit(
+          restored.copyWith(
+            isCompleted: true,
+            isSubmitted: true,
+            referenceNo: savedSubmission['reference_no']?.toString(),
+            assessmentStatus: 'submitted',
+            aiAssessmentStatus:
+                savedSubmission['ai_assessment_status']?.toString() ??
+                (savedAiModel == null ? 'queued' : 'ready'),
+            name: savedName,
+            age: savedAge,
+            aiAssessment: savedAiModel,
+            photos: restoredPhotos,
+            photoAnalysis: _photoVerificationForAssessment(
+              savedAiModel,
+              markMissingUnavailable:
+                  savedSubmission['ai_assessment_status'] == 'ready' ||
+                  savedSubmission['ai_assessment_status'] == 'failed',
+              sourcePhotos: restoredPhotos,
+              previousAnalysis: restored.photoAnalysis,
+              photoRecords: photoRecords,
+            ),
+          ),
+        );
+      } else if (hasCompleted) {
         final hasObservedPattern = restored.primaryConcern != null;
         emit(
           restored.copyWith(
@@ -458,115 +560,135 @@ class HairTestCubit extends Cubit<HairTestState> {
       emit(
         state.copyWith(
           isSubmitting: true,
+          uploadProgress: 0,
           clearErrorMessage: true,
           name: name,
           age: age,
         ),
       );
 
-      final uploadedUrls = <String, String>{};
-      final uploadedPublicIds = <String, String>{};
-      if (state.photos.isNotEmpty) {
-        try {
-          final uploader = _mediaUploadApi ?? MediaUploadApi(dio: _dio);
-          final filesToUpload = <MultipartFile>[];
-          final fileKeys = <String>[];
-          for (final entry in state.photos.entries) {
-            final path = entry.value;
-            if (path.isNotEmpty) {
-              if (path.startsWith('http://') || path.startsWith('https://')) {
-                uploadedUrls[entry.key] = path;
-              } else {
-                filesToUpload.add(
-                  await MultipartFile.fromFile(
-                    path,
-                    filename: path.split('/').last,
-                  ),
-                );
-                fileKeys.add(entry.key);
-              }
-            }
-          }
-          if (filesToUpload.isNotEmpty) {
-            final uploadResult = await uploader.uploadFiles(
-              token: sessionToken!,
-              purpose: 'assessment',
-              files: filesToUpload,
-            );
-            for (var i = 0; i < uploadResult.length; i++) {
-              final url = uploadResult[i]['url']?.toString();
-              if (url != null && url.isNotEmpty) {
-                uploadedUrls[fileKeys[i]] = url;
-              }
-              final publicId =
-                  (uploadResult[i]['public_id'] ?? uploadResult[i]['asset_id'])
-                      ?.toString();
-              if (publicId != null && publicId.isNotEmpty) {
-                uploadedPublicIds[fileKeys[i]] = publicId;
-              }
-            }
-          }
-        } catch (uploadError) {
-          emit(
-            state.copyWith(
-              isSubmitting: false,
-              errorMessage:
-                  'Could not upload assessment photos. Please try again.',
-            ),
-          );
-          return;
-        }
-      }
-
       try {
+        const photoFieldPrefix = {
+          'Front Hairline': 'photo_front',
+          'Crown / Top': 'photo_top',
+          'Side Profile / Temples': 'photo_left',
+          'Side Profile': 'photo_left',
+          'Back / Vertex': 'photo_back',
+        };
+        // Leave room for multipart boundaries and the questionnaire fields.
+        const maxAssessmentBodyBytes = 89 * 1024 * 1024;
+        var assessmentImageBytes = 0;
+        final formFields = <String, dynamic>{
+          'full_name': name,
+          if (age.isNotEmpty) 'age': age,
+          if (gender?.isNotEmpty == true) 'gender': gender,
+          'duration': duration,
+          if (state.primaryConcern?.isNotEmpty == true)
+            'primary_concern': state.primaryConcern,
+          if (stage?.isNotEmpty == true) 'stage': stage,
+          'dandruff': dandruff,
+          'gut_health': gutHealth,
+          'stress_level': stressLevel,
+          'family_history': familyHistory,
+          if (state.allergyStatus?.isNotEmpty == true)
+            'allergy_status': state.allergyStatus,
+          if (state.allergyDetails.trim().isNotEmpty)
+            'allergy_details': state.allergyDetails.trim(),
+          if (state.currentMedicationsStatus?.isNotEmpty == true)
+            'current_medications_status': state.currentMedicationsStatus,
+          if (state.currentMedications.trim().isNotEmpty)
+            'current_medications': state.currentMedications.trim(),
+        };
+        for (final entry in photoFieldPrefix.entries) {
+          final originalPath = state.photos[entry.key];
+          if (originalPath == null || originalPath.isEmpty) continue;
+          if (originalPath.startsWith('http://') ||
+              originalPath.startsWith('https://')) {
+            formFields['${entry.value}_url'] = originalPath;
+            continue;
+          }
+
+          final originalFile = File(originalPath);
+          if (!await originalFile.exists()) {
+            throw const FileSystemException(
+              'A cached assessment photo is missing.',
+            );
+          }
+          final sourceBytes = await originalFile.length();
+          final optimizedPath =
+              state.optimizedPhotos[entry.key] ?? originalPath;
+          final sourceIsTooLarge =
+              sourceBytes > SmartImageUploadService.maxFileBytes;
+          if (sourceIsTooLarge && optimizedPath == originalPath) {
+            throw const FileSystemException(
+              'This image is larger than 25 MiB and has no compressed upload copy. Select it again to prepare it.',
+            );
+          }
+          final primaryPath = sourceIsTooLarge ? optimizedPath : originalPath;
+          final primaryFile = File(primaryPath);
+          if (!await primaryFile.exists()) {
+            throw const FileSystemException(
+              'A prepared assessment photo is missing. Select it again.',
+            );
+          }
+          assessmentImageBytes += await primaryFile.length();
+          if (assessmentImageBytes > maxAssessmentBodyBytes) {
+            throw const FileSystemException(
+              'Assessment photos exceed the safe 89 MiB file budget. Remove a photo or choose smaller images.',
+            );
+          }
+          formFields[entry.value] = await _multipartImage(primaryPath);
+          // A source above the API's 25 MiB per-file limit is represented by
+          // its validated derivative as the primary part; do not upload it
+          // twice under the optional derivative field.
+          if (!sourceIsTooLarge && optimizedPath != originalPath) {
+            final optimizedFile = File(optimizedPath);
+            if (!await optimizedFile.exists()) {
+              throw const FileSystemException(
+                'An optimized assessment photo is missing.',
+              );
+            }
+            assessmentImageBytes += await optimizedFile.length();
+            if (assessmentImageBytes > maxAssessmentBodyBytes) {
+              throw const FileSystemException(
+                'Assessment photos exceed the safe 89 MiB file budget. Remove a photo or choose smaller images.',
+              );
+            }
+            formFields['${entry.value}_optimized'] = await _multipartImage(
+              optimizedPath,
+            );
+          }
+        }
         final client = _dio != null
             ? null
             : DioClient(baseUrl: ApiEndpoints.backendBaseUrl);
         final dioToUse = _dio ?? client!.dio;
         final response = await dioToUse.post<Map<String, dynamic>>(
           ApiEndpoints.hairTestSubmitForm,
-          data: FormData.fromMap({
-            'full_name': name,
-            if (age.isNotEmpty) 'age': age,
-            if (gender?.isNotEmpty == true) 'gender': gender,
-            'duration': duration,
-            if (state.primaryConcern?.isNotEmpty == true)
-              'primary_concern': state.primaryConcern,
-            if (stage?.isNotEmpty == true) 'stage': stage,
-            'dandruff': dandruff,
-            'gut_health': gutHealth,
-            'stress_level': stressLevel,
-            'family_history': familyHistory,
-            if (state.allergyStatus?.isNotEmpty == true)
-              'allergy_status': state.allergyStatus,
-            if (state.allergyDetails.trim().isNotEmpty)
-              'allergy_details': state.allergyDetails.trim(),
-            if (state.currentMedicationsStatus?.isNotEmpty == true)
-              'current_medications_status': state.currentMedicationsStatus,
-            if (state.currentMedications.trim().isNotEmpty)
-              'current_medications': state.currentMedications.trim(),
-            if (uploadedUrls['Front Hairline'] != null)
-              'photo_front_url': uploadedUrls['Front Hairline'],
-            if (uploadedPublicIds['Front Hairline'] != null)
-              'photo_front_id': uploadedPublicIds['Front Hairline'],
-            if (uploadedUrls['Crown / Top'] != null)
-              'photo_top_url': uploadedUrls['Crown / Top'],
-            if (uploadedPublicIds['Crown / Top'] != null)
-              'photo_top_id': uploadedPublicIds['Crown / Top'],
-            if (uploadedUrls['Side Profile / Temples'] != null)
-              'photo_left_url': uploadedUrls['Side Profile / Temples'],
-            if (uploadedPublicIds['Side Profile / Temples'] != null)
-              'photo_left_id': uploadedPublicIds['Side Profile / Temples'],
-          }),
+          data: FormData.fromMap(formFields),
           options: Options(
             contentType: Headers.multipartFormDataContentType,
-            headers: {'Authorization': 'Bearer $sessionToken'},
+            headers: {
+              'Authorization': 'Bearer $sessionToken',
+              'X-Media-Purpose': 'assessment',
+            },
+            connectTimeout: const Duration(seconds: 20),
+            sendTimeout: const Duration(seconds: 120),
+            receiveTimeout: const Duration(seconds: 120),
           ),
+          onSendProgress: (sent, total) {
+            if (total <= 0 || isClosed) return;
+            emit(state.copyWith(uploadProgress: (sent / total).clamp(0, 1)));
+          },
         );
         final referenceNo =
             response.data?['reference_no']?.toString() ??
             response.data?['data']?['reference_no']?.toString() ??
             response.data?['data']?['test']?['reference_no']?.toString();
+        await _cache.put(
+          _submissionResultKey,
+          jsonEncode(response.data?['data'] ?? response.data ?? const {}),
+        );
 
         final rawAi =
             response.data?['data']?['ai_assessment'] ??
@@ -587,6 +709,10 @@ class HairTestCubit extends Cubit<HairTestState> {
             response.data?['data']?['ai_assessment_status']?.toString() ??
             (aiModel != null ? 'ready' : 'queued');
         final aiPending = aiStatus == 'queued' || aiStatus == 'processing';
+        final photoAnalysis = _photoVerificationForAssessment(
+          aiModel,
+          markMissingUnavailable: !aiPending,
+        );
 
         emit(
           state.copyWith(
@@ -594,12 +720,14 @@ class HairTestCubit extends Cubit<HairTestState> {
             assessmentStatus: 'submitted',
             aiAssessmentStatus: aiStatus,
             isSubmitting: aiPending,
+            clearUploadProgress: true,
             isSubmitted: !aiPending,
             isCompleted: true,
             isRetesting: false,
             clearErrorMessage: true,
             aiAssessment: aiModel,
             clearAiAssessment: aiModel == null,
+            photoAnalysis: photoAnalysis,
           ),
         );
 
@@ -615,7 +743,17 @@ class HairTestCubit extends Cubit<HairTestState> {
         emit(
           state.copyWith(
             isSubmitting: false,
+            clearUploadProgress: true,
             errorMessage: serverMessage ?? 'Assessment could not be sent to the clinic. Check your connection and try again.',
+          ),
+        );
+        return;
+      } on FileSystemException catch (error) {
+        emit(
+          state.copyWith(
+            isSubmitting: false,
+            clearUploadProgress: true,
+            errorMessage: error.message.isNotEmpty ? error.message : 'Assessment photos could not be prepared. Try selecting them again.',
           ),
         );
         return;
@@ -623,6 +761,7 @@ class HairTestCubit extends Cubit<HairTestState> {
         emit(
           state.copyWith(
             isSubmitting: false,
+            clearUploadProgress: true,
             errorMessage: 'Assessment could not be sent to the clinic. Check your connection and try again.',
           ),
         );
@@ -666,24 +805,6 @@ class HairTestCubit extends Cubit<HairTestState> {
       await _cache.put(_nameKey, state.name);
       await _cache.put(_ageKey, state.age);
       await _cache.remove(_draftKey);
-      if (sessionToken != null && sessionToken.isNotEmpty) {
-        final dioToUse =
-            _dio ??
-            DioClient(
-              baseUrl: ApiEndpoints.backendBaseUrl,
-              enableDebugLogging: false,
-            ).dio;
-        unawaited(() async {
-          try {
-            await dioToUse.delete<Map<String, dynamic>>(
-              ApiEndpoints.patientAssessmentDraft,
-              options: Options(
-                headers: {'Authorization': 'Bearer $sessionToken'},
-              ),
-            );
-          } catch (_) {}
-        }());
-      }
     } catch (_) {}
   }
 
@@ -739,6 +860,8 @@ class HairTestCubit extends Cubit<HairTestState> {
   }
 
   void startRetest() {
+    unawaited(_cache.remove(_submissionResultKey));
+    unawaited(_cache.remove(_aiAssessmentKey));
     emit(
       state.copyWith(
         isRetesting: true,
@@ -882,21 +1005,24 @@ class HairTestCubit extends Cubit<HairTestState> {
     try {
       final XFile? pickedFile = await _imagePicker.pickImage(
         source: source,
-        imageQuality: 85,
-        maxWidth: 1920,
-        maxHeight: 1920,
+        imageQuality: 100,
       );
 
       if (pickedFile != null) {
+        final prepared = await _imageUploadService.prepare(pickedFile.path);
         final updatedPhotos = Map<String, String>.from(state.photos);
-        updatedPhotos[label] = pickedFile.path;
+        updatedPhotos[label] = prepared.originalPath;
+        final updatedOptimizedPhotos = Map<String, String>.from(
+          state.optimizedPhotos,
+        );
+        updatedOptimizedPhotos[label] = prepared.uploadPath;
 
         final updatedAnalysis = Map<String, HairPhotoAnalysis>.from(
           state.photoAnalysis,
         );
         updatedAnalysis[label] = HairPhotoAnalysis(
           label: label,
-          photoPath: pickedFile.path,
+          photoPath: prepared.originalPath,
           status: HairDetectionStatus.analyzing,
           confidence: 0.0,
           message: 'Analyzing scalp and hair features...',
@@ -906,32 +1032,22 @@ class HairTestCubit extends Cubit<HairTestState> {
         emit(
           state.copyWith(
             photos: updatedPhotos,
+            optimizedPhotos: updatedOptimizedPhotos,
             photoAnalysis: updatedAnalysis,
             isPickingImage: false,
           ),
         );
         _saveDraft();
 
-        final analysis = await HairImageDetector.analyze(
-          pickedFile.path,
-          label: label,
-        );
-        final finalAnalysis = Map<String, HairPhotoAnalysis>.from(
-          state.photoAnalysis,
-        );
-        finalAnalysis[label] = analysis;
-        emit(state.copyWith(photoAnalysis: finalAnalysis));
-        _saveDraft();
+        _markPhotoAwaitingAssessment(label);
       } else {
         emit(state.copyWith(isPickingImage: false));
       }
     } catch (e) {
-      emit(
-        state.copyWith(
-          isPickingImage: false,
-          errorMessage: 'Could not open the image picker. Please try again.',
-        ),
-      );
+      final message = e is FileSystemException && e.message.isNotEmpty
+          ? e.message
+          : 'Could not prepare that image. Please choose it again.';
+      emit(state.copyWith(isPickingImage: false, errorMessage: message));
     }
   }
 
@@ -942,6 +1058,10 @@ class HairTestCubit extends Cubit<HairTestState> {
   ]) async {
     final updatedPhotos = Map<String, String>.from(state.photos);
     updatedPhotos[label] = path;
+    final updatedOptimizedPhotos = Map<String, String>.from(
+      state.optimizedPhotos,
+    );
+    updatedOptimizedPhotos[label] = path;
 
     final initialAnalysis =
         precomputedAnalysis ??
@@ -962,6 +1082,7 @@ class HairTestCubit extends Cubit<HairTestState> {
     emit(
       state.copyWith(
         photos: updatedPhotos,
+        optimizedPhotos: updatedOptimizedPhotos,
         photoAnalysis: updatedAnalysis,
         clearErrorMessage: true,
       ),
@@ -969,20 +1090,90 @@ class HairTestCubit extends Cubit<HairTestState> {
     _saveDraft();
 
     if (precomputedAnalysis != null) return;
+    _markPhotoAwaitingAssessment(label);
+  }
 
-    final analysis = await HairImageDetector.analyze(path, label: label);
-    if (isClosed) return;
-    final finalAnalysis = Map<String, HairPhotoAnalysis>.from(
+  void _markPhotoAwaitingAssessment(String label) {
+    final originalPath = state.photos[label];
+    if (originalPath == null || originalPath.isEmpty || isClosed) return;
+
+    final updatedAnalysis = Map<String, HairPhotoAnalysis>.from(
       state.photoAnalysis,
     );
-    finalAnalysis[label] = analysis;
-    emit(state.copyWith(photoAnalysis: finalAnalysis));
+    updatedAnalysis[label] = HairPhotoAnalysis(
+      label: label,
+      photoPath: originalPath,
+      status: HairDetectionStatus.awaitingAssessment,
+      confidence: 0,
+      message: 'Your photo will be reviewed with the assessment.',
+      details: 'AI review is combined with assessment submission to reduce API requests.',
+    );
+    emit(state.copyWith(photoAnalysis: updatedAnalysis));
+    _saveDraft();
+  }
+
+  Future<void> retryPhotoAnalysis(String label) async {
+    final originalPath = state.photos[label];
+    if (originalPath == null || originalPath.isEmpty || isClosed) return;
+    final checkId = (_photoCheckGeneration[label] ?? 0) + 1;
+    _photoCheckGeneration[label] = checkId;
+    final uploadPath = state.optimizedPhotos[label] ?? originalPath;
+    final token = _sessionToken?.trim();
+    final current = Map<String, HairPhotoAnalysis>.from(state.photoAnalysis);
+    current[label] = HairPhotoAnalysis(
+      label: label,
+      photoPath: originalPath,
+      status: HairDetectionStatus.analyzing,
+      confidence: 0,
+      message: 'Checking whether this is a clear scalp photo…',
+      details: 'This retry checks the selected image with the clinic service.',
+    );
+    emit(state.copyWith(photoAnalysis: current));
+
+    final result =
+        (token == null || token.isEmpty) &&
+            HairImageDetector.analyzerOverride == null
+        ? HairPhotoAnalysis(
+            label: label,
+            photoPath: originalPath,
+            status: HairDetectionStatus.verificationUnavailable,
+            confidence: 0,
+            message: 'Sign in to retry this photo check.',
+            details: 'Photo verification requires an authenticated session.',
+          )
+        : await HairImageDetector.analyze(
+            uploadPath,
+            label: label,
+            sessionToken: token,
+            dioClient: _dio,
+          );
+
+    if (isClosed ||
+        _photoCheckGeneration[label] != checkId ||
+        state.photos[label] != originalPath) {
+      return;
+    }
+    final updated = Map<String, HairPhotoAnalysis>.from(state.photoAnalysis);
+    updated[label] = HairPhotoAnalysis(
+      label: label,
+      photoPath: originalPath,
+      status: result.status,
+      confidence: result.confidence,
+      message: result.message,
+      details: result.details,
+    );
+    emit(state.copyWith(photoAnalysis: updated));
     _saveDraft();
   }
 
   void removePhoto(String label) {
+    _photoCheckGeneration[label] = (_photoCheckGeneration[label] ?? 0) + 1;
     final updatedPhotos = Map<String, String>.from(state.photos);
-    updatedPhotos.remove(label);
+    final oldOriginal = updatedPhotos.remove(label);
+    final updatedOptimizedPhotos = Map<String, String>.from(
+      state.optimizedPhotos,
+    );
+    final oldOptimized = updatedOptimizedPhotos.remove(label);
     final updatedAnalysis = Map<String, HairPhotoAnalysis>.from(
       state.photoAnalysis,
     );
@@ -990,10 +1181,14 @@ class HairTestCubit extends Cubit<HairTestState> {
     emit(
       state.copyWith(
         photos: updatedPhotos,
+        optimizedPhotos: updatedOptimizedPhotos,
         photoAnalysis: updatedAnalysis,
         clearErrorMessage: true,
       ),
     );
+    if (oldOriginal != null) {
+      unawaited(_imageUploadService.deletePrepared(oldOriginal, oldOptimized));
+    }
     _saveDraft();
   }
 
@@ -1015,6 +1210,7 @@ class HairTestCubit extends Cubit<HairTestState> {
     'currentMedicationsStatus': state.currentMedicationsStatus,
     'currentMedications': state.currentMedications,
     'photos': state.photos,
+    'optimizedPhotos': state.optimizedPhotos,
     'photoAnalysis': state.photoAnalysis.map(
       (key, value) => MapEntry(key, value.toJson()),
     ),
@@ -1022,27 +1218,27 @@ class HairTestCubit extends Cubit<HairTestState> {
 
   void _saveDraft() {
     _cache.put(_draftKey, jsonEncode(_draftJson()));
-    final token = _sessionToken;
-    if (token != null && token.isNotEmpty) {
-      final dioToUse =
-          _dio ??
-          DioClient(
-            baseUrl: ApiEndpoints.backendBaseUrl,
-            enableDebugLogging: false,
-          ).dio;
-      unawaited(() async {
-        try {
-          await dioToUse.put<Map<String, dynamic>>(
-            ApiEndpoints.patientAssessmentDraft,
-            data: {'step': state.currentStep, 'formData': _draftJson()},
-            options: Options(headers: {'Authorization': 'Bearer $token'}),
-          );
-        } catch (_) {}
-      }());
+  }
+
+  void _deleteCachedPhotoFiles(HairTestState snapshot) {
+    for (final entry in snapshot.photos.entries) {
+      final original = entry.value;
+      if (original.startsWith('http://') || original.startsWith('https://')) {
+        continue;
+      }
+      unawaited(
+        _imageUploadService.deletePrepared(
+          original,
+          snapshot.optimizedPhotos[entry.key],
+        ),
+      );
     }
   }
 
   void reset() {
+    _deleteCachedPhotoFiles(state);
+    unawaited(_cache.remove(_submissionResultKey));
+    unawaited(_cache.remove(_aiAssessmentKey));
     emit(const HairTestState());
     _saveDraft();
   }
@@ -1075,75 +1271,331 @@ class HairTestCubit extends Cubit<HairTestState> {
     await _pollAiAssessmentStatus(ref, token);
   }
 
+  Map<String, HairPhotoAnalysis> _photoVerificationForAssessment(
+    AiAssessmentModel? aiModel, {
+    bool markMissingUnavailable = false,
+    Map<String, String>? sourcePhotos,
+    Map<String, HairPhotoAnalysis>? previousAnalysis,
+    List<dynamic> photoRecords = const [],
+  }) {
+    const labelsByAngle = {
+      'front': 'Front Hairline',
+      'top': 'Crown / Top',
+      'left': 'Side Profile / Temples',
+      'right': 'Side Profile / Temples',
+      'temples': 'Side Profile / Temples',
+      'back': 'Back / Vertex',
+    };
+    final photos = sourcePhotos ?? state.photos;
+    final results = <String, HairPhotoAnalysis>{
+      ...(previousAnalysis ?? state.photoAnalysis),
+    };
+    final verifiedLabels = <String>{};
+    for (final verification in aiModel?.scalpPhotoVerification ?? const []) {
+      final label =
+          labelsByAngle[verification['angle']?.toString().toLowerCase() ?? ''];
+      if (label == null || !photos.containsKey(label)) continue;
+      verifiedLabels.add(label);
+      final status = switch (verification['status']?.toString()) {
+        'hairDetected' => HairDetectionStatus.hairDetected,
+        'notHair' => HairDetectionStatus.notHair,
+        'lowClarity' => HairDetectionStatus.lowClarity,
+        _ => HairDetectionStatus.verificationUnavailable,
+      };
+      results[label] = HairPhotoAnalysis(
+        label: label,
+        photoPath: photos[label]!,
+        status: status,
+        confidence: ((verification['confidence'] as num?)?.toDouble() ?? 0)
+            .clamp(0, 1),
+        message:
+            verification['message']?.toString() ??
+            _photoVerificationMessage(status),
+        details: verification['details']?.toString() ?? '',
+      );
+    }
+    for (final rawRecord in photoRecords.whereType<Map>()) {
+      final angle = rawRecord['angle']?.toString().toLowerCase() ?? '';
+      final label = labelsByAngle[angle];
+      final rawStatus = rawRecord['verification_status']?.toString();
+      if (label == null ||
+          rawStatus == null ||
+          rawStatus == 'pending' ||
+          !photos.containsKey(label)) {
+        continue;
+      }
+      final status = switch (rawStatus) {
+        'hairDetected' => HairDetectionStatus.hairDetected,
+        'notHair' => HairDetectionStatus.notHair,
+        'lowClarity' => HairDetectionStatus.lowClarity,
+        _ => HairDetectionStatus.verificationUnavailable,
+      };
+      verifiedLabels.add(label);
+      results[label] = HairPhotoAnalysis(
+        label: label,
+        photoPath: photos[label]!,
+        status: status,
+        confidence:
+            ((rawRecord['verification_confidence'] as num?)?.toDouble() ?? 0)
+                .clamp(0, 1),
+        message:
+            rawRecord['verification_message']?.toString() ??
+            _photoVerificationMessage(status),
+        details: rawRecord['verification_details']?.toString() ?? '',
+      );
+    }
+    if (markMissingUnavailable) {
+      for (final entry in photos.entries) {
+        if (verifiedLabels.contains(entry.key)) continue;
+        results[entry.key] = HairPhotoAnalysis(
+          label: entry.key,
+          photoPath: entry.value,
+          status: HairDetectionStatus.verificationUnavailable,
+          confidence: 0,
+          message: _photoVerificationMessage(
+            HairDetectionStatus.verificationUnavailable,
+          ),
+          details: 'No usable visual verification result was returned.',
+        );
+      }
+    }
+    return results;
+  }
+
+  Map<String, String> _photosFromScalpPhotoRecords(
+    List<dynamic> records,
+    Map<String, String> existingPhotos,
+  ) {
+    const labelsByAngle = {
+      'front': 'Front Hairline',
+      'top': 'Crown / Top',
+      'left': 'Side Profile / Temples',
+      'right': 'Side Profile / Temples',
+      'temples': 'Side Profile / Temples',
+      'back': 'Back / Vertex',
+    };
+    final photos = Map<String, String>.from(existingPhotos);
+    for (final rawRecord in records.whereType<Map>()) {
+      final angle = rawRecord['angle']?.toString().toLowerCase() ?? '';
+      final label = labelsByAngle[angle];
+      if (label == null || photos.containsKey(label)) continue;
+      final url = rawRecord['url']?.toString();
+      if (url != null && url.isNotEmpty) photos[label] = url;
+    }
+    return photos;
+  }
+
+  String _photoVerificationMessage(
+    HairDetectionStatus status,
+  ) => switch (status) {
+    HairDetectionStatus.hairDetected =>
+      'Scalp and hair are visually present in this photo.',
+    HairDetectionStatus.notHair => 'This photo does not appear to show a scalp. Choose a close-up scalp photo.',
+    HairDetectionStatus.lowClarity =>
+      'The scalp is too unclear to review. Choose a brighter, sharper photo.',
+    HairDetectionStatus.verificationUnavailable =>
+      'Could not visually verify this photo. Please ask the clinic for help.',
+    HairDetectionStatus.analyzing => 'Checking your photo…',
+    HairDetectionStatus.awaitingAssessment =>
+      'Your photo will be reviewed with the assessment.',
+  };
+
   Future<void> _pollAiAssessmentStatus(String referenceNo, String token) async {
     if (_aiStatusPolling || token.isEmpty || referenceNo.isEmpty) return;
     _aiStatusPolling = true;
-    var retryDelay = 2;
     try {
-      while (!isClosed &&
-          state.referenceNo == referenceNo &&
-          state.isSubmitting) {
-        try {
-          final dioToUse =
-              _dio ??
-              DioClient(
-                baseUrl: ApiEndpoints.backendBaseUrl,
-                enableDebugLogging: false,
-              ).dio;
-          final response = await dioToUse.get<Map<String, dynamic>>(
-            ApiEndpoints.hairTestAiAssessmentStatus(referenceNo),
-            options: Options(headers: {'Authorization': 'Bearer $token'}),
+      final dioToUse =
+          _dio ??
+          DioClient(
+            baseUrl: ApiEndpoints.backendBaseUrl,
+            enableDebugLogging: false,
+          ).dio;
+      // Keep the loading state through a second, slower check only when the
+      // first says work is still running. This caps the flow at three Worker
+      // requests total: one multipart submit and at most two status reads.
+      for (var attempt = 0; attempt < 2; attempt++) {
+        await Future<void>.delayed(Duration(seconds: attempt == 0 ? 2 : 4));
+        if (isClosed || state.referenceNo != referenceNo) return;
+
+        final response = await dioToUse.get<Map<String, dynamic>>(
+          ApiEndpoints.hairTestAiAssessmentStatus(referenceNo),
+          options: Options(headers: {'Authorization': 'Bearer $token'}),
+        );
+        final payload = response.data?['data'];
+        final status = payload is Map
+            ? payload['status']?.toString() ?? 'processing'
+            : 'processing';
+
+        if (status == 'ready' &&
+            payload is Map &&
+            payload['ai_assessment'] is Map) {
+          final aiModel = AiAssessmentModel.fromJson(
+            Map<String, dynamic>.from(payload['ai_assessment'] as Map),
           );
-          final payload = response.data?['data'];
-          final status = payload is Map
-              ? payload['status']?.toString() ?? 'processing'
-              : 'processing';
-          if (status == 'ready') {
-            final rawAi = payload is Map ? payload['ai_assessment'] : null;
-            if (rawAi is Map) {
-              final aiModel = AiAssessmentModel.fromJson(
-                Map<String, dynamic>.from(rawAi),
-              );
-              await _cache.put(_aiAssessmentKey, jsonEncode(aiModel.toJson()));
-              if (!isClosed) {
-                emit(
-                  state.copyWith(
-                    aiAssessment: aiModel,
-                    aiAssessmentStatus: 'ready',
-                    isSubmitting: false,
-                    isSubmitted: true,
-                  ),
-                );
-              }
-              return;
-            }
-          } else if (status == 'failed') {
-            if (!isClosed) {
-              emit(
-                state.copyWith(
-                  aiAssessment: _unavailableAiAssessment,
-                  aiAssessmentStatus: 'failed',
-                  assessmentStatus: 'ai_processing_failed',
-                  isSubmitting: false,
-                  isSubmitted: true,
-                ),
-              );
-            }
-            return;
-          } else if (!isClosed) {
+          await _cache.put(_aiAssessmentKey, jsonEncode(aiModel.toJson()));
+          await _cacheAssessmentResult(referenceNo, 'ready', aiModel);
+          if (!isClosed) {
             emit(
-              state.copyWith(aiAssessmentStatus: status, isSubmitting: true),
+              state.copyWith(
+                aiAssessment: aiModel,
+                aiAssessmentStatus: 'ready',
+                isSubmitting: false,
+                isSubmitted: true,
+                photoAnalysis: _photoVerificationForAssessment(aiModel),
+              ),
             );
           }
-        } catch (_) {
-          // Keep waiting through transient network failures; the job remains on the server.
+          return;
         }
-        await Future<void>.delayed(Duration(seconds: retryDelay));
-        retryDelay = (retryDelay + 2).clamp(2, 12).toInt();
+
+        if (status == 'failed') {
+          await _cacheAssessmentResult(
+            referenceNo,
+            'failed',
+            _unavailableAiAssessment,
+            markPhotosUnavailable: true,
+          );
+          if (!isClosed) {
+            emit(
+              state.copyWith(
+                aiAssessment: _unavailableAiAssessment,
+                aiAssessmentStatus: 'failed',
+                assessmentStatus: 'ai_processing_failed',
+                isSubmitting: false,
+                isSubmitted: true,
+                photoAnalysis: _photoVerificationForAssessment(
+                  _unavailableAiAssessment,
+                  markMissingUnavailable: true,
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
+        if (attempt == 1 || !['queued', 'processing'].contains(status)) {
+          await _cacheAssessmentResult(
+            referenceNo,
+            'unavailable',
+            _unavailableAiAssessment,
+            markPhotosUnavailable: true,
+          );
+          if (!isClosed) {
+            emit(
+              state.copyWith(
+                aiAssessment: _unavailableAiAssessment,
+                aiAssessmentStatus: 'unavailable',
+                isSubmitting: false,
+                isSubmitted: true,
+                photoAnalysis: _photoVerificationForAssessment(
+                  _unavailableAiAssessment,
+                  markMissingUnavailable: true,
+                ),
+              ),
+            );
+          }
+          return;
+        }
+      }
+    } catch (_) {
+      if (!isClosed && state.referenceNo == referenceNo) {
+        emit(
+          state.copyWith(
+            aiAssessment: _unavailableAiAssessment,
+            aiAssessmentStatus: 'unavailable',
+            isSubmitting: false,
+            isSubmitted: true,
+            photoAnalysis: _photoVerificationForAssessment(
+              _unavailableAiAssessment,
+              markMissingUnavailable: true,
+            ),
+          ),
+        );
       }
     } finally {
       _aiStatusPolling = false;
     }
+  }
+
+  Future<void> _cacheAssessmentResult(
+    String referenceNo,
+    String status,
+    AiAssessmentModel aiModel, {
+    bool markPhotosUnavailable = false,
+  }) async {
+    Map<String, dynamic> saved = {};
+    final previous = _cache.getString(_submissionResultKey);
+    if (previous != null && previous.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(previous);
+        if (decoded is Map) saved = Map<String, dynamic>.from(decoded);
+      } catch (_) {}
+    }
+    final photoResults = aiModel.scalpPhotoVerification;
+    final resultByFile = {
+      for (final result in photoResults)
+        result['file_name']?.toString() ?? '': result,
+    };
+    final rawTest = saved['test'];
+    if (rawTest is Map) {
+      final test = Map<String, dynamic>.from(rawTest);
+      final rawPhotos = test['scalp_photos'];
+      if (rawPhotos is List) {
+        test['scalp_photos'] = rawPhotos.map((rawPhoto) {
+          if (rawPhoto is! Map) return rawPhoto;
+          final photo = Map<String, dynamic>.from(rawPhoto);
+          final result = resultByFile[photo['file_name']?.toString() ?? ''];
+          if (result != null) {
+            photo['verification_status'] = result['status'];
+            photo['verification_confidence'] = result['confidence'];
+            photo['verification_message'] = result['message'];
+            photo['verification_details'] = result['details'];
+          } else if (markPhotosUnavailable) {
+            photo['verification_status'] = 'verificationUnavailable';
+            photo['verification_confidence'] = 0;
+            photo['verification_message'] = _photoVerificationMessage(
+              HairDetectionStatus.verificationUnavailable,
+            );
+          }
+          return photo;
+        }).toList();
+      }
+      test['ai_assessment'] = aiModel.toJson();
+      test['ai_assessment_status'] = status;
+      saved['test'] = test;
+    }
+    saved['reference_no'] = referenceNo;
+    saved['ai_assessment_status'] = status;
+    saved['ai_assessment'] = aiModel.toJson();
+    await _cache.put(_submissionResultKey, jsonEncode(saved));
+  }
+
+  Future<MultipartFile> _multipartImage(String path) async {
+    final file = File(path);
+    if (!await file.exists()) {
+      throw const FileSystemException('A cached assessment photo is missing.');
+    }
+    if (await file.length() > SmartImageUploadService.maxFileBytes) {
+      throw const FileSystemException('An assessment photo exceeds 25 MiB.');
+    }
+    final extension = path.split('.').last.toLowerCase();
+    final subtype = switch (extension) {
+      'jpg' || 'jpeg' => 'jpeg',
+      'png' => 'png',
+      'webp' => 'webp',
+      'gif' => 'gif',
+      'avif' => 'avif',
+      'heic' => 'heic',
+      'heif' => 'heif',
+      _ => throw const FileSystemException(
+        'Unsupported assessment photo format.',
+      ),
+    };
+    return MultipartFile.fromFile(
+      path,
+      filename: path.split('/').last,
+      contentType: DioMediaType.parse('image/$subtype'),
+    );
   }
 
   Future<bool> generatePersonalizedDietPlan() async {
@@ -1194,6 +1646,7 @@ class HairTestCubit extends Cubit<HairTestState> {
   }
 
   Future<void> clearSavedAssessment() async {
+    _deleteCachedPhotoFiles(state);
     for (final key in [
       _draftKey,
       _legacyDraftKey,
@@ -1203,6 +1656,7 @@ class HairTestCubit extends Cubit<HairTestState> {
       _nameKey,
       _ageKey,
       _aiAssessmentKey,
+      _submissionResultKey,
       'hair_test_draft_v2',
       'hair_test_draft_v1',
       'has_completed_hair_test',
@@ -1214,21 +1668,6 @@ class HairTestCubit extends Cubit<HairTestState> {
       'hair_test_ai_assessment',
     ]) {
       await _cache.remove(key);
-    }
-    final token = _sessionToken;
-    if (token != null && token.isNotEmpty) {
-      try {
-        final dioToUse =
-            _dio ??
-            DioClient(
-              baseUrl: ApiEndpoints.backendBaseUrl,
-              enableDebugLogging: false,
-            ).dio;
-        await dioToUse.delete<Map<String, dynamic>>(
-          ApiEndpoints.patientAssessmentDraft,
-          options: Options(headers: {'Authorization': 'Bearer $token'}),
-        );
-      } catch (_) {}
     }
     emit(const HairTestState());
   }

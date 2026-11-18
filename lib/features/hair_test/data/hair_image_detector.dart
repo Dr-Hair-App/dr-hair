@@ -11,11 +11,13 @@ class HairImageDetector {
   const HairImageDetector._();
 
   static Future<HairPhotoAnalysis> Function(String path, {String label})?
-      analyzerOverride;
+  analyzerOverride;
 
   static Future<HairPhotoAnalysis> analyze(
     String path, {
     String label = 'Scalp',
+    String? sessionToken,
+    Dio? dioClient,
   }) async {
     if (analyzerOverride != null) {
       return analyzerOverride!(path, label: label);
@@ -34,12 +36,19 @@ class HairImageDetector {
     }
 
     try {
-      final dio = DioClient(
-        baseUrl: ApiEndpoints.backendBaseUrl,
-        enableDebugLogging: false,
-      ).dio;
+      final dio =
+          dioClient ??
+          DioClient(
+            baseUrl: ApiEndpoints.backendBaseUrl,
+            enableDebugLogging: false,
+          ).dio;
+      final headers = <String, String>{};
+      final token = sessionToken?.trim();
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
       final response = await dio.post<Map<String, dynamic>>(
-        '/HairTest/detect_scalp_image',
+        ApiEndpoints.hairTestDetectScalpImage,
         data: FormData.fromMap({
           'label': label,
           'image': await MultipartFile.fromFile(
@@ -48,8 +57,10 @@ class HairImageDetector {
           ),
         }),
         options: Options(
-          sendTimeout: const Duration(seconds: 12),
-          receiveTimeout: const Duration(seconds: 15),
+          headers: headers,
+          connectTimeout: const Duration(seconds: 15),
+          sendTimeout: const Duration(seconds: 20),
+          receiveTimeout: const Duration(seconds: 35),
         ),
       );
 
@@ -71,18 +82,59 @@ class HairImageDetector {
           details: payload['details']?.toString() ?? '',
         );
       }
+    } on DioException catch (error) {
+      return _unavailableResult(path, label, _failureMessage(error));
     } catch (_) {
-      // A network/service failure is not evidence that the image is valid.
+      return _unavailableResult(
+        path,
+        label,
+        'The verification service returned an unexpected response. Please retry.',
+      );
     }
 
-    return HairPhotoAnalysis(
-      label: label,
-      photoPath: path,
-      status: HairDetectionStatus.verificationUnavailable,
-      confidence: 0,
-      message: 'Could not verify this photo. Check your connection and retry.',
-      details: 'The image verification service did not return a result.',
+    return _unavailableResult(
+      path,
+      label,
+      'The verification service returned an unexpected response. Please retry.',
     );
+  }
+
+  static HairPhotoAnalysis _unavailableResult(
+    String path,
+    String label,
+    String message,
+  ) => HairPhotoAnalysis(
+    label: label,
+    photoPath: path,
+    status: HairDetectionStatus.verificationUnavailable,
+    confidence: 0,
+    message: message,
+    details: 'The image verification service did not return a result.',
+  );
+
+  static String _failureMessage(DioException error) {
+    final statusCode = error.response?.statusCode;
+    if (statusCode == 401 || statusCode == 403) {
+      return 'Your session may have expired. Sign in again, then retry the photo check.';
+    }
+    if (statusCode == 413) {
+      return 'This photo is too large to check. Choose a smaller photo and retry.';
+    }
+    if (statusCode == 400 || statusCode == 415) {
+      return 'This photo format could not be checked. Choose a JPEG, PNG, or WebP photo.';
+    }
+    if (error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.sendTimeout ||
+        error.type == DioExceptionType.receiveTimeout) {
+      return 'The photo check took too long. Check your connection and retry.';
+    }
+    if (error.type == DioExceptionType.connectionError) {
+      return 'Could not reach the photo verification service. Check your connection and retry.';
+    }
+    if (statusCode != null && statusCode >= 500) {
+      return 'The photo verification service is temporarily unavailable. Please retry.';
+    }
+    return 'Could not verify this photo. Check your connection and retry.';
   }
 
   static String _messageFor(HairDetectionStatus status) => switch (status) {
@@ -92,6 +144,8 @@ class HairImageDetector {
     HairDetectionStatus.lowClarity =>
       'The photo is unclear. Try brighter light and a closer view.',
     HairDetectionStatus.analyzing => 'Checking your photo…',
+    HairDetectionStatus.awaitingAssessment =>
+      'Your photo will be reviewed with the assessment.',
     HairDetectionStatus.verificationUnavailable =>
       'Could not verify this photo. Please retry.',
   };

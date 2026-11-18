@@ -5,6 +5,7 @@ enum HairDetectionStatus {
   notHair,
   lowClarity,
   verificationUnavailable,
+  awaitingAssessment,
 }
 
 /// Analysis result for an uploaded hair/scalp photo.

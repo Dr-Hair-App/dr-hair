@@ -16,7 +16,7 @@ class ApiEndpoints {
   /// Priority:
   /// 1. dart-define flag (DRHAIR_BACKEND_URL), for explicit build overrides
   /// 2. flutter_dotenv (.env file: DRHAIR_BACKEND_URL or API_BASE_URL)
-  /// 3. Live production Worker fallback (https://dr-hair-backend-production.drhair-app.workers.dev)
+  /// 3. Live production API custom domain (https://api.drhairindia.com)
   static const String _buildBackendUrl = String.fromEnvironment(
     'DRHAIR_BACKEND_URL',
   );
@@ -36,7 +36,7 @@ class ApiEndpoints {
     if (envUrl != null && envUrl.trim().isNotEmpty) {
       return envUrl.trim().replaceAll(RegExp(r'/+$'), '');
     }
-    return 'https://dr-hair-backend-production.drhair-app.workers.dev';
+    return 'https://api.drhairindia.com';
   }
 
   static const int connectTimeout = 30000;
@@ -142,6 +142,7 @@ class ApiEndpoints {
   // ---------------------------------------------------------------------------
   // 10. Hair Test & Assessment Endpoints (/api/v1/hair-tests, /api/v1/patient/assessment)
   // ---------------------------------------------------------------------------
+  static const String hairTestDetectScalpImage = '/HairTest/detect_scalp_image';
   static const String hairTestSubmitForm = '/api/v1/hair-tests/submit_form';
   static String hairTestDietPlan(String referenceNo) =>
       '/api/v1/hair-tests/${Uri.encodeComponent(referenceNo)}/diet_plan';

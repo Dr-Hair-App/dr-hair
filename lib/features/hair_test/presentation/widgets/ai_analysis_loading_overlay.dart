@@ -9,7 +9,9 @@ import '../../../../core/constants/app_colors.dart';
 
 /// Branded, full-screen waiting state while the assessment pathway is prepared.
 class AiAnalysisLoadingOverlay extends StatefulWidget {
-  const AiAnalysisLoadingOverlay({super.key});
+  const AiAnalysisLoadingOverlay({super.key, this.uploadProgress});
+
+  final double? uploadProgress;
 
   @override
   State<AiAnalysisLoadingOverlay> createState() =>
@@ -17,8 +19,9 @@ class AiAnalysisLoadingOverlay extends StatefulWidget {
 }
 
 class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _motionController;
+  late final AnimationController _dotsController;
   Timer? _longWaitTimer;
   bool _reduceMotion = false;
   bool _takingLonger = false;
@@ -29,6 +32,10 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
     _motionController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 5200),
+    )..repeat();
+    _dotsController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1050),
     )..repeat();
     _longWaitTimer = Timer(const Duration(seconds: 25), () {
       if (mounted) {
@@ -45,8 +52,10 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
     _reduceMotion = reduceMotion;
     if (reduceMotion) {
       _motionController.stop();
+      _dotsController.stop();
     } else {
       _motionController.repeat();
+      _dotsController.repeat();
     }
   }
 
@@ -54,6 +63,7 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
   void dispose() {
     _longWaitTimer?.cancel();
     _motionController.dispose();
+    _dotsController.dispose();
     super.dispose();
   }
 
@@ -86,6 +96,9 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
 
   @override
   Widget build(BuildContext context) {
+    final uploaded =
+        widget.uploadProgress != null && widget.uploadProgress! >= 1;
+    final uploading = widget.uploadProgress != null && !uploaded;
     return Scaffold(
       backgroundColor: const Color(0xFFF7FAF9),
       body: SafeArea(
@@ -187,8 +200,12 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
                               ),
                             ),
                             const SizedBox(height: 14),
-                            const Text(
-                              'Putting your care pathway together',
+                            Text(
+                              uploading
+                                  ? 'Uploading your assessment'
+                                  : uploaded
+                                  ? 'Photos uploaded — checking your scalp and preparing your result'
+                                  : 'Putting your care pathway together',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Color(0xFF163A36),
@@ -199,8 +216,10 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
                               ),
                             ),
                             const SizedBox(height: 10),
-                            const Text(
-                              'We’re reviewing your answers to prepare useful care guidance and a suitable next step.',
+                            Text(
+                              uploading
+                                  ? 'Your photos and answers are being sent securely. Keep the app open while we prepare your result.'
+                                  : 'We’re reviewing your answers and photos to prepare useful care guidance and a suitable next step.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Color(0xFF667C78),
@@ -224,7 +243,13 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
                               ),
                               child: Row(
                                 children: [
-                                  if (_reduceMotion)
+                                  if (uploading)
+                                    const Icon(
+                                      LucideIcons.upload,
+                                      size: 17,
+                                      color: AppColors.primary,
+                                    )
+                                  else if (_reduceMotion)
                                     const Icon(
                                       LucideIcons.clock3,
                                       size: 17,
@@ -241,7 +266,11 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Text(
-                                      'Reviewing your answers and preparing next steps',
+                                      uploading
+                                          ? 'Uploading ${(widget.uploadProgress! * 100).round()}%'
+                                          : uploaded
+                                          ? 'Checking your scalp and preparing your result'
+                                          : 'Reviewing your answers and preparing next steps',
                                       style: const TextStyle(
                                         color: Color(0xFF31534E),
                                         fontSize: 13,
@@ -252,7 +281,14 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
                                 ],
                               ),
                             ),
-                            if (_takingLonger) ...[
+                            const SizedBox(height: 16),
+                            _DancingDots(
+                              animation: _dotsController,
+                              reduceMotion: _reduceMotion,
+                              label: uploading ? 'Uploading assessment' : 'Checking scalp photos and preparing result',
+                            ),
+                            if (_takingLonger &&
+                                widget.uploadProgress == null) ...[
                               const SizedBox(height: 14),
                               const Text(
                                 'This is taking longer than usual.',
@@ -295,6 +331,60 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
       ),
     );
   }
+}
+
+class _DancingDots extends StatelessWidget {
+  const _DancingDots({
+    required this.animation,
+    required this.reduceMotion,
+    required this.label,
+  });
+
+  final Animation<double> animation;
+  final bool reduceMotion;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    liveRegion: true,
+    child: ExcludeSemantics(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (index) {
+          final dot = Container(
+            width: 7,
+            height: 7,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: const BoxDecoration(
+              color: AppColors.primary,
+              shape: BoxShape.circle,
+            ),
+          );
+          if (reduceMotion) return dot;
+          final phase = CurvedAnimation(
+            parent: animation,
+            curve: Interval(
+              index * 0.19,
+              0.58 + index * 0.12,
+              curve: Curves.easeInOut,
+            ),
+          );
+          return AnimatedBuilder(
+            animation: phase,
+            builder: (context, child) => Transform.translate(
+              offset: Offset(0, -5 * phase.value),
+              child: Transform.scale(
+                scale: 0.8 + 0.2 * phase.value,
+                child: child,
+              ),
+            ),
+            child: dot,
+          );
+        }),
+      ),
+    ),
+  );
 }
 
 class _SoftBackdropPainter extends CustomPainter {

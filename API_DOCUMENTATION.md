@@ -309,7 +309,9 @@ Upload one file as `file`, or up to five mixed files as repeated `files` fields.
 ### 8. Submit Hair Test Form
 Comprehensive multi-step hair evaluation questionnaire submission, including questionnaire answers and scalp photos.
 
-Submission now returns as soon as the assessment is stored. The response includes `reference_no` and `ai_assessment_status: queued`; the app polls `GET /api/v1/hair-tests/{referenceNo}/ai_assessment/status` until the status is `ready` or `failed`. A persistent backend worker must be running for queued assessments to finish. A failed result can be requeued through `POST /api/v1/hair-tests/{referenceNo}/ai_assessment/retry` by the assessment owner.
+The submit request uploads answers and photos together. Its existing assessment AI request checks up to five optimized private photos (2 MiB per photo, 10 MiB aggregate) for visible scalp/hair, unrelated images/screenshots, and clarity; this adds no per-photo Worker request. The AI result contains `scalp_photo_verification`, and each matching `scalp_photos` history item stores the same status by its stable `file_name`. Status is `hairDetected`, `notHair`, `lowClarity`, `verificationUnavailable`, or `pending`; uncheckable images and AI fallback results are unavailable, never assumed genuine. This is a visual-content check only and does not verify ownership or image provenance.
+
+The assessment result may be ready in the submit response or queued for background processing. When queued, the app polls `GET /api/v1/hair-tests/{referenceNo}/ai_assessment/status` until the status is `ready` or `failed`. A persistent backend worker must be running for queued assessments to finish. A failed result can be requeued through `POST /api/v1/hair-tests/{referenceNo}/ai_assessment/retry` by the assessment owner.
 
 - **URL**: `{BASE_URL}/HairTest/submit_form`
 - **Method**: `POST`

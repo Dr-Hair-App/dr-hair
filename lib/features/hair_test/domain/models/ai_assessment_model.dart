@@ -205,6 +205,7 @@ class AiAssessmentModel {
   final bool shopEnabled;
   final Map<String, dynamic>? customMealPlan;
   final bool requiresClinician;
+  final List<Map<String, dynamic>> scalpPhotoVerification;
 
   const AiAssessmentModel({
     this.scalpHealthScore = 70,
@@ -224,6 +225,7 @@ class AiAssessmentModel {
     this.shopEnabled = false,
     this.customMealPlan,
     this.requiresClinician = false,
+    this.scalpPhotoVerification = const [],
   });
 
   factory AiAssessmentModel.fromJson(Map<String, dynamic> json) {
@@ -310,6 +312,12 @@ class AiAssessmentModel {
           ? Map<String, dynamic>.from(json['custom_meal_plan'])
           : null,
       requiresClinician: requiresClinician,
+      scalpPhotoVerification: json['scalp_photo_verification'] is List
+          ? (json['scalp_photo_verification'] as List)
+                .whereType<Map>()
+                .map((photo) => Map<String, dynamic>.from(photo))
+                .toList()
+          : const [],
     );
   }
 
@@ -334,6 +342,7 @@ class AiAssessmentModel {
       'shop_enabled': shopEnabled,
     },
     if (customMealPlan != null) 'custom_meal_plan': customMealPlan,
+    'scalp_photo_verification': scalpPhotoVerification,
     if (requiresClinician) 'ai_status': 'clinician_review_required',
   };
 }

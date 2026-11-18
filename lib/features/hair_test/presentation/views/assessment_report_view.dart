@@ -1421,7 +1421,8 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               ),
               itemBuilder: (context, index) {
                 final angle = angles[index];
-                final photoPath = state.photos[angle];
+                final photoPath =
+                    state.optimizedPhotos[angle] ?? state.photos[angle];
                 final label = labels[angle] ?? angle;
 
                 if (photoPath == null || photoPath.trim().isEmpty) {
@@ -1476,7 +1477,17 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                     fit: StackFit.expand,
                     children: [
                       isLocal
-                          ? Image.file(File(photoPath), fit: BoxFit.cover)
+                          ? Image.file(
+                              File(photoPath),
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const Center(
+                                    child: Icon(
+                                      LucideIcons.image,
+                                      color: AppColors.secondaryDark,
+                                    ),
+                                  ),
+                            )
                           : CustomCachedImage(
                               imageUrl: photoPath,
                               fit: BoxFit.cover,
