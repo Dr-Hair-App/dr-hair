@@ -108,11 +108,13 @@ class AssessmentLanguageSheet extends StatelessWidget {
                       ? AppColors.primary5
                       : const Color(0xFFF8FAFC),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected
-                        ? AppColors.primary
-                        : const Color(0xFFE2E8F0),
-                    width: isSelected ? 1.6 : 1.0,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: isSelected
+                          ? AppColors.primary
+                          : const Color(0xFFE2E8F0),
+                      width: isSelected ? 1.6 : 1.0,
+                    ),
                   ),
                 ),
                 child: InkWell(

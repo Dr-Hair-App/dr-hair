@@ -345,8 +345,16 @@ void main() {
         // AppointmentDatePickerBottomSheet should appear
         expect(find.text('Select Clinic Visit Slot'), findsOneWidget);
 
-        // Tap day 20 on calendar to choose a guaranteed future date
-        await tester.tap(find.text('20').first);
+        // Choose a future non-Sunday date so this remains valid across months.
+        var targetDate = DateTime.now().add(const Duration(days: 1));
+        while (targetDate.weekday == DateTime.sunday) {
+          targetDate = targetDate.add(const Duration(days: 1));
+        }
+        if (targetDate.month != DateTime.now().month) {
+          await tester.tap(find.byIcon(LucideIcons.chevronRight).last);
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.text('${targetDate.day}').first);
         await tester.pumpAndSettle();
 
         // Tap sitting slot '11:00 AM' and confirm

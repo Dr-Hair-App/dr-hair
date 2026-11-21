@@ -315,6 +315,78 @@ void main() {
   );
 
   testWidgets(
+    'HairTestView displays different person badge and alert banner when photos belong to different people',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final cubit = HairTestCubit();
+      cubit.selectPrimaryConcern('Stage 1 - Receding hairline at temples');
+      cubit.selectDuration('1 - 3 years');
+      cubit.selectDandruff('Occasional flakes or itching');
+      cubit.selectStressLevel('Moderate');
+      cubit.selectGutHealth('Normal');
+      cubit.selectFamilyHistory("Mother's side");
+      cubit.selectHairFallTrend('No, it has been gradual or stable');
+      cubit.selectScalpSymptoms('No');
+      cubit.setAllergyStatus('No known allergies');
+      cubit.setCurrentMedicationsStatus('No');
+
+      const frontPath = '/tmp/front_scalp.jpg';
+      const crownPath = '/tmp/different_person_crown.jpg';
+      cubit.emit(
+        cubit.state.copyWith(
+          currentStep: 9,
+          photos: const {'Front Hairline': frontPath, 'Crown / Top': crownPath},
+          optimizedPhotos: const {
+            'Front Hairline': frontPath,
+            'Crown / Top': crownPath,
+          },
+          photoAnalysis: {
+            'Front Hairline': const HairPhotoAnalysis(
+              label: 'Front Hairline',
+              photoPath: frontPath,
+              status: HairDetectionStatus.hairDetected,
+              confidence: 0.95,
+              message: 'Scalp confirmed',
+              details: 'Clear scalp photo.',
+            ),
+            'Crown / Top': const HairPhotoAnalysis(
+              label: 'Crown / Top',
+              photoPath: crownPath,
+              status: HairDetectionStatus.personMismatch,
+              confidence: 0.96,
+              message:
+                  'Photos appear to be of different people. Please ensure all 3 photos are of the same person.',
+              details: 'Hair texture and skin tone do not match.',
+            ),
+          },
+        ),
+      );
+
+      await tester.pumpWidget(MaterialApp(home: HairTestView(cubit: cubit)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        find.text(
+          'Photos appear to be of different people. Please ensure all 3 photos belong to the same person.',
+        ),
+        findsOneWidget,
+      );
+
+      expect(find.text('Different person'), findsOneWidget);
+      expect(find.byIcon(LucideIcons.userX), findsWidgets);
+
+      cubit.close();
+    },
+  );
+
+  testWidgets(
     'HairTestView skip button marks assessment as skipped in local cache',
     (tester) async {
       await AppLocalCache.instance.clearAll();

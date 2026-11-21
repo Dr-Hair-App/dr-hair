@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:dr_hair/features/auth/presentation/viewmodels/auth_cubit.dart';
 import 'package:dr_hair/features/auth/presentation/views/signin_view.dart';
+import 'package:dr_hair/core/widgets/app_button.dart';
 
 import 'fake_auth_repository.dart';
 
@@ -38,7 +39,7 @@ void main() {
       expect(find.text('Sign In'), findsWidgets);
 
       // Submit empty credentials
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Sign In').first);
+      await tester.tap(find.widgetWithText(AppButton, 'Sign In').first);
       await tester.pumpAndSettle();
 
       expect(find.text('Please enter a valid email address'), findsOneWidget);

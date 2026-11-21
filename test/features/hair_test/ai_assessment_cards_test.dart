@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dr_hair/features/hair_test/domain/models/ai_assessment_model.dart';
+import 'package:dr_hair/features/hair_test/presentation/localization/assessment_translations.dart';
 import 'package:dr_hair/features/hair_test/presentation/widgets/ai_assessment_cards.dart';
 
 void main() {
@@ -54,10 +55,13 @@ void main() {
     'AiAssessmentCards renders score, stage, and switches tabs cleanly',
     (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(
+        MaterialApp(
           home: Scaffold(
             body: SingleChildScrollView(
-              child: AiAssessmentCards(aiAssessment: sampleAi),
+              child: AiAssessmentCards(
+                aiAssessment: sampleAi,
+                onGenerateDietPlan: () async {},
+              ),
             ),
           ),
         ),
@@ -83,13 +87,12 @@ void main() {
       // Switch to Diet Plan tab
       await tester.tap(find.text('Diet Plan'));
       await tester.pumpAndSettle();
-      expect(find.text('Foods to Eat (Follicle Nourishers)'), findsOneWidget);
       expect(
-        find.text('Foods to Avoid (Inflammation Triggers)'),
+        find.textContaining('Create a meal plan from your assessment answers'),
         findsOneWidget,
       );
-      expect(find.text('Daily Hydration Target'), findsOneWidget);
-      expect(find.text('2.5 Litres daily'), findsOneWidget);
+      expect(find.text('Create a 7-day meal plan with AI'), findsOneWidget);
+      expect(find.text('Eggs & Paneer'), findsNothing);
 
       // Switch to Lifestyle tab
       await tester.tap(find.text('Lifestyle'));
@@ -104,10 +107,14 @@ void main() {
       // Switch to Regimen tab
       await tester.tap(find.text('Regimen'));
       await tester.pumpAndSettle();
-      expect(find.text('Daily care starter plan'), findsOneWidget);
-      expect(find.text('Morning'), findsOneWidget);
-      expect(find.text('Afternoon'), findsOneWidget);
-      expect(find.text('Night'), findsOneWidget);
+      expect(find.text('AI care routine'), findsOneWidget);
+      expect(
+        find.textContaining('Generate a routine from this assessment'),
+        findsOneWidget,
+      );
+      expect(find.text('Morning'), findsNothing);
+      expect(find.text('Afternoon'), findsNothing);
+      expect(find.text('Night'), findsNothing);
       expect(find.text('Targeted Regimen Products'), findsNothing);
       expect(find.text('Follicle Activator Serum'), findsNothing);
       expect(find.text('Add to Kit / Cart'), findsNothing);
@@ -166,5 +173,30 @@ void main() {
     expect(assessment.stageClassification, isEmpty);
     expect(assessment.nextStepType, 'doctor_appointment');
     expect(assessment.recommendedRegimen.targetProducts, isEmpty);
+  });
+
+  testWidgets('AiAssessmentCards supports Hindi language translation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AiAssessmentCards(
+              aiAssessment: sampleAi,
+              language: AssessmentLanguage.hindi,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('स्क्रीनिंग रिज़ल्ट'), findsOneWidget);
+    expect(find.text('संभावित कारक'), findsOneWidget);
+    expect(find.text('डाइट प्लान'), findsOneWidget);
+    expect(find.text('जीवनशैली'), findsOneWidget);
+    expect(find.text('दैनिक दिनचर्या'), findsOneWidget);
+    expect(find.textContaining('केवल प्रश्नावली आधारित मार्गदर्शन'), findsOneWidget);
   });
 }

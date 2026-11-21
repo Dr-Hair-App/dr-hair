@@ -41,9 +41,11 @@ void main() {
     await tester.pump();
     expect(find.text('First message'), findsNothing);
     expect(find.text('Second message'), findsOneWidget);
+    final visibleSnackBar = tester.widget<SnackBar>(find.byType(SnackBar).last);
+    expect(visibleSnackBar.duration, const Duration(milliseconds: 2500));
 
     await tester.pumpAndSettle();
-    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
     expect(find.text('Second message'), findsNothing);
   });

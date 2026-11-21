@@ -15,11 +15,25 @@ import 'package:dr_hair/core/constants/app_strings.dart';
 import 'package:dr_hair/core/theme/app_theme.dart';
 import 'package:dr_hair/features/home/presentation/views/home_view.dart';
 import 'package:dr_hair/features/hair_test/presentation/viewmodels/hair_test_cubit.dart';
+import 'package:dr_hair/core/services/network_connection_service.dart';
+import 'package:dr_hair/core/widgets/app_button.dart';
 
 import 'fake_auth_repository.dart';
 
+class _AlwaysOnlineNetworkConnectionService extends NetworkConnectionService {
+  @override
+  Future<bool> hasInternet({Duration timeout = const Duration(seconds: 4)}) async => true;
+}
+
 void main() {
   group('Auth Flow Widget Tests', () {
+    setUp(() {
+      NetworkConnectionService.instanceForTesting =
+          _AlwaysOnlineNetworkConnectionService();
+    });
+
+    tearDown(NetworkConnectionService.resetInstanceForTesting);
+
     testWidgets('SplashView renders branding and animated emblem', (
       tester,
     ) async {
@@ -58,7 +72,7 @@ void main() {
         expect(find.text('Sign In'), findsWidgets);
 
         // Test validation on empty credentials
-        await tester.tap(find.widgetWithText(ElevatedButton, 'Sign In').first);
+        await tester.tap(find.widgetWithText(AppButton, 'Sign In').first);
         await tester.pumpAndSettle();
         expect(find.text('Please enter a valid email address'), findsOneWidget);
         expect(find.text('Password must be at least 6 characters'), findsOneWidget);
@@ -70,7 +84,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // Tap Sign In to trigger login
-        await tester.tap(find.widgetWithText(ElevatedButton, 'Sign In').first);
+        await tester.tap(find.widgetWithText(AppButton, 'Sign In').first);
         await tester.pump(const Duration(milliseconds: 350));
         await tester.pumpAndSettle();
 
@@ -156,13 +170,17 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       // 2. Now on SigninView with bottom card
-      expect(find.byType(SigninView), findsOneWidget);
+      expect(
+        find.byType(SigninView),
+        findsOneWidget,
+        reason: 'Router location: ${AppRouter.router.routeInformationProvider.value.uri}',
+      );
       expect(find.text('Welcome Back'), findsOneWidget);
 
       final textFields = find.byType(TextField);
       await tester.enterText(textFields.at(0), 'patient@example.com');
       await tester.enterText(textFields.at(1), 'password123');
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Sign In').first);
+      await tester.tap(find.widgetWithText(AppButton, 'Sign In').first);
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pumpAndSettle();
 
@@ -200,7 +218,7 @@ void main() {
         // 1. Initial screen is SplashView -> Proceed to SigninView
         await tester.tap(find.byType(SplashView));
         await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(seconds: 4));
 
         // 2. SigninView: switch to Sign Up
         await tester.tap(find.text('Sign Up').first);

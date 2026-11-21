@@ -6,6 +6,16 @@ import 'package:dr_hair/features/auth/presentation/viewmodels/auth_state.dart';
 import 'package:dr_hair/features/auth/presentation/views/splash_view.dart';
 
 void main() {
+  test('unauthenticated patients are sent to sign in before profile checks', () {
+    final destination = resolveSplashDestination(
+      const AuthState(status: AuthStatus.unauthenticated),
+      cachedCompleted: false,
+      cachedSkipped: false,
+    );
+
+    expect(destination, RouteNames.signin);
+  });
+
   test(
     'restored patient without gender is sent to completion before assessment',
     () {

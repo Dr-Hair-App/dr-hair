@@ -61,6 +61,67 @@ void main() {
   );
 
   test(
+    'posts target photo and reference photo, parsing personMismatch status',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('hair-mismatch-');
+      final targetImage = File('${directory.path}/target.jpg');
+      await targetImage.writeAsBytes([0xFF, 0xD8, 0xFF, 0xD9]);
+      final referenceImage = File('${directory.path}/reference.jpg');
+      await referenceImage.writeAsBytes([0xFF, 0xD8, 0xFF, 0xD9]);
+
+      final dio = Dio(BaseOptions(baseUrl: 'https://test.drhair.local'));
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            expect(options.path, ApiEndpoints.hairTestDetectScalpImage);
+            final formData = options.data as FormData;
+            final fields = formData.fields.map((e) => e.key).toList();
+            final files = formData.files.map((e) => e.key).toList();
+            expect(fields, contains('label'));
+            expect(files, containsAll(['image', 'reference_image']));
+            handler.resolve(
+              Response(
+                requestOptions: options,
+                statusCode: 200,
+                data: {
+                  'message': 'ok',
+                  'data': {
+                    'is_hair': false,
+                    'status': 'personMismatch',
+                    'confidence': 0.95,
+                    'same_person': false,
+                    'message':
+                        'Photos appear to be of different people. Please ensure all 3 photos are of the same person.',
+                    'details': 'Hair color does not match reference photo.',
+                  },
+                },
+              ),
+            );
+          },
+        ),
+      );
+
+      try {
+        final result = await HairImageDetector.analyze(
+          targetImage.path,
+          label: 'Crown / Top',
+          referencePhotoPath: referenceImage.path,
+          sessionToken: 'synthetic-session-token',
+          dioClient: dio,
+        );
+
+        expect(result.status, HairDetectionStatus.personMismatch);
+        expect(result.isPersonMismatch, isTrue);
+        expect(result.isHair, isFalse);
+        expect(result.confidence, 0.95);
+        expect(result.message, contains('different people'));
+      } finally {
+        await directory.delete(recursive: true);
+      }
+    },
+  );
+
+  test(
     'maps verifier service failures to unavailable without a false verdict',
     () async {
       final directory = await Directory.systemTemp.createTemp(

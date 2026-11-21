@@ -4,6 +4,7 @@ enum HairDetectionStatus {
   hairDetected,
   notHair,
   lowClarity,
+  personMismatch,
   verificationUnavailable,
   awaitingAssessment,
 }
@@ -30,6 +31,7 @@ class HairPhotoAnalysis {
   bool get isAnalyzing => status == HairDetectionStatus.analyzing;
   bool get isNotHair => status == HairDetectionStatus.notHair;
   bool get isLowClarity => status == HairDetectionStatus.lowClarity;
+  bool get isPersonMismatch => status == HairDetectionStatus.personMismatch;
   bool get isVerificationUnavailable =>
       status == HairDetectionStatus.verificationUnavailable;
 

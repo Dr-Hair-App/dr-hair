@@ -35,7 +35,7 @@ String resolveSplashDestination(
     return RouteNames.completeProfile;
   }
 
-  if (needsAssessment && !hasUsableGender) {
+  if (authState.isAuthenticated && needsAssessment && !hasUsableGender) {
     return Uri(
       path: RouteNames.completeProfile,
       queryParameters: {

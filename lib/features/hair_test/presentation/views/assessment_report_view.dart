@@ -410,6 +410,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                           AiAssessmentCards(
                             aiAssessment: state.aiAssessment!,
                             assessmentReferenceNo: state.referenceNo,
+                            language: _currentLanguage,
                             onRefresh: _retryAiAssessment,
                             isRefreshing: _isRequestingAi,
                             onGenerateDietPlan: () async {
@@ -685,7 +686,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                         if (!isCritical) ...[
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(18),
+                            padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(20),
@@ -705,7 +706,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                     color: AppColors.primaryDark,
                                   ),
                                 ),
-                                const SizedBox(height: 6),
+                                // const SizedBox(height: 6),
                                 Text(
                                   careRoutineSteps.isNotEmpty
                                       ? AssessmentTranslations.t(

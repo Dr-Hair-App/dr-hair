@@ -21,9 +21,15 @@ class AppToast {
     messenger.clearSnackBars();
     messenger.removeCurrentSnackBar();
 
-    final duration = message.action == null
-        ? _defaultDuration
-        : _actionDuration;
+    // SnackBar's own default duration is four seconds, so a newly constructed
+    // SnackBar otherwise masks the shorter branded default for non-action
+    // toasts. Preserve explicitly supplied durations and keep action toasts at
+    // their accessible four-second default.
+    final hasDefaultSnackBarDuration =
+        message.duration == const Duration(seconds: 4);
+    final duration = hasDefaultSnackBarDuration
+        ? (message.action == null ? _defaultDuration : _actionDuration)
+        : message.duration;
 
     messenger.showSnackBar(
       SnackBar(
@@ -31,7 +37,7 @@ class AppToast {
         action: message.action,
         backgroundColor: message.backgroundColor ?? AppColors.primaryDark,
         behavior: SnackBarBehavior.floating,
-        duration: message.duration > Duration.zero ? message.duration : duration,
+        duration: duration,
         dismissDirection: DismissDirection.horizontal,
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

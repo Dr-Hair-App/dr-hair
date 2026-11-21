@@ -501,7 +501,38 @@ class _HairTestContent extends StatelessWidget {
                 height: 1.35,
               ),
             ),
-            if (hasNonHair) ...[
+            if (state.hasPersonMismatchPhoto) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFECACA)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      LucideIcons.userX,
+                      color: Color(0xFFDC2626),
+                      size: 18,
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Photos appear to be of different people. Please ensure all 3 photos belong to the same person.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFB91C1C),
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (hasNonHair) ...[
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -709,6 +740,17 @@ class _HairTestContent extends StatelessWidget {
     final hasPhoto = photoPath != null && photoPath.isNotEmpty;
     final analysis = state.getAnalysis(label);
 
+    Color borderColor = AppColors.primary100;
+    if (hasPhoto && analysis != null) {
+      if (analysis.isHair) {
+        borderColor = const Color(0xFF86EFAC);
+      } else if (analysis.isPersonMismatch || analysis.isNotHair) {
+        borderColor = const Color(0xFFFCA5A5);
+      } else if (analysis.isLowClarity) {
+        borderColor = const Color(0xFFFCD34D);
+      }
+    }
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -722,9 +764,7 @@ class _HairTestContent extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: hasPhoto ? AppColors.primary100 : AppColors.primary100,
-            ),
+            border: Border.all(color: borderColor),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.035),
@@ -805,9 +845,13 @@ class _HairTestContent extends StatelessWidget {
                     ),
                   ),
                   Positioned(
-                    left: 8,
+                    top: 8,
                     bottom: 8,
-                    child: _buildDetectionBadge(context, label, analysis),
+                    left: 8,
+                    right: 8,
+                    child: Center(
+                      child: _buildDetectionBadge(context, label, analysis),
+                    ),
                   ),
                   Positioned(
                     right: 8,
@@ -880,11 +924,34 @@ class _HairTestContent extends StatelessWidget {
         const Color(0xFF15803D),
       );
     }
+    if (analysis.isPersonMismatch) {
+      return Material(
+        color: const Color(0xFFDC2626),
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: () => context.read<HairTestCubit>().retryPhotoAnalysis(label),
+          borderRadius: BorderRadius.circular(20),
+          child: _statusPill(
+            const Icon(LucideIcons.userX, size: 11, color: Colors.white),
+            'Different person',
+            const Color(0xFFDC2626),
+          ),
+        ),
+      );
+    }
     if (analysis.isNotHair) {
-      return _statusPill(
-        const Icon(LucideIcons.refreshCw, size: 11, color: Colors.white),
-        'Try another photo',
-        const Color(0xFFB91C1C),
+      return Material(
+        color: const Color(0xFFB91C1C),
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: () => context.read<HairTestCubit>().retryPhotoAnalysis(label),
+          borderRadius: BorderRadius.circular(20),
+          child: _statusPill(
+            const Icon(LucideIcons.refreshCw, size: 11, color: Colors.white),
+            'Try another photo',
+            const Color(0xFFB91C1C),
+          ),
+        ),
       );
     }
     if (analysis.isVerificationUnavailable) {

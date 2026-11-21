@@ -308,7 +308,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       final cache = AppLocalCache.inMemory();
-      final existingSlot = DateTime(2026, 11, 20, 10, 0);
+      final existingSlot = DateTime.now().add(const Duration(days: 2));
       final mockApi = _MockAppointmentApi([
         {
           'id': 'APT-991',

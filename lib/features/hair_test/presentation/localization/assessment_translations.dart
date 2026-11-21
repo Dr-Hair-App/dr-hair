@@ -382,9 +382,47 @@ class AssessmentTranslations {
       AssessmentLanguage.hinglish: 'Crown Area',
     },
     'photo_left': {
-      AssessmentLanguage.english: 'Left Temple',
-      AssessmentLanguage.hindi: 'बायाँ सिरा (Left Temple)',
-      AssessmentLanguage.hinglish: 'Left Temple',
+      AssessmentLanguage.english: 'Side Profile / Temples',
+      AssessmentLanguage.hindi: 'साइड प्रोफ़ाइल / कनपटी',
+      AssessmentLanguage.hinglish: 'Side Profile / Temples',
+    },
+    'photo_side': {
+      AssessmentLanguage.english: 'Side Profile / Temples',
+      AssessmentLanguage.hindi: 'साइड प्रोफ़ाइल / कनपटी',
+      AssessmentLanguage.hinglish: 'Side Profile / Temples',
+    },
+    'tab_possible_factors': {
+      AssessmentLanguage.english: 'Possible factors',
+      AssessmentLanguage.hindi: 'संभावित कारक',
+      AssessmentLanguage.hinglish: 'Possible factors',
+    },
+    'tab_diet_plan': {
+      AssessmentLanguage.english: 'Diet Plan',
+      AssessmentLanguage.hindi: 'डाइट प्लान',
+      AssessmentLanguage.hinglish: 'Diet Plan',
+    },
+    'tab_lifestyle': {
+      AssessmentLanguage.english: 'Lifestyle',
+      AssessmentLanguage.hindi: 'जीवनशैली',
+      AssessmentLanguage.hinglish: 'Lifestyle',
+    },
+    'tab_regimen': {
+      AssessmentLanguage.english: 'Regimen',
+      AssessmentLanguage.hindi: 'दैनिक दिनचर्या',
+      AssessmentLanguage.hinglish: 'Daily Routine',
+    },
+    'ai_guidance_disclaimer': {
+      AssessmentLanguage.english:
+          'Questionnaire-based guidance only · Not a diagnosis',
+      AssessmentLanguage.hindi:
+          'केवल प्रश्नावली आधारित मार्गदर्शन · यह कोई चिकित्सीय निदान नहीं है',
+      AssessmentLanguage.hinglish:
+          'Questionnaire based guidance only · Ye medical diagnosis nahi hai',
+    },
+    'screening_result': {
+      AssessmentLanguage.english: 'Screening result',
+      AssessmentLanguage.hindi: 'स्क्रीनिंग रिज़ल्ट',
+      AssessmentLanguage.hinglish: 'Screening result',
     },
     'photo_right': {
       AssessmentLanguage.english: 'Right Temple',

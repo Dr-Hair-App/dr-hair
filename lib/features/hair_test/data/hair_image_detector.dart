@@ -10,17 +10,25 @@ import '../domain/models/hair_photo_analysis.dart';
 class HairImageDetector {
   const HairImageDetector._();
 
-  static Future<HairPhotoAnalysis> Function(String path, {String label})?
-  analyzerOverride;
+  static Future<HairPhotoAnalysis> Function(
+    String path, {
+    String label,
+    String? referencePhotoPath,
+  })? analyzerOverride;
 
   static Future<HairPhotoAnalysis> analyze(
     String path, {
     String label = 'Scalp',
+    String? referencePhotoPath,
     String? sessionToken,
     Dio? dioClient,
   }) async {
     if (analyzerOverride != null) {
-      return analyzerOverride!(path, label: label);
+      return analyzerOverride!(
+        path,
+        label: label,
+        referencePhotoPath: referencePhotoPath,
+      );
     }
 
     final file = File(path);
@@ -47,15 +55,28 @@ class HairImageDetector {
       if (token != null && token.isNotEmpty) {
         headers['Authorization'] = 'Bearer $token';
       }
+
+      final formMap = <String, dynamic>{
+        'label': label,
+        'image': await MultipartFile.fromFile(
+          path,
+          filename: path.split('/').last,
+        ),
+      };
+
+      if (referencePhotoPath != null && referencePhotoPath.isNotEmpty) {
+        final refFile = File(referencePhotoPath);
+        if (await refFile.exists() && await refFile.length() > 0) {
+          formMap['reference_image'] = await MultipartFile.fromFile(
+            referencePhotoPath,
+            filename: referencePhotoPath.split('/').last,
+          );
+        }
+      }
+
       final response = await dio.post<Map<String, dynamic>>(
         ApiEndpoints.hairTestDetectScalpImage,
-        data: FormData.fromMap({
-          'label': label,
-          'image': await MultipartFile.fromFile(
-            path,
-            filename: path.split('/').last,
-          ),
-        }),
+        data: FormData.fromMap(formMap),
         options: Options(
           headers: headers,
           connectTimeout: const Duration(seconds: 15),
@@ -70,6 +91,7 @@ class HairImageDetector {
           'hairDetected' => HairDetectionStatus.hairDetected,
           'notHair' => HairDetectionStatus.notHair,
           'lowClarity' => HairDetectionStatus.lowClarity,
+          'personMismatch' => HairDetectionStatus.personMismatch,
           _ => HairDetectionStatus.verificationUnavailable,
         };
         final confidence = (payload['confidence'] as num?)?.toDouble() ?? 0;
@@ -143,6 +165,8 @@ class HairImageDetector {
       'This photo does not show a scalp. Please choose another photo.',
     HairDetectionStatus.lowClarity =>
       'The photo is unclear. Try brighter light and a closer view.',
+    HairDetectionStatus.personMismatch =>
+      'Photos appear to be of different people. Please ensure all 3 photos are of the same person.',
     HairDetectionStatus.analyzing => 'Checking your photo…',
     HairDetectionStatus.awaitingAssessment =>
       'Your photo will be reviewed with the assessment.',

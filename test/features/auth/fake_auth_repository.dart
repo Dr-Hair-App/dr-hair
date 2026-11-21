@@ -221,7 +221,9 @@ class FakeAuthRepository implements AuthRepository {
     gender: gender,
     city: city,
     occupation: occupation,
-    photoUrl: profileUrl,
+    photoUrl: profilePhotoBytes?.isNotEmpty == true
+        ? 'https://example.test/profile.jpg'
+        : profileUrl,
     clearPhotoUrl: clearProfileUrl,
   );
 

@@ -869,7 +869,11 @@ void main() {
       'explicit photo retry runs the verifier once and updates its verdict',
       () async {
         var attempt = 0;
-        HairImageDetector.analyzerOverride = (path, {label = 'Scalp'}) async {
+        HairImageDetector.analyzerOverride = (
+          path, {
+          label = 'Scalp',
+          referencePhotoPath,
+        }) async {
           attempt++;
           return HairPhotoAnalysis(
             label: label,
@@ -905,6 +909,27 @@ void main() {
     );
 
     test('step progression validates answers and required photos', () async {
+      var returnMismatch = true;
+      var referencePhotoWasCompared = false;
+      HairImageDetector.analyzerOverride = (
+        path, {
+        label = 'Scalp',
+        referencePhotoPath,
+      }) async {
+        if (referencePhotoPath != null) referencePhotoWasCompared = true;
+        final mismatch = label == 'Crown / Top' && returnMismatch;
+        return HairPhotoAnalysis(
+          label: label,
+          photoPath: path,
+          status: mismatch
+              ? HairDetectionStatus.personMismatch
+              : HairDetectionStatus.hairDetected,
+          confidence: 0.95,
+          message: mismatch ? 'Different people.' : 'Verified.',
+          details: '',
+        );
+      };
+      addTearDown(() => HairImageDetector.analyzerOverride = null);
       final cubit = HairTestCubit(
         imagePicker: _FakeImagePicker(fileToReturn: XFile('/tmp/scalp.jpg')),
         imageUploadService: _testImageUploadService(),
@@ -955,6 +980,14 @@ void main() {
       ]) {
         await cubit.pickPhoto(label: label, source: ImageSource.gallery);
       }
+      await cubit.nextStep();
+      expect(cubit.state.isSubmitted, false);
+      expect(cubit.state.hasPersonMismatchPhoto, true);
+      expect(cubit.state.errorMessage, contains('different people'));
+      expect(referencePhotoWasCompared, true);
+
+      returnMismatch = false;
+      await cubit.retryPhotoAnalysis('Crown / Top');
       await cubit.nextStep();
       expect(cubit.state.isSubmitted, true);
 
@@ -1008,17 +1041,21 @@ void main() {
     });
 
     test(
-      'pickPhoto defers AI review until multipart assessment submission',
+      'pickPhoto verifies photo immediately with AI on upload screen',
       () async {
         var individualAiCalls = 0;
-        HairImageDetector.analyzerOverride = (path, {label = 'Scalp'}) async {
+        HairImageDetector.analyzerOverride = (
+          path, {
+          label = 'Scalp',
+          referencePhotoPath,
+        }) async {
           individualAiCalls++;
           return HairPhotoAnalysis(
             label: label,
             photoPath: path,
             status: HairDetectionStatus.hairDetected,
-            confidence: 1,
-            message: 'Verified',
+            confidence: 0.95,
+            message: 'Scalp photo verified.',
             details: '',
           );
         };
@@ -1036,9 +1073,75 @@ void main() {
 
         final analysis = cubit.state.getAnalysis('Crown / Top');
         expect(analysis, isNotNull);
-        expect(analysis!.status, HairDetectionStatus.awaitingAssessment);
-        expect(analysis.message, contains('reviewed with the assessment'));
-        expect(individualAiCalls, 0);
+        expect(analysis!.status, HairDetectionStatus.hairDetected);
+        expect(analysis.message, contains('verified'));
+        expect(individualAiCalls, 1);
+        await cubit.close();
+      },
+    );
+
+    test(
+      'pickPhoto uses existing confirmed photo as reference and flags person mismatch',
+      () async {
+        String? capturedReference;
+        HairImageDetector.analyzerOverride = (
+          path, {
+          label = 'Scalp',
+          referencePhotoPath,
+        }) async {
+          capturedReference = referencePhotoPath;
+          if (label == 'Crown / Top') {
+            return HairPhotoAnalysis(
+              label: label,
+              photoPath: path,
+              status: HairDetectionStatus.personMismatch,
+              confidence: 0.96,
+              message:
+                  'Photos appear to be of different people. Please ensure all 3 photos are of the same person.',
+              details: '',
+            );
+          }
+          return HairPhotoAnalysis(
+            label: label,
+            photoPath: path,
+            status: HairDetectionStatus.hairDetected,
+            confidence: 0.95,
+            message: 'Scalp photo verified.',
+            details: '',
+          );
+        };
+        addTearDown(() => HairImageDetector.analyzerOverride = null);
+
+        final picker = _FakeImagePicker(
+          fileToReturn: XFile('/tmp/scalp_second.jpg'),
+        );
+        final cubit = HairTestCubit(
+          imagePicker: picker,
+          imageUploadService: _testImageUploadService(),
+        );
+
+        // First set Front Hairline as confirmed
+        await cubit.setPhoto(
+          'Front Hairline',
+          '/tmp/scalp_front.jpg',
+          const HairPhotoAnalysis(
+            label: 'Front Hairline',
+            photoPath: '/tmp/scalp_front.jpg',
+            status: HairDetectionStatus.hairDetected,
+            confidence: 0.95,
+            message: 'Verified',
+            details: '',
+          ),
+        );
+
+        // Pick second photo
+        await cubit.pickPhoto(label: 'Crown / Top', source: ImageSource.gallery);
+
+        expect(capturedReference, isNotNull);
+        final analysis = cubit.state.getAnalysis('Crown / Top');
+        expect(analysis?.status, HairDetectionStatus.personMismatch);
+        expect(analysis?.isPersonMismatch, isTrue);
+        expect(cubit.state.hasPersonMismatchPhoto, isTrue);
         await cubit.close();
       },
     );

@@ -10,6 +10,7 @@ import '../../../../core/constants/api_endpoints.dart';
 import '../../../../core/media/data/smart_image_upload_service.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/storage/app_local_cache.dart';
+import '../../../../core/storage/secure_session_store.dart';
 import '../../../treatment/data/patient_clinical_api.dart';
 import '../../data/hair_image_detector.dart';
 import '../../domain/models/hair_photo_analysis.dart';
@@ -119,7 +120,13 @@ class HairTestCubit extends Cubit<HairTestState> {
       emit(state.copyWith(patientId: patientId));
     }
     if (sessionToken != null && sessionToken.isNotEmpty) {
-      await _syncWithBackend(sessionToken);
+      final hasLocalData = state.aiAssessment != null ||
+          (state.isCompleted &&
+              state.referenceNo != null &&
+              state.referenceNo!.isNotEmpty);
+      if (state.isRetesting || !hasLocalData) {
+        await _syncWithBackend(sessionToken);
+      }
     }
   }
 
@@ -972,6 +979,14 @@ class HairTestCubit extends Cubit<HairTestState> {
           return 'List current medicines or supplements, or choose “Not sure.”';
         }
         return null;
+      case 9:
+        if (value.hasPersonMismatchPhoto) {
+          return 'Photos appear to be of different people. Please ensure all 3 photos belong to the same person.';
+        }
+        if (value.hasNonHairPhoto) {
+          return 'One or more photos do not clearly show the scalp. Please retake them to continue.';
+        }
+        return null;
       default:
         return null;
     }
@@ -1183,7 +1198,11 @@ class HairTestCubit extends Cubit<HairTestState> {
         );
         _saveDraft();
 
-        _markPhotoAwaitingAssessment(label);
+        await _analyzeUploadedPhoto(
+          label: label,
+          originalPath: prepared.originalPath,
+          uploadPath: prepared.uploadPath,
+        );
       } else {
         emit(state.copyWith(isPickingImage: false));
       }
@@ -1266,41 +1285,60 @@ class HairTestCubit extends Cubit<HairTestState> {
     _saveDraft();
   }
 
-  Future<void> retryPhotoAnalysis(String label) async {
-    final originalPath = state.photos[label];
-    if (originalPath == null || originalPath.isEmpty || isClosed) return;
+  String? _findReferencePhotoPath({required String excludeLabel}) {
+    const preferredOrder = [
+      'Front Hairline',
+      'Crown / Top',
+      'Side Profile / Temples',
+    ];
+
+    for (final candidate in preferredOrder) {
+      if (candidate == excludeLabel) continue;
+      final analysis = state.photoAnalysis[candidate];
+      if (analysis != null && analysis.isHair) {
+        final path = state.optimizedPhotos[candidate] ?? state.photos[candidate];
+        if (path != null && path.isNotEmpty) {
+          return path;
+        }
+      }
+    }
+
+    for (final candidate in preferredOrder) {
+      if (candidate == excludeLabel) continue;
+      final path = state.optimizedPhotos[candidate] ?? state.photos[candidate];
+      if (path != null && path.isNotEmpty) {
+        return path;
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _analyzeUploadedPhoto({
+    required String label,
+    required String originalPath,
+    required String uploadPath,
+  }) async {
     final checkId = (_photoCheckGeneration[label] ?? 0) + 1;
     _photoCheckGeneration[label] = checkId;
-    final uploadPath = state.optimizedPhotos[label] ?? originalPath;
-    final token = _sessionToken?.trim();
-    final current = Map<String, HairPhotoAnalysis>.from(state.photoAnalysis);
-    current[label] = HairPhotoAnalysis(
-      label: label,
-      photoPath: originalPath,
-      status: HairDetectionStatus.analyzing,
-      confidence: 0,
-      message: 'Checking whether this is a clear scalp photo…',
-      details: 'This retry checks the selected image with the clinic service.',
-    );
-    emit(state.copyWith(photoAnalysis: current));
+    var token = _sessionToken?.trim();
+    if (token == null || token.isEmpty) {
+      try {
+        token = (await SecureSessionStore().readToken())?.trim();
+        if (token != null && token.isNotEmpty) {
+          _sessionToken = token;
+        }
+      } catch (_) {}
+    }
+    final referencePhotoPath = _findReferencePhotoPath(excludeLabel: label);
 
-    final result =
-        (token == null || token.isEmpty) &&
-            HairImageDetector.analyzerOverride == null
-        ? HairPhotoAnalysis(
-            label: label,
-            photoPath: originalPath,
-            status: HairDetectionStatus.verificationUnavailable,
-            confidence: 0,
-            message: 'Sign in to retry this photo check.',
-            details: 'Photo verification requires an authenticated session.',
-          )
-        : await HairImageDetector.analyze(
-            uploadPath,
-            label: label,
-            sessionToken: token,
-            dioClient: _dio,
-          );
+    final result = await HairImageDetector.analyze(
+      uploadPath,
+      label: label,
+      referencePhotoPath: referencePhotoPath,
+      sessionToken: token,
+      dioClient: _dio,
+    );
 
     if (isClosed ||
         _photoCheckGeneration[label] != checkId ||
@@ -1318,6 +1356,28 @@ class HairTestCubit extends Cubit<HairTestState> {
     );
     emit(state.copyWith(photoAnalysis: updated));
     _saveDraft();
+  }
+
+  Future<void> retryPhotoAnalysis(String label) async {
+    final originalPath = state.photos[label];
+    if (originalPath == null || originalPath.isEmpty || isClosed) return;
+    final uploadPath = state.optimizedPhotos[label] ?? originalPath;
+    final current = Map<String, HairPhotoAnalysis>.from(state.photoAnalysis);
+    current[label] = HairPhotoAnalysis(
+      label: label,
+      photoPath: originalPath,
+      status: HairDetectionStatus.analyzing,
+      confidence: 0,
+      message: 'Checking whether this is a clear scalp photo…',
+      details: 'This retry checks the selected image with the clinic service.',
+    );
+    emit(state.copyWith(photoAnalysis: current));
+
+    await _analyzeUploadedPhoto(
+      label: label,
+      originalPath: originalPath,
+      uploadPath: uploadPath,
+    );
   }
 
   void removePhoto(String label) {
@@ -1581,6 +1641,8 @@ class HairTestCubit extends Cubit<HairTestState> {
     HairDetectionStatus.notHair => 'This photo does not appear to show a scalp. Choose a close-up scalp photo.',
     HairDetectionStatus.lowClarity =>
       'The scalp is too unclear to review. Choose a brighter, sharper photo.',
+    HairDetectionStatus.personMismatch =>
+      'Photos appear to be of different people. Please ensure all 3 photos are of the same person.',
     HairDetectionStatus.verificationUnavailable =>
       'Could not visually verify this photo. Please ask the clinic for help.',
     HairDetectionStatus.analyzing => 'Checking your photo…',

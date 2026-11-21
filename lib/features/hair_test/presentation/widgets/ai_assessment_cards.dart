@@ -6,6 +6,7 @@ import '../../../../core/constants/app_urls.dart';
 import '../../../../core/utils/whatsapp_launcher.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../domain/models/ai_assessment_model.dart';
+import '../localization/assessment_translations.dart';
 
 /// AI screening summary, possible factors, nutrition, lifestyle, and daily routine.
 class AiAssessmentCards extends StatefulWidget {
@@ -19,6 +20,7 @@ class AiAssessmentCards extends StatefulWidget {
   final bool isGeneratingRoutine;
   final String? routineError;
   final String? assessmentReferenceNo;
+  final AssessmentLanguage language;
 
   const AiAssessmentCards({
     super.key,
@@ -32,6 +34,7 @@ class AiAssessmentCards extends StatefulWidget {
     this.isGeneratingRoutine = false,
     this.routineError,
     this.assessmentReferenceNo,
+    this.language = AssessmentLanguage.english,
   });
 
   @override
@@ -200,9 +203,9 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                   color: const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  'Screening result',
-                  style: TextStyle(
+                child: Text(
+                  AssessmentTranslations.t('screening_result', widget.language),
+                  style: const TextStyle(
                     color: Color(0xFF475569),
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
@@ -241,7 +244,10 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  ai.stageClassification,
+                  AssessmentTranslations.translateStage(
+                    ai.stageClassification,
+                    widget.language,
+                  ),
                   textAlign: TextAlign.end,
                   style: const TextStyle(
                     fontSize: 13,
@@ -261,14 +267,17 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
               color: AppColors.primary.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(LucideIcons.info, size: 15, color: AppColors.primary),
-                SizedBox(width: 7),
+                const Icon(LucideIcons.info, size: 15, color: AppColors.primary),
+                const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    'Questionnaire-based guidance only · Not a diagnosis',
-                    style: TextStyle(
+                    AssessmentTranslations.t(
+                      'ai_guidance_disclaimer',
+                      widget.language,
+                    ),
+                    style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: AppColors.primaryDark,
@@ -306,11 +315,27 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
   }
 
   Widget _buildNavigationTabs(AiAssessmentModel ai) {
-    const tabs = <({int id, String title, IconData icon})>[
-      (id: 0, title: 'Possible factors', icon: LucideIcons.activity),
-      (id: 1, title: 'Diet Plan', icon: LucideIcons.utensils),
-      (id: 2, title: 'Lifestyle', icon: LucideIcons.shieldCheck),
-      (id: 3, title: 'Regimen', icon: LucideIcons.clock),
+    final tabs = <({int id, String title, IconData icon})>[
+      (
+        id: 0,
+        title: AssessmentTranslations.t('tab_possible_factors', widget.language),
+        icon: LucideIcons.activity,
+      ),
+      (
+        id: 1,
+        title: AssessmentTranslations.t('tab_diet_plan', widget.language),
+        icon: LucideIcons.utensils,
+      ),
+      (
+        id: 2,
+        title: AssessmentTranslations.t('tab_lifestyle', widget.language),
+        icon: LucideIcons.shieldCheck,
+      ),
+      (
+        id: 3,
+        title: AssessmentTranslations.t('tab_regimen', widget.language),
+        icon: LucideIcons.clock,
+      ),
     ];
 
     return SingleChildScrollView(
@@ -448,7 +473,10 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  cause.factor,
+                  AssessmentTranslations.translateRootCauseFactor(
+                    cause.factor,
+                    widget.language,
+                  ),
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -457,7 +485,11 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  cause.explanation,
+                  AssessmentTranslations.translateRootCauseExplanation(
+                    cause.factor,
+                    cause.explanation,
+                    widget.language,
+                  ),
                   style: const TextStyle(
                     fontSize: 12.5,
                     height: 1.45,

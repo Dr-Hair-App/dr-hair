@@ -558,7 +558,7 @@ class ScalpPhotosGalleryCard extends StatelessWidget {
               const SizedBox(height: 14),
 
               if (hasAnyPhotos) ...[
-                // 3 Angle Photos Row (Front, Top / Crown, Back View)
+                // Exactly 3 Intake Angles: Front Hairline, Crown / Top, Side Profile / Temples
                 Row(
                   children: [
                     _buildPhotoThumbnail(
@@ -575,29 +575,11 @@ class ScalpPhotosGalleryCard extends StatelessWidget {
                     const SizedBox(width: 8),
                     _buildPhotoThumbnail(
                       context: context,
-                      label: AssessmentTranslations.t('photo_back', language),
-                      imagePath: backPhoto,
+                      label: AssessmentTranslations.t('photo_side', language),
+                      imagePath: sidePhoto ?? backPhoto,
                     ),
                   ],
                 ),
-
-                // Optional 4th angle (Temples / Side Profile) if uploaded
-                if (sidePhoto != null && sidePhoto.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      _buildPhotoThumbnail(
-                        context: context,
-                        label: AssessmentTranslations.t('photo_left', language),
-                        imagePath: sidePhoto,
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(child: SizedBox.shrink()),
-                      const SizedBox(width: 8),
-                      const Expanded(child: SizedBox.shrink()),
-                    ],
-                  ),
-                ],
 
                 const SizedBox(height: 12),
 

@@ -20,6 +20,16 @@ class NetworkConnectionService {
   static NetworkConnectionService get instance =>
       _instance ??= NetworkConnectionService();
 
+  /// Allows deterministic startup-routing checks in widget tests without
+  /// calling the platform connectivity plugin or public DNS.
+  static set instanceForTesting(NetworkConnectionService service) {
+    _instance = service;
+  }
+
+  static void resetInstanceForTesting() {
+    _instance = null;
+  }
+
   NetworkConnectionService({
     Connectivity? connectivity,
     SocketLookupFunction? lookup,

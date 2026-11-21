@@ -211,10 +211,14 @@ class HairTestState {
   HairPhotoAnalysis? getAnalysis(String label) => photoAnalysis[label];
   bool get hasNonHairPhoto =>
       photoAnalysis.values.any((a) => a.status == HairDetectionStatus.notHair);
+  bool get hasPersonMismatchPhoto => photoAnalysis.values.any(
+    (a) => a.status == HairDetectionStatus.personMismatch,
+  );
   bool get hasPhotoNeedingReview => photoAnalysis.values.any(
     (a) =>
         a.status == HairDetectionStatus.notHair ||
-        a.status == HairDetectionStatus.lowClarity,
+        a.status == HairDetectionStatus.lowClarity ||
+        a.status == HairDetectionStatus.personMismatch,
   );
   bool get hasUnverifiedPhoto => photoAnalysis.values.any(
     (a) => a.status == HairDetectionStatus.verificationUnavailable,

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dr_hair/core/constants/api_endpoints.dart';
 import 'package:dr_hair/core/network/dio_client.dart';
 
 class _HermeticTestHttpClientAdapter implements HttpClientAdapter {
@@ -124,6 +125,10 @@ class _HermeticTestHttpClientAdapter implements HttpClientAdapter {
 
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   TestWidgetsFlutterBinding.ensureInitialized();
+  // Keep the URI itself test-local as well as replacing Dio's transport with
+  // the hermetic adapter below. This prevents production-host URLs in logs and
+  // makes accidental clients easier to spot during test review.
+  ApiEndpoints.testOverride = 'http://127.0.0.1:1';
   DioClient.mockAdapter = _HermeticTestHttpClientAdapter();
 
   const storageChannel =
