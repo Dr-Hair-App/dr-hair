@@ -35,6 +35,9 @@ import '../../features/care/presentation/views/reminders_view.dart';
 import '../../features/care/presentation/views/routine_tracker_view.dart';
 import 'route_names.dart';
 
+Widget _authenticatedRoute(GoRouterState state, Widget child) =>
+    AuthRequiredRoute(routePath: state.uri.toString(), child: child);
+
 class AppRouter {
   AppRouter._();
 
@@ -52,7 +55,10 @@ class AppRouter {
       // Persistent Bottom Navigation Shell via StatefulShellRoute (4 main tabs)
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
-          return MainShellView(navigationShell: navigationShell);
+          return _authenticatedRoute(
+            state,
+            MainShellView(navigationShell: navigationShell),
+          );
         },
         branches: [
           // 0. Home Branch
@@ -111,74 +117,179 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.hairTest,
-        builder: (context, state) => const HairTestView(),
+        builder: (context, state) =>
+            _authenticatedRoute(state, const HairTestView()),
       ),
       GoRoute(
         path: RouteNames.assessmentResult,
-        builder: (context, state) =>
-            AssessmentRequiredRoute(child: const AssessmentResultView()),
+        builder: (context, state) {
+          final refNo =
+              state.uri.queryParameters['refNo'] ??
+              (state.extra is String ? state.extra as String : null);
+          return _authenticatedRoute(
+            state,
+            AssessmentRequiredRoute(
+              child: AssessmentResultView(referenceNo: refNo),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.hairTestAssessment,
+        builder: (context, state) {
+          final refNo = state.pathParameters['refNo'];
+          return _authenticatedRoute(
+            state,
+            AssessmentRequiredRoute(
+              child: AssessmentResultView(referenceNo: refNo),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.universalAssessment,
+        builder: (context, state) {
+          final refNo = state.pathParameters['refNo'];
+          return _authenticatedRoute(
+            state,
+            AssessmentRequiredRoute(
+              child: AssessmentResultView(referenceNo: refNo),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/hair-test/assessment',
+        redirect: (context, state) {
+          final refNo = state.uri.queryParameters['refNo'];
+          if (refNo != null && refNo.trim().isNotEmpty) {
+            return RouteNames.hairTestAssessmentPath(refNo.trim());
+          }
+          return RouteNames.assessmentResult;
+        },
+      ),
+      GoRoute(
+        path: '/assessment',
+        redirect: (context, state) {
+          final refNo = state.uri.queryParameters['refNo'];
+          if (refNo != null && refNo.trim().isNotEmpty) {
+            return RouteNames.universalAssessmentPath(refNo.trim());
+          }
+          return RouteNames.assessmentResult;
+        },
       ),
       GoRoute(
         path: RouteNames.updateProfile,
-        builder: (context, state) => const AuthRequiredRoute(
-          routePath: RouteNames.updateProfile,
-          child: UpdateProfileView(),
-        ),
+        builder: (context, state) =>
+            _authenticatedRoute(state, const UpdateProfileView()),
       ),
       GoRoute(
         path: RouteNames.settings,
-        builder: (context, state) => const AuthRequiredRoute(
-          routePath: RouteNames.settings,
-          child: SettingsView(),
-        ),
+        builder: (context, state) =>
+            _authenticatedRoute(state, const SettingsView()),
       ),
       GoRoute(
         path: RouteNames.treatmentDetails,
-        builder: (context, state) => AuthRequiredRoute(
-          routePath: state.uri.toString(),
-          child: TreatmentDetailsView(
+        builder: (context, state) => _authenticatedRoute(
+          state,
+          TreatmentDetailsView(
             initialReportId: state.uri.queryParameters['report_id'],
+            initialReportsTab: state.uri.queryParameters['tab'] == 'reports',
           ),
         ),
       ),
       GoRoute(
         path: RouteNames.cart,
-        builder: (context, state) {
-          final items = state.extra as List<Map<String, dynamic>>?;
-          return CartView(initialItems: items);
-        },
+        builder: (context, state) => _authenticatedRoute(
+          state,
+          CartView(initialItems: state.extra as List<Map<String, dynamic>>?),
+        ),
       ),
       GoRoute(
         path: RouteNames.notifications,
-        builder: (context, state) => const NotificationsView(),
+        builder: (context, state) =>
+            _authenticatedRoute(state, const NotificationsView()),
       ),
       GoRoute(
         path: RouteNames.productDetails,
         redirect: (context, state) =>
             state.extra is ProductItem ? null : RouteNames.products,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final product = state.extra as ProductItem;
-          return ProductDetailsView(initialProduct: product);
+          return CustomTransitionPage<void>(
+            key: state.pageKey,
+            child: _authenticatedRoute(
+              state,
+              ProductDetailsView(initialProduct: product),
+            ),
+            transitionDuration: const Duration(milliseconds: 380),
+            reverseTransitionDuration: const Duration(milliseconds: 320),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  );
+                  return FadeTransition(
+                    opacity: curved,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.04, 0),
+                        end: Offset.zero,
+                      ).animate(curved),
+                      child: child,
+                    ),
+                  );
+                },
+          );
         },
       ),
       GoRoute(
         path: RouteNames.productById,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['productId'];
-          final product = ProductItem.findById(id);
-          return ProductDetailsView(productId: id, initialProduct: product);
+          final product = state.extra is ProductItem
+              ? state.extra as ProductItem
+              : ProductItem.findById(id);
+          return CustomTransitionPage<void>(
+            key: state.pageKey,
+            child: _authenticatedRoute(
+              state,
+              ProductDetailsView(productId: id, initialProduct: product),
+            ),
+            transitionDuration: const Duration(milliseconds: 380),
+            reverseTransitionDuration: const Duration(milliseconds: 320),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  );
+                  return FadeTransition(
+                    opacity: curved,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0.04, 0),
+                        end: Offset.zero,
+                      ).animate(curved),
+                      child: child,
+                    ),
+                  );
+                },
+          );
         },
       ),
       GoRoute(
         path: RouteNames.checkout,
-        builder: (context, state) => const AuthRequiredRoute(
-          routePath: RouteNames.checkout,
-          child: CheckoutView(),
-        ),
+        builder: (context, state) =>
+            _authenticatedRoute(state, const CheckoutView()),
       ),
       GoRoute(
         path: RouteNames.products,
-        builder: (context, state) => const ProductsView(),
+        builder: (context, state) =>
+            _authenticatedRoute(state, const ProductsView()),
       ),
       GoRoute(
         path: RouteNames.signin,
@@ -186,11 +297,17 @@ class AppRouter {
       ),
       GoRoute(
         path: RouteNames.completeProfile,
-        builder: (context, state) => const CompleteProfileView(),
+        builder: (context, state) => _authenticatedRoute(
+          state,
+          CompleteProfileView(
+            requireGender: state.uri.queryParameters['requireGender'] == 'true',
+          ),
+        ),
       ),
       GoRoute(
         path: RouteNames.about,
-        builder: (context, state) => const AboutView(),
+        builder: (context, state) =>
+            _authenticatedRoute(state, const AboutView()),
       ),
       GoRoute(
         path: RouteNames.routine,

@@ -30,10 +30,18 @@ import 'features/shop/presentation/viewmodels/cart_cubit.dart';
 import 'features/shop/presentation/viewmodels/notifications_cubit.dart';
 import 'firebase_options.dart';
 
+const _buildAppEnvironment = String.fromEnvironment(
+  'APP_ENV',
+  defaultValue: 'production',
+);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await dotenv.load(fileName: '.env');
+    final envFile = _buildAppEnvironment.trim().toLowerCase() == 'testing'
+        ? 'assets/env.testing'
+        : '.env';
+    await dotenv.load(fileName: envFile);
   } catch (_) {
     // Falls back gracefully if .env is missing or packaged differently
   }
@@ -68,7 +76,7 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   StreamSubscription<RemoteMessage>? _tapSubscription;
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
   late final NotificationsCubit _notificationsCubit;
@@ -76,6 +84,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _notificationsCubit = NotificationsCubit();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initPushNotifications();
@@ -133,6 +142,19 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+      // Best-effort cleanup for graceful engine shutdown. Cold-start cleanup in
+      // main() covers force-stops where this callback cannot run.
+      unawaited(
+        AppLocalCache.instance.removeByPrefix(
+          AppLocalCache.productCatalogCachePrefix,
+        ),
+      );
+    }
+  }
+
   void _navigateFromMessage(RemoteMessage message) {
     try {
       SessionCoordinator.instance.refreshHomeSummaryForReportNotification(
@@ -165,6 +187,7 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tapSubscription?.cancel();
     _foregroundSubscription?.cancel();
     _notificationsCubit.close();

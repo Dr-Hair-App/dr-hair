@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:dr_hair/core/storage/app_local_cache.dart';
@@ -38,10 +37,7 @@ class _FakeImagePicker extends Fake implements ImagePicker {
   }
 }
 
-SmartImageUploadService _testImageUploadService({
-  SmartImageCompressor? compressor,
-}) => SmartImageUploadService(
-  compressor: compressor,
+SmartImageUploadService _testImageUploadService() => SmartImageUploadService(
   supportDirectoryProvider: () async {
     final directory = Directory(
       '${Directory.systemTemp.path}/drhair_cubit_upload_test',
@@ -53,6 +49,157 @@ SmartImageUploadService _testImageUploadService({
 
 void main() {
   group('HairTestCubit', () {
+    test(
+      'clears dependent allergy and medication answers when changed to no',
+      () {
+        final cubit = HairTestCubit(cache: AppLocalCache.inMemory());
+        cubit
+          ..setAllergyStatus('Yes, I have allergies')
+          ..setAllergyDetails('A known medicine allergy')
+          ..setAllergyStatus('No known allergies')
+          ..setCurrentMedicationsStatus('Yes')
+          ..setCurrentMedications('A current supplement')
+          ..setCurrentMedicationsStatus('No');
+
+        expect(cubit.state.allergyDetails, isEmpty);
+        expect(cubit.state.currentMedications, isEmpty);
+        cubit.close();
+      },
+    );
+
+    test(
+      'does not submit stale allergy or medication details when status is no',
+      () async {
+        final submittedForm = Completer<FormData>();
+        final dio = Dio(BaseOptions(baseUrl: 'https://test.drhair.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              if (options.path == '/api/v1/hair-tests/submit_form') {
+                submittedForm.complete(options.data as FormData);
+                handler.resolve(
+                  Response(
+                    requestOptions: options,
+                    statusCode: 200,
+                    data: {
+                      'data': {
+                        'reference_no': 'HT-SAFETY-001',
+                        'ai_assessment_status': 'ready',
+                        'ai_assessment': {
+                          'ai_status': 'available',
+                          'summary': 'Assessment received.',
+                        },
+                      },
+                    },
+                  ),
+                );
+                return;
+              }
+              handler.reject(DioException(requestOptions: options));
+            },
+          ),
+        );
+        final cubit = HairTestCubit(dio: dio, cache: AppLocalCache.inMemory());
+        cubit.emit(
+          cubit.state.copyWith(
+            primaryConcern: 'Reported thinning',
+            duration: 'Less than 6 months',
+            dandruff: 'No noticeable flakes or itching',
+            stressLevel: 'Low / Manageable',
+            gutHealth: 'No',
+            hairFallTrend: 'No, it has been gradual or stable',
+            scalpSymptoms: 'No',
+            allergyStatus: 'No known allergies',
+            allergyDetails: 'Old allergy detail',
+            currentMedicationsStatus: 'No',
+            currentMedications: 'Old medicine detail',
+          ),
+        );
+
+        await cubit.submitTest(
+          sessionToken: 'test-token',
+          patientName: 'Test Patient',
+        );
+        final fields = (await submittedForm.future).fields
+            .map((field) => field.key)
+            .toSet();
+
+        expect(fields, contains('allergy_status'));
+        expect(fields, contains('current_medications_status'));
+        expect(fields, isNot(contains('allergy_details')));
+        expect(fields, isNot(contains('current_medications')));
+        await cubit.close();
+      },
+    );
+
+    test(
+      'status refresh reads pending state without posting an AI retry',
+      () async {
+        var retryRequests = 0;
+        var statusReads = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://test.drhair.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              if (options.path == '/api/v1/patient/clinical-record') {
+                handler.resolve(
+                  Response(
+                    requestOptions: options,
+                    statusCode: 200,
+                    data: {
+                      'data': {
+                        'assessments': [],
+                        'reports': [],
+                        'care_plans': [],
+                      },
+                    },
+                  ),
+                );
+                return;
+              }
+              if (options.path.endsWith('/ai_assessment/retry')) {
+                retryRequests++;
+              }
+              if (options.path.endsWith('/ai_assessment/status')) {
+                statusReads++;
+                handler.resolve(
+                  Response(
+                    requestOptions: options,
+                    statusCode: 200,
+                    data: {
+                      'data': {'status': 'processing'},
+                    },
+                  ),
+                );
+                return;
+              }
+              handler.reject(DioException(requestOptions: options));
+            },
+          ),
+        );
+        final cubit = HairTestCubit(dio: dio, cache: AppLocalCache.inMemory());
+        await cubit.bindPatient('patient-1', sessionToken: 'test-token');
+        cubit.emit(
+          cubit.state.copyWith(
+            referenceNo: 'HT-PENDING-001',
+            isCompleted: true,
+            isSubmitted: true,
+            aiAssessmentStatus: 'queued',
+          ),
+        );
+
+        await cubit.refreshAiAssessmentStatus();
+
+        expect(statusReads, 1);
+        expect(retryRequests, 0);
+        expect(cubit.state.aiAssessment, isNull);
+        expect(cubit.state.aiAssessmentStatus, 'processing');
+        expect(cubit.state.isSubmitting, isFalse);
+        expect(cubit.state.isSubmitted, isTrue);
+        await cubit.close();
+      },
+    );
+
     test('keeps assessment pending until the AI response is ready', () async {
       final aiRequestStarted = Completer<void>();
       final aiResponse = Completer<Map<String, dynamic>>();
@@ -94,6 +241,8 @@ void main() {
         ..selectStressLevel('Moderate')
         ..selectGutHealth('Normal')
         ..selectFamilyHistory('No known family history')
+        ..selectHairFallTrend('No, it has been gradual or stable')
+        ..selectScalpSymptoms('No')
         ..setAllergyStatus('No known allergies')
         ..setCurrentMedicationsStatus('No');
 
@@ -202,6 +351,8 @@ void main() {
           ..selectStressLevel('Moderate')
           ..selectGutHealth('Normal')
           ..selectFamilyHistory('No known family history')
+          ..selectHairFallTrend('No, it has been gradual or stable')
+          ..selectScalpSymptoms('No')
           ..setAllergyStatus('No known allergies')
           ..setCurrentMedicationsStatus('No');
 
@@ -217,6 +368,83 @@ void main() {
         await resultReady.future.timeout(const Duration(seconds: 10));
         expect(submitRequests, 1);
         expect(statusReads, 2);
+        expect(cubit.state.isSubmitting, isFalse);
+        expect(cubit.state.isSubmitted, isTrue);
+        await subscription.cancel();
+        await cubit.close();
+      },
+    );
+
+    test(
+      'keeps a slow AI job pending after the bounded automatic checks',
+      () async {
+        final completed = Completer<void>();
+        var statusReads = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://test.drhair.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              if (options.path == '/api/v1/hair-tests/submit_form') {
+                handler.resolve(
+                  Response(
+                    requestOptions: options,
+                    statusCode: 200,
+                    data: {
+                      'data': {
+                        'reference_no': 'HT-STILL-PROCESSING',
+                        'ai_assessment_status': 'queued',
+                      },
+                    },
+                  ),
+                );
+                return;
+              }
+              if (options.path.endsWith('/ai_assessment/status')) {
+                statusReads++;
+                handler.resolve(
+                  Response(
+                    requestOptions: options,
+                    statusCode: 200,
+                    data: {
+                      'data': {'status': 'processing'},
+                    },
+                  ),
+                );
+                return;
+              }
+              handler.reject(DioException(requestOptions: options));
+            },
+          ),
+        );
+        final cubit = HairTestCubit(dio: dio, cache: AppLocalCache.inMemory());
+        final subscription = cubit.stream.listen((state) {
+          if (state.isSubmitted &&
+              !state.isSubmitting &&
+              state.aiAssessmentStatus == 'processing' &&
+              !completed.isCompleted) {
+            completed.complete();
+          }
+        });
+        cubit
+          ..selectPrimaryConcern('Reported thinning')
+          ..selectDuration('Less than 6 months')
+          ..selectDandruff('No noticeable flakes or itching')
+          ..selectStressLevel('Low / Manageable')
+          ..selectGutHealth('No')
+          ..selectHairFallTrend('No, it has been gradual or stable')
+          ..selectScalpSymptoms('No')
+          ..setAllergyStatus('No known allergies')
+          ..setCurrentMedicationsStatus('No');
+
+        await cubit.submitTest(
+          sessionToken: 'test-token',
+          patientName: 'Test Patient',
+        );
+        await completed.future.timeout(const Duration(seconds: 10));
+
+        expect(statusReads, 2);
+        expect(cubit.state.aiAssessment, isNull);
+        expect(cubit.state.aiAssessmentStatus, 'processing');
         expect(cubit.state.isSubmitting, isFalse);
         expect(cubit.state.isSubmitted, isTrue);
         await subscription.cancel();
@@ -311,7 +539,7 @@ void main() {
     });
 
     test(
-      'submits answers and both image variants in one multipart request',
+      'submits answers and one source image in one multipart request',
       () async {
         final temp = await Directory.systemTemp.createTemp('hair_submit_test_');
         final source = File('${temp.path}/scalp.jpg');
@@ -334,10 +562,8 @@ void main() {
                 isTrue,
               );
               final fileFields = form.files.map((entry) => entry.key).toSet();
-              expect(
-                fileFields,
-                containsAll(['photo_front', 'photo_front_optimized']),
-              );
+              expect(fileFields, containsAll(['photo_front']));
+              expect(fileFields, isNot(contains('photo_front_optimized')));
               options.onSendProgress?.call(25, 100);
               handler.resolve(
                 Response(
@@ -377,13 +603,7 @@ void main() {
           dio: dio,
           cache: cache,
           imagePicker: _FakeImagePicker(fileToReturn: XFile(source.path)),
-          imageUploadService: _testImageUploadService(
-            compressor: (
-              path, {
-              required quality,
-              required maxDimension,
-            }) async => Uint8List.fromList(List<int>.filled(400, 0x42)),
-          ),
+          imageUploadService: _testImageUploadService(),
         );
         final progressSubscription = cubit.stream.listen((state) {
           if (state.uploadProgress == 0.25) sawUploadProgress = true;
@@ -395,6 +615,8 @@ void main() {
           ..selectStressLevel('Moderate')
           ..selectGutHealth('Normal')
           ..selectFamilyHistory('No known family history')
+          ..selectHairFallTrend('No, it has been gradual or stable')
+          ..selectScalpSymptoms('No')
           ..setAllergyStatus('No known allergies')
           ..setCurrentMedicationsStatus('No');
 
@@ -441,96 +663,48 @@ void main() {
       },
     );
 
-    test('submits only the compressed derivative when the cached original exceeds 25 MiB', () async {
-      final temp = await Directory.systemTemp.createTemp(
-        'hair_large_submit_test_',
-      );
-      final source = File('${temp.path}/large-scalp.jpg');
-      final bytes = List<int>.filled(26 * 1024 * 1024, 0x7f);
-      bytes.setRange(0, 4, [0xff, 0xd8, 0xff, 0xd9]);
-      await source.writeAsBytes(bytes, flush: true);
-      var submitRequests = 0;
-      final dio = Dio(BaseOptions(baseUrl: 'https://test.drhair.local'));
-      dio.interceptors.add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) {
-            submitRequests++;
-            final form = options.data as FormData;
-            final photoParts = form.files
-                .where((entry) => entry.key.startsWith('photo_'))
-                .toList();
-            expect(photoParts.map((entry) => entry.key).toList(), [
-              'photo_front',
-            ]);
-            expect(
-              photoParts.single.value.length,
-              lessThanOrEqualTo(25 * 1024 * 1024),
-            );
-            expect(photoParts.single.value.filename, endsWith('.webp'));
-            handler.resolve(
-              Response(
-                requestOptions: options,
-                statusCode: 200,
-                data: {
-                  'data': {
-                    'reference_no': 'HT-LARGE-001',
-                    'ai_assessment_status': 'ready',
-                    'ai_assessment': {
-                      'ai_status': 'available',
-                      'scalp_health_score': 72,
-                      'stage_classification': 'Reported pattern',
-                      'summary': 'Large source was represented by its compressed derivative.',
-                    },
-                  },
-                },
-              ),
-            );
-          },
-        ),
-      );
-      final cubit = HairTestCubit(
-        dio: dio,
-        cache: AppLocalCache.inMemory(),
-        imagePicker: _FakeImagePicker(fileToReturn: XFile(source.path)),
-        imageUploadService: _testImageUploadService(
-          compressor: (path, {required quality, required maxDimension}) async =>
-              Uint8List(512 * 1024),
-        ),
-      );
-      cubit
-        ..selectPrimaryConcern('Temple thinning')
-        ..selectDuration('Less than 6 months')
-        ..selectDandruff('Occasional flakes')
-        ..selectStressLevel('Moderate')
-        ..selectGutHealth('Normal')
-        ..selectFamilyHistory('No known family history')
-        ..setAllergyStatus('No known allergies')
-        ..setCurrentMedicationsStatus('No');
-      await cubit.pickPhoto(
-        label: 'Front Hairline',
-        source: ImageSource.gallery,
-      );
-      final preservedSource = cubit.state.photos['Front Hairline']!;
-      final derivative = cubit.state.optimizedPhotos['Front Hairline']!;
-      expect(await File(preservedSource).length(), 26 * 1024 * 1024);
-      expect(await File(derivative).length(), 512 * 1024);
-
-      await cubit.submitTest(
-        sessionToken: 'test-session-token',
-        patientName: 'Test Patient',
-        patientAge: 30,
-      );
-
-      expect(submitRequests, 1);
-      expect(cubit.state.isSubmitted, isTrue);
-      await cubit.close();
-      await temp.delete(recursive: true);
-    });
+    test(
+      'rejects an image above the upload limit without calling the API',
+      () async {
+        final temp = await Directory.systemTemp.createTemp(
+          'hair_large_submit_test_',
+        );
+        final source = File('${temp.path}/large-scalp.jpg');
+        final bytes = List<int>.filled(26 * 1024 * 1024, 0x7f);
+        bytes.setRange(0, 4, [0xff, 0xd8, 0xff, 0xd9]);
+        await source.writeAsBytes(bytes, flush: true);
+        var submitRequests = 0;
+        final dio = Dio(BaseOptions(baseUrl: 'https://test.drhair.local'));
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              submitRequests++;
+              handler.reject(DioException(requestOptions: options));
+            },
+          ),
+        );
+        final cubit = HairTestCubit(
+          dio: dio,
+          cache: AppLocalCache.inMemory(),
+          imagePicker: _FakeImagePicker(fileToReturn: XFile(source.path)),
+          imageUploadService: _testImageUploadService(),
+        );
+        await cubit.pickPhoto(
+          label: 'Front Hairline',
+          source: ImageSource.gallery,
+        );
+        expect(cubit.state.photos['Front Hairline'], isNull);
+        expect(cubit.state.errorMessage, contains('25 MiB upload limit'));
+        expect(submitRequests, 0);
+        await cubit.close();
+        await temp.delete(recursive: true);
+      },
+    );
 
     test('initial state requires the user to provide answers', () {
       final cubit = HairTestCubit();
       expect(cubit.state.currentStep, 0);
-      expect(cubit.state.totalSteps, 8);
+      expect(cubit.state.totalSteps, 10);
       expect(cubit.state.primaryConcern, isNull);
       expect(cubit.state.duration, isNull);
       expect(cubit.state.stressLevel, isNull);
@@ -571,9 +745,10 @@ void main() {
         final temp = await Directory.systemTemp.createTemp(
           'hair_cached_result_photos_',
         );
-        final original = File('${temp.path}/front.original.jpg')
+        final uploads = Directory('${temp.path}/drhair_uploads')..createSync();
+        final original = File('${uploads.path}/front.original.jpg')
           ..writeAsBytesSync([0xff, 0xd8, 0xff, 0xd9]);
-        final optimized = File('${temp.path}/front.upload.webp')
+        final optimized = File('${uploads.path}/front.upload.webp')
           ..writeAsBytesSync([0x52, 0x49, 0x46, 0x46]);
         final cache = AppLocalCache.inMemory({
           'hair_test_submission_result_patient-photos': jsonEncode({
@@ -639,10 +814,11 @@ void main() {
         final temp = await Directory.systemTemp.createTemp(
           'hair_patient_switch_',
         );
-        final photoA = File('${temp.path}/patient_a.jpg')..createSync();
-        final optimizedA = File('${temp.path}/patient_a.webp')..createSync();
-        final photoB = File('${temp.path}/patient_b.jpg')..createSync();
-        final optimizedB = File('${temp.path}/patient_b.webp')..createSync();
+        final uploads = Directory('${temp.path}/drhair_uploads')..createSync();
+        final photoA = File('${uploads.path}/patient_a.jpg')..createSync();
+        final optimizedA = File('${uploads.path}/patient_a.webp')..createSync();
+        final photoB = File('${uploads.path}/patient_b.jpg')..createSync();
+        final optimizedB = File('${uploads.path}/patient_b.webp')..createSync();
         final cache = AppLocalCache.inMemory({
           'hair_test_draft_patient-A_v2': jsonEncode({
             'name': 'Patient A',
@@ -705,7 +881,10 @@ void main() {
           );
         };
         addTearDown(() => HairImageDetector.analyzerOverride = null);
-        final cubit = HairTestCubit(cache: AppLocalCache.inMemory());
+        final cubit = HairTestCubit(
+          cache: AppLocalCache.inMemory(),
+          imageUploadService: _testImageUploadService(),
+        );
 
         await cubit.setPhoto('Front Hairline', '/tmp/front.jpg');
         expect(
@@ -758,11 +937,15 @@ void main() {
       cubit.selectGutHealth('Normal');
       cubit.nextStep(); // 5
       cubit.selectFamilyHistory("Mother's side");
-      cubit.nextStep(); // 6
+      await cubit.nextStep(); // 6
+      cubit.selectHairFallTrend('No, it has been gradual or stable');
+      await cubit.nextStep(); // 7
+      cubit.selectScalpSymptoms('No');
+      await cubit.nextStep(); // 8
       cubit.setAllergyStatus('No known allergies');
       cubit.setCurrentMedicationsStatus('No');
-      cubit.nextStep(); // 7
-      expect(cubit.state.currentStep, 7);
+      await cubit.nextStep(); // 9
+      expect(cubit.state.currentStep, 9);
       expect(cubit.state.isSubmitted, false);
 
       for (final label in [

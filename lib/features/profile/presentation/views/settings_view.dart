@@ -615,27 +615,15 @@ class _SettingsViewState extends State<SettingsView> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.danger,
-                          side: const BorderSide(color: AppColors.danger),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                        ),
-                        icon: const Icon(LucideIcons.trash2, size: 16),
-                        label: const Text(
-                          'Delete My Account',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                          ),
-                        ),
-                        onPressed: () => _showDeleteAccountSheet(context),
-                      ),
+                    AppButton(
+                      height: 44,
+                      text: 'Delete My Account',
+                      icon: const Icon(LucideIcons.trash2, size: 16),
+                      variant: AppButtonVariant.outlined,
+                      foregroundColor: AppColors.danger,
+                      borderColor: AppColors.danger,
+                      borderRadius: BorderRadius.circular(14),
+                      onPressed: () => _showDeleteAccountSheet(context),
                     ),
                   ],
                 ),

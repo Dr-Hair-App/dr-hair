@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
+import '../../../../core/widgets/app_button.dart';
 import '../../domain/models/care_models.dart';
 import '../viewmodels/care_cubit.dart';
 import '../viewmodels/care_state.dart';
@@ -553,25 +554,24 @@ class _OrdersListViewState extends State<OrdersListView>
                       ),
                       if (category != OrderCategory.cancelled) ...[
                         const SizedBox(height: 24),
-                        ElevatedButton.icon(
+                        AppButton(
+                          height: 44,
+                          text: 'Explore Hair Products',
+                          icon: const Icon(
+                            LucideIcons.shoppingBag,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                          variant: AppButtonVariant.filled,
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                          textStyle: const TextStyle(fontWeight: FontWeight.w700),
                           onPressed: () => context.push(RouteNames.products),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                          ),
-                          icon: const Icon(LucideIcons.shoppingBag, size: 18),
-                          label: const Text(
-                            'Explore Hair Products',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
                         ),
                       ],
                     ],

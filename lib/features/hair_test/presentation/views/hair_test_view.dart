@@ -9,6 +9,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_text_form_field.dart';
 import '../../../../core/widgets/app_toast.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../../../core/widgets/photo_source_bottom_sheet.dart';
@@ -262,7 +263,6 @@ class _HairTestContent extends StatelessWidget {
                                 child: AppButton(
                                   text: 'Back',
                                   variant: AppButtonVariant.outlined,
-                                  size: AppButtonSize.large,
                                   width: targetBackWidth,
                                   height: 54,
                                   onPressed: () {
@@ -287,7 +287,6 @@ class _HairTestContent extends StatelessWidget {
                           ? 'Submit'
                           : 'Continue',
                       variant: AppButtonVariant.filled,
-                      size: AppButtonSize.large,
                       width: currentContinueWidth,
                       onPressed: state.isSubmitting
                           ? null
@@ -331,22 +330,29 @@ class _HairTestContent extends StatelessWidget {
                                       ),
                                     ),
                                     actions: [
-                                      OutlinedButton(
+                                      AppButton(
+                                        height: 38,
+                                        text: state.hasUnverifiedPhoto
+                                            ? 'Review photos'
+                                            : 'Retake photos',
+                                        variant: AppButtonVariant.outlined,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 14,
+                                        ),
                                         onPressed: () =>
                                             Navigator.of(ctx).pop(false),
-                                        child: Text(
-                                          state.hasUnverifiedPhoto
-                                              ? 'Review photos'
-                                              : 'Retake photos',
-                                        ),
                                       ),
-                                      FilledButton(
-                                        style: FilledButton.styleFrom(
-                                          backgroundColor: AppColors.primary,
+                                      AppButton(
+                                        height: 38,
+                                        text: 'Proceed Anyway',
+                                        variant: AppButtonVariant.filled,
+                                        backgroundColor: AppColors.primary,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 14,
                                         ),
                                         onPressed: () =>
                                             Navigator.of(ctx).pop(true),
-                                        child: const Text('Proceed Anyway'),
                                       ),
                                     ],
                                   ),
@@ -402,6 +408,8 @@ class _HairTestContent extends StatelessWidget {
             'No noticeable flakes or itching',
             'Occasional flakes or itching',
             'Frequent flakes or itching',
+            'Oily scalp',
+            'Dry scalp',
             'Not sure',
           ],
           selected: state.dandruff,
@@ -437,8 +445,35 @@ class _HairTestContent extends StatelessWidget {
           onSelected: cubit.selectFamilyHistory,
         );
       case 6:
-        return _buildMedicationSafetyStep(state, cubit);
+        return _buildOptionSelector(
+          title: 'Has your hair loss changed quickly recently?',
+          subtitle:
+              'This helps the clinician understand the timing and urgency.',
+          options: const [
+            'No, it has been gradual or stable',
+            'Yes, it has increased quickly',
+            'Not sure',
+          ],
+          selected: state.hairFallTrend,
+          onSelected: cubit.selectHairFallTrend,
+        );
       case 7:
+        return _buildOptionSelector(
+          title: 'Do you have scalp pain, burning, sores, or bleeding?',
+          subtitle:
+              'Choose the closest answer; a clinician can review any symptoms.',
+          options: const [
+            'No',
+            'Scalp pain or burning',
+            'Sores or bleeding',
+            'Not sure',
+          ],
+          selected: state.scalpSymptoms,
+          onSelected: cubit.selectScalpSymptoms,
+        );
+      case 8:
+        return _buildMedicationSafetyStep(state, cubit);
+      case 9:
         final bool hasNonHair = state.hasNonHairPhoto;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -601,21 +636,17 @@ class _HairTestContent extends StatelessWidget {
         ),
         if (state.allergyStatus == 'Yes, I have allergies') ...[
           const SizedBox(height: 4),
-          TextField(
-            maxLength: 500,
+          AppTextFormField(
+            initialValue: state.allergyDetails,
+            labelText: 'List known allergies',
+            hintText: 'Name the medicine, ingredient, or product if known',
             minLines: 2,
             maxLines: 4,
             textCapitalization: TextCapitalization.sentences,
             onChanged: cubit.setAllergyDetails,
-            decoration: InputDecoration(
-              labelText: 'List known allergies',
-              hintText: 'Name the medicine, ingredient, or product if known',
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
+            borderRadius: BorderRadius.circular(14),
+            fillColor: Colors.white,
+            filled: true,
           ),
         ],
         const SizedBox(height: 18),
@@ -628,23 +659,32 @@ class _HairTestContent extends StatelessWidget {
         ),
         if (state.currentMedicationsStatus == 'Yes') ...[
           const SizedBox(height: 4),
-          TextField(
-            maxLength: 1000,
+          AppTextFormField(
+            initialValue: state.currentMedications,
+            labelText: 'Current medicines and supplements',
+            hintText: 'Add names and doses if you know them',
             minLines: 2,
             maxLines: 4,
             textCapitalization: TextCapitalization.sentences,
             onChanged: cubit.setCurrentMedications,
-            decoration: InputDecoration(
-              labelText: 'Current medicines and supplements',
-              hintText: 'Add names and doses if you know them',
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
+            borderRadius: BorderRadius.circular(14),
+            fillColor: Colors.white,
+            filled: true,
           ),
         ],
+        const SizedBox(height: 16),
+        AppTextFormField(
+          initialValue: state.medicalConditions,
+          labelText: 'Known medical conditions (optional)',
+          hintText: 'For example, thyroid condition, PCOS, anemia, or diabetes',
+          minLines: 1,
+          maxLines: 3,
+          textCapitalization: TextCapitalization.sentences,
+          onChanged: cubit.setMedicalConditions,
+          borderRadius: BorderRadius.circular(14),
+          fillColor: Colors.white,
+          filled: true,
+        ),
         const SizedBox(height: 12),
         const Text(
           'Your answers are shared with the clinic team for care review.',
@@ -961,19 +1001,22 @@ class _HairTestContent extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
+                    child: AppButton(
+                      height: 44,
+                      text: 'Keep photo',
+                      variant: AppButtonVariant.outlined,
                       onPressed: () => Navigator.pop(sheetContext, false),
-                      child: const Text('Keep photo'),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.danger,
-                      ),
+                    child: AppButton(
+                      height: 44,
+                      text: 'Remove photo',
+                      variant: AppButtonVariant.filled,
+                      backgroundColor: AppColors.danger,
+                      foregroundColor: Colors.white,
                       onPressed: () => Navigator.pop(sheetContext, true),
-                      child: const Text('Remove photo'),
                     ),
                   ),
                 ],

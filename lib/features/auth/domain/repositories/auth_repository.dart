@@ -120,11 +120,8 @@ abstract interface class AuthRepository {
     String? occupation,
     String? profileUrl,
     bool clearProfileUrl = false,
-  });
-
-  Future<String?> uploadProfilePhoto({
-    required Uint8List bytes,
-    required String filename,
+    Uint8List? profilePhotoBytes,
+    String? profilePhotoFilename,
   });
 
   Future<void> removeProfilePhoto();

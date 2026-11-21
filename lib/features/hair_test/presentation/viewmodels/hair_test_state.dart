@@ -15,10 +15,13 @@ class HairTestState {
   final String? gutHealth;
   final String? stressLevel;
   final String? familyHistory;
+  final String? hairFallTrend;
+  final String? scalpSymptoms;
   final String? allergyStatus;
   final String allergyDetails;
   final String? currentMedicationsStatus;
   final String currentMedications;
+  final String medicalConditions;
   final Map<String, String> photos;
   final Map<String, String> optimizedPhotos;
   final Map<String, HairPhotoAnalysis> photoAnalysis;
@@ -44,7 +47,7 @@ class HairTestState {
 
   const HairTestState({
     this.currentStep = 0,
-    this.totalSteps = 8,
+    this.totalSteps = 10,
     this.name = '',
     this.age = '',
     this.selectedGender,
@@ -55,10 +58,13 @@ class HairTestState {
     this.gutHealth,
     this.stressLevel,
     this.familyHistory,
+    this.hairFallTrend,
+    this.scalpSymptoms,
     this.allergyStatus,
     this.allergyDetails = '',
     this.currentMedicationsStatus,
     this.currentMedications = '',
+    this.medicalConditions = '',
     this.photos = const {},
     this.optimizedPhotos = const {},
     this.photoAnalysis = const {},
@@ -97,10 +103,13 @@ class HairTestState {
     String? gutHealth,
     String? stressLevel,
     String? familyHistory,
+    String? hairFallTrend,
+    String? scalpSymptoms,
     String? allergyStatus,
     String? allergyDetails,
     String? currentMedicationsStatus,
     String? currentMedications,
+    String? medicalConditions,
     Map<String, String>? photos,
     Map<String, String>? optimizedPhotos,
     Map<String, HairPhotoAnalysis>? photoAnalysis,
@@ -146,11 +155,14 @@ class HairTestState {
       gutHealth: gutHealth ?? this.gutHealth,
       stressLevel: stressLevel ?? this.stressLevel,
       familyHistory: familyHistory ?? this.familyHistory,
+      hairFallTrend: hairFallTrend ?? this.hairFallTrend,
+      scalpSymptoms: scalpSymptoms ?? this.scalpSymptoms,
       allergyStatus: allergyStatus ?? this.allergyStatus,
       allergyDetails: allergyDetails ?? this.allergyDetails,
       currentMedicationsStatus:
           currentMedicationsStatus ?? this.currentMedicationsStatus,
       currentMedications: currentMedications ?? this.currentMedications,
+      medicalConditions: medicalConditions ?? this.medicalConditions,
       photos: photos ?? this.photos,
       optimizedPhotos: optimizedPhotos ?? this.optimizedPhotos,
       photoAnalysis: photoAnalysis ?? this.photoAnalysis,

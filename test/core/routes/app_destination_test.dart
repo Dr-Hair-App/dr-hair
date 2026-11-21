@@ -22,6 +22,13 @@ void main() {
       'entityId': 'prd_custom_101',
     });
     expect(underscoreDestination.location, '/products/prd_custom_101');
+
+    final dottedDestination = AppDestination.fromJson({
+      'type': 'product',
+      'entityId': 'prd.custom.v2',
+    });
+    expect(dottedDestination.location, '/products/prd.custom.v2');
+    expect(AppDestination.isValidRoute('/products/prd.custom.v2'), isTrue);
   });
 
   test('unknown and malformed destinations cannot create routes', () {
@@ -31,6 +38,7 @@ void main() {
           .location,
       isNull,
     );
+    expect(AppDestination.isValidRoute('/products/../profile'), isFalse);
   });
 
   test('clinic appointment destination uses the single doctor screen', () {

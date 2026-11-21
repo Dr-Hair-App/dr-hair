@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../constants/app_colors.dart';
+import '../media/data/smart_image_upload_service.dart';
 import 'custom_cached_image.dart';
 import 'photo_source_bottom_sheet.dart';
 
@@ -45,16 +48,21 @@ class ProfilePhotoPicker extends StatelessWidget {
       onSelectSource: (source) async {
         try {
           final picker = ImagePicker();
-          final image = await picker.pickImage(
-            source: source,
-            maxWidth: 1024,
-            maxHeight: 1024,
-            imageQuality: 85,
-          );
+          final image = await picker.pickImage(source: source);
           if (image == null || !context.mounted) return;
-          final bytes = await image.readAsBytes();
+          if (await image.length() > SmartImageUploadService.maxSourceBytes) {
+            throw const FileSystemException(
+              'This image is larger than 100 MiB. Choose a smaller image.',
+            );
+          }
+          final prepared = await const SmartImageUploadService().prepareBytes(
+            await image.readAsBytes(),
+            filename: image.name,
+            maxDimension: 1024,
+            quality: 86,
+          );
           if (!context.mounted) return;
-          onPhotoSelected((bytes: bytes, filename: image.name));
+          onPhotoSelected((bytes: prepared.bytes, filename: prepared.filename));
         } catch (e) {
           if (!context.mounted) return;
           ScaffoldMessenger.of(

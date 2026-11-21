@@ -2,7 +2,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_urls.dart';
 import '../../../../core/utils/whatsapp_launcher.dart';
+import '../../../../core/widgets/app_button.dart';
 import '../../domain/models/ai_assessment_model.dart';
 
 /// AI screening summary, possible factors, nutrition, lifestyle, and daily routine.
@@ -471,7 +473,6 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
   }
 
   Widget _buildDietPlanTab(AiAssessmentModel ai) {
-    final diet = ai.dietPlan;
     final customPlan = ai.customMealPlan;
     final days = customPlan?['days'] is List
         ? (customPlan!['days'] as List).whereType<Map>().toList()
@@ -495,155 +496,18 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (diet.summary.isNotEmpty) ...[
-            Text(
-              diet.summary,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF0F172A),
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 14),
-          ],
-
-          // Hydration & Key Nutrients
-          if (diet.hydrationTarget.isNotEmpty) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFBFDBFE)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    LucideIcons.droplets,
-                    color: Color(0xFF2563EB),
-                    size: 18,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Daily Hydration Target',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1E40AF),
-                          ),
-                        ),
-                        Text(
-                          diet.hydrationTarget,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1E3A8A),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-          ],
-
-          if (diet.keyNutrients.isNotEmpty) ...[
-            const Text(
-              'Essential Hair Nutrients',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF64748B),
-                letterSpacing: 0.2,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: diet.keyNutrients.map((nutrient) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    nutrient,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF334155),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 18),
-          ],
-
-          // Foods to Eat
-          const Row(
-            children: [
-              Icon(LucideIcons.check, color: Color(0xFF059669), size: 16),
-              SizedBox(width: 6),
-              Text(
-                'Foods to Eat (Follicle Nourishers)',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF059669),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ...diet.foodsToEat.map(
-            (food) => _buildBulletItem(
-              text: food,
-              iconColor: const Color(0xFF10B981),
-              bgColor: const Color(0xFFECFDF5),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Foods to Avoid
-          const Row(
-            children: [
-              Icon(LucideIcons.alertCircle, color: Color(0xFFDC2626), size: 16),
-              SizedBox(width: 6),
-              Text(
-                'Foods to Avoid (Inflammation Triggers)',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFFDC2626),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ...diet.foodsToAvoid.map(
-            (food) => _buildBulletItem(
-              text: food,
-              iconColor: const Color(0xFFEF4444),
-              bgColor: const Color(0xFFFEF2F2),
-            ),
-          ),
-          const SizedBox(height: 18),
           if (customPlan != null && days.isNotEmpty) ...[
             _buildGeneratedMealPlan(context, customPlan, days),
+            const SizedBox(height: 12),
+          ] else ...[
+            const Text(
+              'Create a meal plan from your assessment answers. Add your food preference and allergy details first so the plan can respect them.',
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.45,
+                color: Color(0xFF475569),
+              ),
+            ),
             const SizedBox(height: 12),
           ],
           if (widget.dietPlanError != null) ...[
@@ -654,26 +518,20 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
             const SizedBox(height: 8),
           ],
           if (widget.onGenerateDietPlan != null)
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: widget.isGeneratingDietPlan
-                    ? null
-                    : widget.onGenerateDietPlan,
-                icon: widget.isGeneratingDietPlan
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(LucideIcons.sparkles, size: 16),
-                label: Text(
-                  widget.isGeneratingDietPlan
-                      ? 'Creating your meal plan…'
-                      : customPlan == null
-                      ? 'Create a 7-day meal plan with Assistant'
-                      : 'Create a new 7-day meal plan',
-                ),
-              ),
+            AppButton(
+              height: 44,
+              isLoading: widget.isGeneratingDietPlan,
+              icon: const Icon(LucideIcons.sparkles, size: 16),
+              text: widget.isGeneratingDietPlan
+                  ? 'Creating your meal plan…'
+                  : customPlan == null
+                  ? 'Create a 7-day meal plan with AI'
+                  : 'Create a new 7-day meal plan',
+              variant: AppButtonVariant.outlined,
+              borderRadius: BorderRadius.circular(12),
+              onPressed: widget.isGeneratingDietPlan
+                  ? null
+                  : widget.onGenerateDietPlan,
             ),
         ],
       ),
@@ -767,12 +625,15 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
           TextButton.icon(
             onPressed: () {
               final ref = widget.assessmentReferenceNo?.trim() ?? '';
-              final link = ref.isNotEmpty
-                  ? 'https://admin.drhairindia.com/patients/patient/assessments/$ref'
-                  : 'https://drhairindia.com';
+              final universalLink = ref.isNotEmpty
+                  ? AppUrls.assessmentUniversalLink(ref)
+                  : AppUrls.websiteUrl;
+              final appLink = ref.isNotEmpty
+                  ? '\n• App Deep Link: ${AppUrls.assessmentAppDeepLink(ref)}'
+                  : '';
               WhatsAppLauncher.launch(
                 message:
-                    'Hello Dr. Hair Clinician,\n\nI would like a review of my AI nutrition & meal plan as it may need clinical adjustment.\n• Assessment Ref: ${ref.isNotEmpty ? ref : "N/A"}\n• Record Link: $link\n\nPlease advise. Thank you!',
+                    'Hello Dr. Hair Clinician,\n\nI would like a review of my AI nutrition & meal plan as it may need clinical adjustment.\n• Assessment Ref: ${ref.isNotEmpty ? ref : "N/A"}\n• Assessment Link: $universalLink$appLink\n\nPlease advise. Thank you!',
               );
             },
             icon: const Icon(LucideIcons.flag, size: 15),
@@ -901,7 +762,6 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
   }
 
   Widget _buildRegimenTab(AiAssessmentModel ai) {
-    final regimen = ai.recommendedRegimen;
     final customRoutine = ai.customRoutine;
     final List<dynamic> customSteps = customRoutine?['steps'] is List
         ? (customRoutine!['steps'] as List)
@@ -942,7 +802,7 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                       ),
                       SizedBox(width: 6),
                       Text(
-                        'Daily care starter plan',
+                        'AI care routine',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
@@ -995,8 +855,7 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                 ...customSteps.map((step) {
                   final title = step['title']?.toString() ?? 'Care Step';
                   final subtitle = step['subtitle']?.toString() ?? '';
-                  final timeOfDay =
-                      step['time_of_day']?.toString() ?? 'Daily';
+                  final timeOfDay = step['time_of_day']?.toString() ?? 'Daily';
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Row(
@@ -1052,45 +911,14 @@ class _AiAssessmentCardsState extends State<AiAssessmentCards> {
                   );
                 }),
               ] else ...[
-                ...regimen.dailySteps.map((step) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            step.step,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            step.instruction,
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              height: 1.4,
-                              color: Color(0xFF334155),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+                const Text(
+                  'Generate a routine from this assessment when you are ready. It will not be added to your daily tracker automatically.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.45,
+                    color: Color(0xFF475569),
+                  ),
+                ),
               ],
             ],
           ),

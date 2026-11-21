@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -6,9 +8,6 @@ import '../constants/app_colors.dart';
 /// Available visual styles for [AppButton].
 enum AppButtonVariant { filled, outlined, tonal, ghost }
 
-/// Available predefined sizes for [AppButton].
-enum AppButtonSize { small, medium, large }
-
 /// A highly customizable, production-ready button component with smooth micro-motion,
 /// loading states, variant styling, optional gradients, and tactile haptic feedback.
 class AppButton extends StatefulWidget {
@@ -16,7 +15,6 @@ class AppButton extends StatefulWidget {
   final Widget? child;
   final VoidCallback? onPressed;
   final AppButtonVariant variant;
-  final AppButtonSize size;
   final Widget? icon;
   final Widget? trailingIcon;
   final bool isLoading;
@@ -46,7 +44,6 @@ class AppButton extends StatefulWidget {
     this.child,
     this.onPressed,
     this.variant = AppButtonVariant.filled,
-    this.size = AppButtonSize.large,
     this.icon,
     this.trailingIcon,
     this.isLoading = false,
@@ -89,38 +86,12 @@ class _AppButtonState extends State<AppButton> {
     widget.onPressed?.call();
   }
 
-  double get _defaultHeight {
-    switch (widget.size) {
-      case AppButtonSize.small:
-        return 38;
-      case AppButtonSize.medium:
-        return 48;
-      case AppButtonSize.large:
-        return 54;
-    }
-  }
-
-  EdgeInsetsGeometry get _defaultPadding {
-    switch (widget.size) {
-      case AppButtonSize.small:
-        return const EdgeInsets.symmetric(horizontal: 14, vertical: 5);
-      case AppButtonSize.medium:
-        return const EdgeInsets.symmetric(horizontal: 20, vertical: 5);
-      case AppButtonSize.large:
-        return const EdgeInsets.symmetric(horizontal: 24, vertical: 5);
-    }
-  }
-
-  double get _defaultFontSize {
-    switch (widget.size) {
-      case AppButtonSize.small:
-        return 12;
-      case AppButtonSize.medium:
-        return 14;
-      case AppButtonSize.large:
-        return 16;
-    }
-  }
+  static const double _defaultHeight = 54;
+  static const EdgeInsetsGeometry _defaultPadding = EdgeInsets.symmetric(
+    horizontal: 12,
+    vertical: 5,
+  );
+  static const double _defaultFontSize = 13;
 
   Color _resolveBackgroundColor(BuildContext context) {
     if (widget.backgroundColor != null) {
@@ -167,7 +138,7 @@ class _AppButtonState extends State<AppButton> {
   BorderSide _resolveBorderSide(BuildContext context) {
     final double width =
         widget.borderWidth ??
-        (widget.variant == AppButtonVariant.outlined ? 1.5 : 0.0);
+        (widget.variant == AppButtonVariant.outlined ? 1 : 0.0);
 
     if (widget.variant == AppButtonVariant.outlined) {
       final Color color =
@@ -209,7 +180,12 @@ class _AppButtonState extends State<AppButton> {
     return Semantics(
       button: true,
       enabled: !_effectiveDisabled,
-      label: widget.semanticLabel ?? widget.text,
+      label:
+          widget.semanticLabel ??
+          (widget.isLoading
+              ? '${widget.text ?? 'Button'}, loading'
+              : widget.text),
+      liveRegion: widget.isLoading,
       child: AnimatedScale(
         scale: _isPressed && !_effectiveDisabled ? 0.96 : 1.0,
         duration: motionDuration,
@@ -251,13 +227,9 @@ class _AppButtonState extends State<AppButton> {
                   padding: widget.padding ?? _defaultPadding,
                   alignment: Alignment.center,
                   child: widget.isLoading
-                      ? SizedBox(
-                          width: _defaultFontSize + 6,
-                          height: _defaultFontSize + 6,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            valueColor: AlwaysStoppedAnimation<Color>(fgColor),
-                          ),
+                      ? _JumpingDotsIndicator(
+                          color: fgColor,
+                          animate: !disableMotion,
                         )
                       : (widget.child ??
                             Row(
@@ -291,6 +263,78 @@ class _AppButtonState extends State<AppButton> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _JumpingDotsIndicator extends StatefulWidget {
+  final Color color;
+  final bool animate;
+
+  const _JumpingDotsIndicator({required this.color, required this.animate});
+
+  @override
+  State<_JumpingDotsIndicator> createState() => _JumpingDotsIndicatorState();
+}
+
+class _JumpingDotsIndicatorState extends State<_JumpingDotsIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.animate) _controller.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _JumpingDotsIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.animate && !oldWidget.animate) {
+      _controller.repeat();
+    } else if (!widget.animate && oldWidget.animate) {
+      _controller.stop();
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (index) {
+            final phase = (_controller.value - index / 3) % 1;
+            final lift = math
+                .max(0.0, math.sin(phase * math.pi * 2))
+                .toDouble();
+            return Padding(
+              padding: EdgeInsets.only(right: index == 2 ? 0 : 5),
+              child: Transform.translate(
+                offset: Offset(0, -5 * lift),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: widget.color,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const SizedBox(width: 6, height: 6),
+                ),
+              ),
+            );
+          }),
         ),
       ),
     );

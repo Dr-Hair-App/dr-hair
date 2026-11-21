@@ -25,7 +25,8 @@ class OrderTrackingView extends StatefulWidget {
   State<OrderTrackingView> createState() => _OrderTrackingViewState();
 }
 
-class _OrderTrackingViewState extends State<OrderTrackingView> {
+class _OrderTrackingViewState extends State<OrderTrackingView>
+    with WidgetsBindingObserver {
   int _selectedOrderIndex = 0;
   bool _isCancelling = false;
   bool _initialIndexSet = false;
@@ -38,8 +39,52 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadOrdersAndTracking();
+    });
+  }
+
+  bool _isTerminalStatus(String? status) {
+    if (status == null) return false;
+    final s = status.trim().toLowerCase();
+    return s == 'delivered' ||
+        s == 'cancelled' ||
+        s == 'canceled' ||
+        s == 'completed' ||
+        s == 'refunded';
+  }
+
+  void _startTrackingTimer() {
+    _trackingRefreshTimer?.cancel();
+    final currentOrders = context.read<CareCubit>().state.orders;
+    if (currentOrders.isEmpty) return;
+    final index = _selectedOrderIndex.clamp(0, currentOrders.length - 1);
+    final selectedOrder = currentOrders[index];
+
+    // Cancel / do not schedule polling if order or tracking is terminal
+    if (_isTerminalStatus(selectedOrder.status) ||
+        (_liveTracking != null &&
+            _isTerminalStatus(_liveTracking!.currentStatus))) {
+      return;
+    }
+
+    _trackingRefreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (!mounted) return;
+      final orders = context.read<CareCubit>().state.orders;
+      if (orders.isEmpty) {
+        _trackingRefreshTimer?.cancel();
+        return;
+      }
+      final idx = _selectedOrderIndex.clamp(0, orders.length - 1);
+      final ord = orders[idx];
+      if (_isTerminalStatus(ord.status) ||
+          (_liveTracking != null &&
+              _isTerminalStatus(_liveTracking!.currentStatus))) {
+        _trackingRefreshTimer?.cancel();
+        return;
+      }
+      unawaited(_refreshTracking(ord));
     });
   }
 
@@ -54,17 +99,11 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
       _initialIndexSet = true;
     });
     if (orders.isNotEmpty) await _refreshTracking(orders[_selectedOrderIndex]);
-    _trackingRefreshTimer?.cancel();
-    _trackingRefreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      if (!mounted) return;
-      final currentOrders = context.read<CareCubit>().state.orders;
-      if (currentOrders.isEmpty) return;
-      final index = _selectedOrderIndex.clamp(0, currentOrders.length - 1);
-      unawaited(_refreshTracking(currentOrders[index]));
-    });
+    _startTrackingTimer();
   }
 
   Future<void> _refreshTracking(CareOrder order) async {
+    if (_isTrackingLoading) return;
     if (order.trackingNumber.isEmpty && order.shiprocketShipmentId.isEmpty ||
         order.status.startsWith('Preview only')) {
       return;
@@ -80,6 +119,10 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
       );
       if (mounted && requestId == _trackingRequestId) {
         setState(() => _liveTracking = tracking);
+        if (_isTerminalStatus(order.status) ||
+            _isTerminalStatus(tracking.currentStatus)) {
+          _trackingRefreshTimer?.cancel();
+        }
       }
     } catch (_) {
       if (mounted && requestId == _trackingRequestId) {
@@ -96,7 +139,18 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startTrackingTimer();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _trackingRefreshTimer?.cancel();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _trackingRefreshTimer?.cancel();
     _trackingRequestId++;
     super.dispose();
@@ -251,7 +305,12 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
                                 _liveTracking = null;
                                 _trackingError = null;
                               });
-                              unawaited(_refreshTracking(ord));
+                              _trackingRefreshTimer?.cancel();
+                              unawaited(
+                                _refreshTracking(ord).then((_) {
+                                  if (mounted) _startTrackingTimer();
+                                }),
+                              );
                             }
                           },
                         ),
@@ -695,80 +754,49 @@ class _OrderTrackingViewState extends State<OrderTrackingView> {
                 // Cancel Order button (if status is New or Preparing)
                 if (isCancellable) ...[
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.error,
-                        side: const BorderSide(color: AppColors.error),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      onPressed: _isCancelling
-                          ? null
-                          : () => _handleCancelOrder(order),
-                      icon: _isCancelling
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.error,
-                              ),
-                            )
-                          : const Icon(LucideIcons.ban, size: 18),
-                      label: Text(
-                        _isCancelling
-                            ? 'Cancelling...'
-                            : 'Cancel Order & Release Items',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
+                  AppButton(
+                    height: 48,
+                    isLoading: _isCancelling,
+                    icon: const Icon(LucideIcons.ban, size: 18),
+                    text: _isCancelling
+                        ? 'Cancelling...'
+                        : 'Cancel Order & Release Items',
+                    variant: AppButtonVariant.outlined,
+                    foregroundColor: AppColors.error,
+                    borderColor: AppColors.error,
+                    borderRadius: BorderRadius.circular(14),
+                    onPressed: _isCancelling
+                        ? null
+                        : () => _handleCancelOrder(order),
                   ),
                 ],
 
                 // Support button
                 if (!isPreviewOrder) ...[
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      onPressed: () {
-                        WhatsAppLauncher.launchOrderInquiry(
-                          orderId: order.orderId,
-                          status: order.status,
-                          trackingNumber: order.trackingNumber,
-                        );
-                      },
-                      icon: Image.asset(
-                        'assets/icons/whatsapp.png',
-                        height: 18,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(
-                              LucideIcons.messageCircle,
-                              size: 18,
-                              color: Color(0xFF25D366),
-                            ),
-                      ),
-                      label: const Text(
-                        'Contact Support regarding this order',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
+                  AppButton(
+                    height: 48,
+                    icon: Image.asset(
+                      'assets/icons/whatsapp.png',
+                      height: 18,
+                      errorBuilder: (context, error, stackTrace) => const Icon(
+                        LucideIcons.messageCircle,
+                        size: 18,
+                        color: Color(0xFF25D366),
                       ),
                     ),
+                    text: 'Contact Support regarding this order',
+                    variant: AppButtonVariant.outlined,
+                    foregroundColor: AppColors.primaryDark,
+                    borderColor: AppColors.border,
+                    borderRadius: BorderRadius.circular(14),
+                    onPressed: () {
+                      WhatsAppLauncher.launchOrderInquiry(
+                        orderId: order.orderId,
+                        status: order.status,
+                        trackingNumber: order.trackingNumber,
+                      );
+                    },
                   ),
                 ],
               ],

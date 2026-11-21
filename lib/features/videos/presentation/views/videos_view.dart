@@ -14,6 +14,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/custom_app_bar.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../../../core/widgets/shell_tab_visibility.dart';
@@ -445,18 +446,16 @@ class _VideosContentState extends State<_VideosContent>
               style: TextStyle(fontSize: 12.5, color: Colors.white60),
             ),
             const SizedBox(height: 18),
-            ElevatedButton(
+            AppButton(
+              height: 40,
+              text: 'Show All Stories',
+              variant: AppButtonVariant.filled,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              borderRadius: BorderRadius.circular(20),
               onPressed: () {
                 context.read<VideosCubit>().changeFilter(0);
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-              child: const Text('Show All Stories'),
             ),
           ],
         ),
@@ -492,14 +491,15 @@ class _VideosContentState extends State<_VideosContent>
               style: const TextStyle(fontSize: 12.5, color: Colors.white60),
             ),
             const SizedBox(height: 18),
-            ElevatedButton.icon(
+            AppButton(
+              height: 40,
+              text: 'Try Again',
+              icon: const Icon(Icons.refresh_rounded, size: 16, color: Colors.white),
+              variant: AppButtonVariant.filled,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              borderRadius: BorderRadius.circular(20),
               onPressed: () => context.read<VideosCubit>().refresh(),
-              icon: const Icon(Icons.refresh_rounded, size: 16),
-              label: const Text('Try Again'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-              ),
             ),
           ],
         ),
@@ -923,17 +923,15 @@ class _MinimalReelPlayerState extends State<_MinimalReelPlayer>
                       style: TextStyle(color: Colors.white70, fontSize: 12.5),
                     ),
                     const SizedBox(height: 16),
-                    ElevatedButton.icon(
+                    AppButton(
+                      height: 40,
+                      text: 'Watch on YouTube',
+                      icon: const Icon(Icons.open_in_new_rounded, size: 16, color: Colors.white),
+                      variant: AppButtonVariant.filled,
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
                       onPressed: _openInYouTube,
-                      icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                      label: const Text('Watch on YouTube'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ),
                     ),
                   ],
                 ),

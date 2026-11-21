@@ -12,6 +12,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/session/session_coordinator.dart';
 import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_toast.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../../../core/widgets/assessment_gate.dart';
 import '../../../auth/domain/models/user_model.dart';
@@ -187,6 +188,16 @@ class ProfileView extends StatelessWidget {
                   onTap: () => _openPersonalizedFeature(
                     context,
                     RouteNames.treatmentDetails,
+                  ),
+                ),
+                _ProfileMenuTile(
+                  icon: LucideIcons.fileText,
+                  iconColor: const Color(0xFF0D9488),
+                  iconBgColor: const Color(0xFFF0FDFA),
+                  title: 'Medical reports',
+                  subtitle: 'Open reports shared by your clinic',
+                  onTap: () => context.push(
+                    '${RouteNames.treatmentDetails}?tab=reports',
                   ),
                 ),
                 if (showRoutine)
@@ -536,10 +547,9 @@ class ProfileView extends StatelessWidget {
                           child: InkWell(
                             onTap: () {
                               Clipboard.setData(ClipboardData(text: patientId));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Patient ID copied'),
-                                ),
+                              AppToast.showSuccess(
+                                context,
+                                'Patient ID copied',
                               );
                             },
                             borderRadius: BorderRadius.circular(10),

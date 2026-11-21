@@ -7,8 +7,54 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/services/network_connection_service.dart';
 import '../../../../core/storage/app_local_cache.dart';
+import '../../../../core/widgets/app_button.dart';
 import '../viewmodels/auth_cubit.dart';
 import '../viewmodels/auth_state.dart';
+
+/// Selects the first patient destination after restoring or completing auth.
+/// Patients with a pending first assessment need a usable gender on file; this
+/// also covers cold restarts where the original social provider is unavailable.
+String resolveSplashDestination(
+  AuthState authState, {
+  required bool cachedCompleted,
+  required bool cachedSkipped,
+}) {
+  final hasAssessment = authState.hasCompletedAssessment || cachedCompleted;
+  final gender = authState.user?.gender?.trim().toLowerCase();
+  final hasUsableGender = const {
+    'female',
+    'male',
+    'non-binary',
+    'prefer not to say',
+  }.contains(gender);
+  final needsAssessment = authState.nextStep == 'ASSESSMENT' || !hasAssessment;
+
+  if (hasAssessment &&
+      (authState.requiresProfileCompletion ||
+          authState.nextStep == 'COMPLETE_PROFILE')) {
+    return RouteNames.completeProfile;
+  }
+
+  if (needsAssessment && !hasUsableGender) {
+    return Uri(
+      path: RouteNames.completeProfile,
+      queryParameters: {
+        'requireGender': 'true',
+        'redirect': RouteNames.hairTest,
+      },
+    ).toString();
+  }
+
+  if (authState.requiresProfileCompletion ||
+      authState.nextStep == 'COMPLETE_PROFILE') {
+    return RouteNames.completeProfile;
+  }
+  if (authState.isAuthenticated) {
+    if (needsAssessment && !cachedSkipped) return RouteNames.hairTest;
+    return RouteNames.mainShell;
+  }
+  return RouteNames.signin;
+}
 
 class SplashView extends StatefulWidget {
   const SplashView({super.key});
@@ -154,24 +200,17 @@ class _SplashViewState extends State<SplashView>
       return;
     }
     _hasNavigated = true;
-    if (authState.requiresProfileCompletion ||
-        authState.nextStep == 'COMPLETE_PROFILE') {
-      context.go(RouteNames.completeProfile);
-    } else if (authState.isAuthenticated) {
-      final cachedCompleted =
-          AppLocalCache.instance.getBool('has_completed_hair_test') ?? false;
-      final cachedSkipped =
-          AppLocalCache.instance.getBool('has_skipped_hair_test') ?? false;
-      if ((authState.nextStep == 'ASSESSMENT' ||
-              (!authState.hasCompletedAssessment && !cachedCompleted)) &&
-          !cachedSkipped) {
-        context.go(RouteNames.hairTest);
-      } else {
-        context.go(RouteNames.mainShell);
-      }
-    } else {
-      context.go(RouteNames.signin);
-    }
+    final cachedCompleted =
+        AppLocalCache.instance.getBool('has_completed_hair_test') ?? false;
+    final cachedSkipped =
+        AppLocalCache.instance.getBool('has_skipped_hair_test') ?? false;
+    context.go(
+      resolveSplashDestination(
+        authState,
+        cachedCompleted: cachedCompleted,
+        cachedSkipped: cachedSkipped,
+      ),
+    );
   }
 
   Future<void> _continueToSignIn() async {
@@ -331,15 +370,20 @@ class _SplashViewState extends State<SplashView>
                                       ),
                                     ),
                                     const SizedBox(height: 22),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: ElevatedButton.icon(
-                                        onPressed: context
-                                            .read<AuthCubit>()
-                                            .restoreSession,
-                                        icon: const Icon(LucideIcons.rotateCw),
-                                        label: const Text('Try again'),
+                                    AppButton(
+                                      height: 46,
+                                      text: 'Try again',
+                                      icon: const Icon(
+                                        LucideIcons.rotateCw,
+                                        size: 16,
+                                        color: Colors.white,
                                       ),
+                                      variant: AppButtonVariant.filled,
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      onPressed: context
+                                          .read<AuthCubit>()
+                                          .restoreSession,
                                     ),
                                     Align(
                                       alignment: Alignment.center,

@@ -8,6 +8,7 @@ import 'package:skeletonizer/skeletonizer.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/app_destination.dart';
 import '../../../../core/routes/route_names.dart';
+import '../../../../core/widgets/custom_cached_image.dart';
 import '../../data/models/notification_item_model.dart';
 import '../viewmodels/notifications_cubit.dart';
 import '../viewmodels/notifications_state.dart';
@@ -28,7 +29,7 @@ class NotificationsView extends StatelessWidget {
     try {
       final existing = context.read<NotificationsCubit>();
       return BlocProvider<NotificationsCubit>.value(
-        value: existing..loadNotifications(),
+        value: existing,
         child: const _NotificationsContent(),
       );
     } catch (_) {
@@ -40,9 +41,14 @@ class NotificationsView extends StatelessWidget {
   }
 }
 
-class _NotificationsContent extends StatelessWidget {
+class _NotificationsContent extends StatefulWidget {
   const _NotificationsContent();
 
+  @override
+  State<_NotificationsContent> createState() => _NotificationsContentState();
+}
+
+class _NotificationsContentState extends State<_NotificationsContent> {
   static final List<NotificationItemModel> _skeletonItems = List.generate(
     3,
     (index) => NotificationItemModel(
@@ -55,6 +61,15 @@ class _NotificationsContent extends StatelessWidget {
       isRead: false,
     ),
   );
+
+  @override
+  void initState() {
+    super.initState();
+    final cubit = context.read<NotificationsCubit>();
+    if (cubit.state.notifications.isEmpty && !cubit.state.isLoading) {
+      cubit.loadNotifications();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -277,15 +292,13 @@ class _NotificationsContent extends StatelessWidget {
                       if (notification.imageUrl != null &&
                           notification.imageUrl!.isNotEmpty) ...[
                         const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.network(
-                            notification.imageUrl!,
-                            height: 120,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                          ),
+                        CustomCachedImage(
+                          imageUrl: notification.imageUrl!,
+                          height: 120,
+                          width: double.infinity,
+                          borderRadius: 10,
+                          fit: BoxFit.cover,
+                          errorWidget: const SizedBox.shrink(),
                         ),
                       ],
                       const SizedBox(height: 8),

@@ -36,7 +36,9 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => _buildForSheet(context, isDark);
+
+  Widget _buildForSheet(BuildContext context, bool isDark) {
     final double topPadding = MediaQuery.of(context).padding.top;
     final double progress = scrollProgress.clamp(0.0, 1.0);
     final bool canPop = Navigator.of(context).canPop();

@@ -24,6 +24,7 @@ class MedicineCard extends StatelessWidget {
   final VoidCallback? onTap;
   final double width;
   final bool showAddToCart;
+  final String? heroTag;
 
   const MedicineCard({
     super.key,
@@ -36,6 +37,7 @@ class MedicineCard extends StatelessWidget {
     this.onTap,
     this.width = 220,
     this.showAddToCart = false,
+    this.heroTag,
   });
 
   @override
@@ -73,28 +75,55 @@ class MedicineCard extends StatelessWidget {
                   // Medicine Image with Category Badge (Dermatologist vs Ayurveda)
                   Stack(
                     children: [
-                      CustomCachedImage(
-                        imageUrl: imageUrl,
-                        height: 140,
-                        width: double.infinity,
-                        borderRadius: 16,
-                        fit: BoxFit.cover,
-                        errorWidget: Container(
+                      if (heroTag != null && heroTag!.isNotEmpty)
+                        Hero(
+                          tag: heroTag!,
+                          child: CustomCachedImage(
+                            imageUrl: imageUrl,
+                            height: 140,
+                            width: double.infinity,
+                            borderRadius: 16,
+                            fit: BoxFit.cover,
+                            errorWidget: Container(
+                              height: 140,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: AppColors.primary5,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Icon(
+                                isAyurveda ? LucideIcons.leaf : LucideIcons.pill,
+                                color: isAyurveda
+                                    ? AppColors.success
+                                    : AppColors.primary,
+                                size: 32,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        CustomCachedImage(
+                          imageUrl: imageUrl,
                           height: 140,
                           width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary5,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Icon(
-                            isAyurveda ? LucideIcons.leaf : LucideIcons.pill,
-                            color: isAyurveda
-                                ? AppColors.success
-                                : AppColors.primary,
-                            size: 32,
+                          borderRadius: 16,
+                          fit: BoxFit.cover,
+                          errorWidget: Container(
+                            height: 140,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary5,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(
+                              isAyurveda ? LucideIcons.leaf : LucideIcons.pill,
+                              color: isAyurveda
+                                  ? AppColors.success
+                                  : AppColors.primary,
+                              size: 32,
+                            ),
                           ),
                         ),
-                      ),
 
                       // Category Badge (Dermatologist / Ayurveda)
                       Positioned(
@@ -157,10 +186,13 @@ class MedicineCard extends StatelessWidget {
 
                   const SizedBox(height: 5),
 
-                  // Title
+                  // Title & Description
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.all(8.0),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                        vertical: 4.0,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -169,7 +201,7 @@ class MedicineCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 15,
+                              fontSize: 14,
                               fontWeight: FontWeight.w700,
                               color: AppColors.primaryDark,
                             ),
@@ -180,10 +212,10 @@ class MedicineCard extends StatelessWidget {
                           // Description
                           Text(
                             desc,
-                            maxLines: 2,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 11.5,
                               color: AppColors.secondaryDark,
                             ),
                           ),

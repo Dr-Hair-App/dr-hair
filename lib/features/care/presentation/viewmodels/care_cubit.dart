@@ -65,21 +65,37 @@ class CareCubit extends Cubit<CareState> {
     _initPersistence();
   }
 
-  Future<void> bindPatient(String? patientId, {String? sessionToken}) async {
+  DateTime? _lastSyncAt;
+  DateTime? _ordersFetchedAt;
+  final Map<String, Future<void>> _syncRequests = {};
+  static const Duration _syncFreshnessTtl = Duration(minutes: 3);
+  static const Duration _ordersFreshnessTtl = Duration(seconds: 30);
+
+  DateTime? get lastSyncAt => _lastSyncAt;
+
+  Future<void> bindPatient(
+    String? patientId, {
+    String? sessionToken,
+    bool force = false,
+  }) async {
     if (patientId == null || patientId.isEmpty) {
       _patientId = null;
       _sessionToken = null;
+      _lastSyncAt = null;
+      _ordersFetchedAt = null;
       if (!isClosed) emit(const CareState());
       return;
     }
     if (_patientId != patientId && !isClosed) {
+      _lastSyncAt = null;
+      _ordersFetchedAt = null;
       emit(const CareState());
     }
     _patientId = patientId;
     _sessionToken = sessionToken;
     await _initPersistence();
     if (sessionToken != null && sessionToken.isNotEmpty) {
-      await _syncWithBackend(sessionToken);
+      await _syncWithBackend(sessionToken, force: force);
     }
   }
 
@@ -132,10 +148,8 @@ class CareCubit extends Cubit<CareState> {
     await service.syncScheduledReminders(persistedReminders ?? state.reminders);
     if (isClosed) return;
     final latestState = state;
-    final resolvedCareEvents = identical(
-      latestState.careEvents,
-      stateAtStart.careEvents,
-    )
+    final resolvedCareEvents =
+        identical(latestState.careEvents, stateAtStart.careEvents)
         ? (careEvents ?? latestState.careEvents)
         : latestState.careEvents;
     final todayResolvedEvents = resolvedCareEvents
@@ -147,10 +161,8 @@ class CareCubit extends Cubit<CareState> {
         reminders: identical(latestState.reminders, stateAtStart.reminders)
             ? (persistedReminders ?? latestState.reminders)
             : latestState.reminders,
-        routineTasks: identical(
-          latestState.routineTasks,
-          stateAtStart.routineTasks,
-        )
+        routineTasks:
+            identical(latestState.routineTasks, stateAtStart.routineTasks)
             ? routineTasks
             : latestState.routineTasks,
         checkIns: identical(latestState.checkIns, stateAtStart.checkIns)
@@ -159,28 +171,27 @@ class CareCubit extends Cubit<CareState> {
         orders: identical(latestState.orders, stateAtStart.orders)
             ? (orders ?? latestState.orders)
             : latestState.orders,
-        routineCompletionDays: identical(
-          latestState.routineCompletionDays,
-          stateAtStart.routineCompletionDays,
-        )
+        routineCompletionDays:
+            identical(
+              latestState.routineCompletionDays,
+              stateAtStart.routineCompletionDays,
+            )
             ? (routineDays ?? latestState.routineCompletionDays)
             : latestState.routineCompletionDays,
         assistantDietMeals:
             identical(
-                  latestState.assistantDietMeals,
-                  stateAtStart.assistantDietMeals,
-                )
-                ? (assistantDietPlan?.meals ?? latestState.assistantDietMeals)
-                : latestState.assistantDietMeals,
+              latestState.assistantDietMeals,
+              stateAtStart.assistantDietMeals,
+            )
+            ? (assistantDietPlan?.meals ?? latestState.assistantDietMeals)
+            : latestState.assistantDietMeals,
         assistantDietTitle:
             latestState.assistantDietTitle == stateAtStart.assistantDietTitle
-                ? (assistantDietPlan?.title ?? latestState.assistantDietTitle)
-                : latestState.assistantDietTitle,
+            ? (assistantDietPlan?.title ?? latestState.assistantDietTitle)
+            : latestState.assistantDietTitle,
         careEvents: resolvedCareEvents,
-        waterCups: !identical(
-                  latestState.careEvents,
-                  stateAtStart.careEvents,
-                ) ||
+        waterCups:
+            !identical(latestState.careEvents, stateAtStart.careEvents) ||
                 latestState.waterCups != stateAtStart.waterCups
             ? latestState.waterCups
             : _waterValueForDay(todayResolvedEvents),
@@ -188,7 +199,28 @@ class CareCubit extends Cubit<CareState> {
     );
   }
 
-  Future<void> _syncWithBackend(String token) async {
+  Future<void> _syncWithBackend(String token, {bool force = false}) {
+    final key = '${_patientId ?? 'unknown'}:${token.hashCode}';
+    final pending = _syncRequests[key];
+    if (pending != null) return pending;
+    final request = _performSyncWithBackend(token, force: force);
+    _syncRequests[key] = request;
+    return request.whenComplete(() {
+      if (identical(_syncRequests[key], request)) _syncRequests.remove(key);
+    });
+  }
+
+  Future<void> _performSyncWithBackend(
+    String token, {
+    bool force = false,
+  }) async {
+    final hasPendingEvents = state.isCareEventSyncPending;
+    if (!force &&
+        !hasPendingEvents &&
+        _lastSyncAt != null &&
+        DateTime.now().difference(_lastSyncAt!) < _syncFreshnessTtl) {
+      return;
+    }
     try {
       final record = await _clinicalApi.getClinicalRecord(token);
       final syncedCareEvents = await _syncCareEvents(token);
@@ -210,19 +242,20 @@ class CareCubit extends Cubit<CareState> {
         }
       }
 
-      // Also check direct routine-steps endpoint
-      try {
-        final directSteps = await _clinicalApi.getRoutineSteps(token);
-        if (directSteps.isNotEmpty ||
-            serverTasks == null ||
-            serverTasks.isEmpty) {
-          serverTasks = _routineTasksFromSteps(
-            directSteps,
-            syncedCareEvents ?? state.careEvents,
-            currentDay,
-          );
-        }
-      } catch (_) {}
+      // The clinical record normally already includes routine steps. Only use
+      // the fallback endpoint when it does not, avoiding a duplicate read.
+      if (serverTasks == null || serverTasks.isEmpty) {
+        try {
+          final directSteps = await _clinicalApi.getRoutineSteps(token);
+          if (directSteps.isNotEmpty) {
+            serverTasks = _routineTasksFromSteps(
+              directSteps,
+              syncedCareEvents ?? state.careEvents,
+              currentDay,
+            );
+          }
+        } catch (_) {}
+      }
 
       List<ProgressCheckIn>? serverCheckIns;
       try {
@@ -307,6 +340,7 @@ class CareCubit extends Cubit<CareState> {
       _persistCheckIns();
       if (serverOrders != null) {
         _persistOrders();
+        _ordersFetchedAt = DateTime.now();
       }
       if (serverTasks != null) {
         _persistRoutineTasks();
@@ -315,6 +349,7 @@ class CareCubit extends Cubit<CareState> {
         _notificationService?.saveReminders(serverReminders);
       }
       await fetchPatientDietPlan(token);
+      _lastSyncAt = DateTime.now();
     } catch (_) {}
   }
 
@@ -1251,13 +1286,21 @@ class CareCubit extends Cubit<CareState> {
 
   void addOrder(CareOrder order) {
     emit(state.copyWith(orders: [order, ...state.orders]));
+    _ordersFetchedAt = DateTime.now();
     _persistOrders();
   }
 
   Future<List<CareOrder>> fetchPatientOrders({
     String? sessionToken,
     String? status,
+    bool forceRefresh = false,
   }) async {
+    if (!forceRefresh &&
+        (status == null || status.isEmpty) &&
+        _ordersFetchedAt != null &&
+        DateTime.now().difference(_ordersFetchedAt!) < _ordersFreshnessTtl) {
+      return state.orders;
+    }
     final token = sessionToken ?? _sessionToken;
     try {
       final serverOrders = await _commerceDataSource.fetchPatientOrders(
@@ -1267,10 +1310,11 @@ class CareCubit extends Cubit<CareState> {
       if (status == null || status.isEmpty) {
         emit(state.copyWith(orders: serverOrders));
         _persistOrders();
+        _ordersFetchedAt = DateTime.now();
       }
       return serverOrders;
     } catch (_) {
-      return [];
+      return status == null || status.isEmpty ? state.orders : const [];
     }
   }
 
@@ -1302,6 +1346,7 @@ class CareCubit extends Cubit<CareState> {
           return o.orderId == orderId ? updatedOrder : o;
         }).toList();
         emit(state.copyWith(orders: updatedList));
+        _ordersFetchedAt = DateTime.now();
         _persistOrders();
         return true;
       }

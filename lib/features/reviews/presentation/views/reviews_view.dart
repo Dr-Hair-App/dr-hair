@@ -1,9 +1,11 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/category_filter_bar.dart';
+import '../../../../core/widgets/custom_cached_image.dart';
 import '../../data/datasources/review_remote_data_source.dart';
 import '../../data/models/review_model.dart';
 
@@ -43,22 +45,20 @@ class _ReviewsViewState extends State<ReviewsView> {
 
   void _onScroll() {
     if (!_scrollController.hasClients) return;
-    // When the user has scrolled past the flexible header space,
-    // the category filter bar docks cleanly under the app bar.
-    final bool past = _scrollController.offset >= 60.0;
+    final bool past = _scrollController.offset >= 10.0;
     if (past != _isScrolledPastHeader) {
       setState(() => _isScrolledPastHeader = past);
     }
   }
 
-  Future<void> _loadReviews() async {
+  Future<void> _loadReviews({bool forceRefresh = false}) async {
     setState(() => _isLoading = true);
     _loadErrorMessage = null;
-    final category = _selectedFilterIndex == 0
-        ? null
-        : _filters[_selectedFilterIndex];
+    if (forceRefresh) {
+      ReviewRemoteDataSource.clearCache();
+    }
     try {
-      final items = await _dataSource.getReviews(category: category);
+      final items = await _dataSource.getReviews(category: null);
       if (!mounted) return;
       setState(() {
         _reviews = items;
@@ -77,12 +77,6 @@ class _ReviewsViewState extends State<ReviewsView> {
 
   @override
   Widget build(BuildContext context) {
-    final double topPadding = MediaQuery.of(context).padding.top;
-    const double toolbarH = 60.0;
-    const double categoryBarH = 48.0;
-    final double collapsedHeight = topPadding;
-    final double expandedHeight = toolbarH + 120.0;
-
     final List<ReviewModel> filteredReviews = _selectedFilterIndex == 0
         ? _reviews
         : _reviews
@@ -99,206 +93,131 @@ class _ReviewsViewState extends State<ReviewsView> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
-        onRefresh: _loadReviews,
+        onRefresh: () => _loadReviews(forceRefresh: true),
         color: AppColors.primary,
         backgroundColor: Colors.white,
-        child: NestedScrollView(
+        child: CustomScrollView(
           controller: _scrollController,
-          physics: const BouncingScrollPhysics(
-            parent: AlwaysScrollableScrollPhysics(),
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
           ),
-          headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
-            final bool isDocked = innerBoxIsScrolled || _isScrolledPastHeader;
-
-            return <Widget>[
-              SliverOverlapAbsorber(
-                handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
-                  context,
-                ),
-                sliver: SliverAppBar(
-                  pinned: true,
-                  floating: false,
-                  centerTitle: false,
-                  automaticallyImplyLeading: false,
-                  elevation: 0.0,
-                  backgroundColor: isDocked
+          slivers: <Widget>[
+            SliverAppBar(
+              pinned: true,
+              floating: false,
+              centerTitle: false,
+              automaticallyImplyLeading: false,
+              elevation: 0.0,
+              backgroundColor: _isScrolledPastHeader
+                  ? Colors.white
+                  : AppColors.background,
+              surfaceTintColor: Colors.transparent,
+              toolbarHeight: 52.0,
+              titleSpacing: 0,
+              title: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                height: 52.0,
+                decoration: BoxDecoration(
+                  color: _isScrolledPastHeader
                       ? Colors.white
                       : AppColors.background,
-                  surfaceTintColor: Colors.transparent,
-                  expandedHeight: expandedHeight,
-                  toolbarHeight: 0,
-                  title: null,
-                  flexibleSpace: LayoutBuilder(
-                    builder:
-                        (BuildContext context, BoxConstraints constraints) {
-                          final double currentHeight =
-                              constraints.biggest.height;
-                          final double t = expandedHeight > collapsedHeight
-                              ? ((currentHeight - collapsedHeight) /
-                                        (expandedHeight - collapsedHeight))
-                                    .clamp(0.0, 1.0)
-                              : 0.0;
-
-                          return FlexibleSpaceBar(
-                            collapseMode: CollapseMode.pin,
-                            background: SafeArea(
-                              bottom: false,
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  0,
-                                  16,
-                                  categoryBarH + 4,
-                                ),
-                                child: Opacity(
-                                  opacity: t,
-                                  child: ClipRect(
-                                    child: SingleChildScrollView(
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      reverse: true,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Text(
-                                            'Patient Stories',
-                                            style: TextStyle(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.primaryDark,
-                                              letterSpacing: -0.3,
-                                            ),
-                                          ),
-
-                                          const SizedBox(height: 10),
-                                          const Text(
-                                            'Stories shared by patients',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: AppColors.secondaryDark,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 10),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                  ),
-                  bottom: PreferredSize(
-                    preferredSize: const Size.fromHeight(categoryBarH),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeInOut,
-                      height: categoryBarH,
-                      decoration: BoxDecoration(
-                        color: isDocked ? Colors.white : AppColors.background,
-                        border: Border(
-                          bottom: BorderSide(
-                            color: isDocked
-                                ? AppColors.border
-                                : Colors.transparent,
-                            width: 1,
-                          ),
-                        ),
-                        boxShadow: isDocked
-                            ? [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.04),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      alignment: Alignment.centerLeft,
-                      child: CategoryFilterBar(
-                        categories: _filters,
-                        selectedIndex: _selectedFilterIndex,
-                        unselectedColor: isDocked
-                            ? AppColors.neutral100
-                            : Colors.white,
-                        onSelected: (index) {
-                          HapticFeedback.selectionClick();
-                          setState(() => _selectedFilterIndex = index);
-                          _loadReviews();
-                        },
-                      ),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: _isScrolledPastHeader
+                          ? AppColors.border
+                          : Colors.transparent,
+                      width: 1,
                     ),
                   ),
+                  boxShadow: _isScrolledPastHeader
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                alignment: Alignment.centerLeft,
+                child: CategoryFilterBar(
+                  categories: _filters,
+                  selectedIndex: _selectedFilterIndex,
+                  unselectedColor: _isScrolledPastHeader
+                      ? AppColors.neutral100
+                      : Colors.white,
+                  onSelected: (index) {
+                    HapticFeedback.selectionClick();
+                    setState(() => _selectedFilterIndex = index);
+                    if (_reviews.isEmpty) {
+                      _loadReviews();
+                    }
+                  },
                 ),
               ),
-            ];
-          },
-          body: Builder(
-            builder: (BuildContext context) {
-              return CustomScrollView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
-                slivers: <Widget>[
-                  SliverOverlapInjector(
-                    handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
-                      context,
+            ),
+            if (_isLoading)
+              SliverPadding(
+                key: const ValueKey('reviews_loading'),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+                sliver: SliverToBoxAdapter(
+                  child: Skeletonizer(
+                    enabled: true,
+                    effect: _kReviewsShimmerEffect,
+                    containersColor: Colors.white,
+                    child: const Column(
+                      children: [
+                        _ReviewCardSkeleton(),
+                        SizedBox(height: 14),
+                        _ReviewCardSkeleton(),
+                        SizedBox(height: 14),
+                        _ReviewCardSkeleton(),
+                        SizedBox(height: 14),
+                        _ReviewCardSkeleton(),
+                      ],
                     ),
                   ),
-                  if ((_isLoading && _reviews.isEmpty) ||
-                      _loadErrorMessage != null ||
-                      filteredReviews.isEmpty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        transitionBuilder: (child, animation) {
-                          final scale = Tween<double>(begin: 0.98, end: 1)
-                              .animate(
-                                CurvedAnimation(
-                                  parent: animation,
-                                  curve: Curves.easeOutCubic,
-                                ),
-                              );
-                          return FadeTransition(
-                            opacity: animation,
-                            child: ScaleTransition(scale: scale, child: child),
-                          );
-                        },
-                        child: _isLoading && _reviews.isEmpty
-                            ? const Center(
-                                key: ValueKey('reviews_loading'),
-                                child: CircularProgressIndicator(
-                                  color: AppColors.primary,
-                                ),
-                              )
-                            : _loadErrorMessage != null
-                            ? _buildErrorState(_loadErrorMessage!)
-                            : _buildEmptyState(),
+                ),
+              )
+            else if (_loadErrorMessage != null || filteredReviews.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    final scale = Tween<double>(begin: 0.98, end: 1).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
                       ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
-                      sliver: SliverList.separated(
-                        itemCount: filteredReviews.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 14),
-                        itemBuilder: (context, index) {
-                          final r = filteredReviews[index];
-                          return _ReviewCard(review: r);
-                        },
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
+                    );
+                    return FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(scale: scale, child: child),
+                    );
+                  },
+                  child: _loadErrorMessage != null
+                      ? _buildErrorState(_loadErrorMessage!)
+                      : _buildEmptyState(),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
+                sliver: SliverList.separated(
+                  itemCount: filteredReviews.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 14),
+                  itemBuilder: (context, index) {
+                    final r = filteredReviews[index];
+                    return _ReviewCard(review: r);
+                  },
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -308,7 +227,7 @@ class _ReviewsViewState extends State<ReviewsView> {
     return Center(
       key: const ValueKey('empty_reviews'),
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -472,18 +391,20 @@ class _ReviewCardState extends State<_ReviewCard>
                     ),
                     child: ClipOval(
                       child: r.avatar.isNotEmpty
-                          ? Image.network(
-                              r.avatar,
+                          ? CustomCachedImage(
+                              imageUrl: r.avatar,
+                              width: 44,
+                              height: 44,
+                              borderRadius: 22,
                               fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(
-                                    color: AppColors.primary5,
-                                    child: const Icon(
-                                      LucideIcons.userRound,
-                                      color: AppColors.primary,
-                                      size: 22,
-                                    ),
-                                  ),
+                              errorWidget: Container(
+                                color: AppColors.primary5,
+                                child: const Icon(
+                                  LucideIcons.userRound,
+                                  color: AppColors.primary,
+                                  size: 22,
+                                ),
+                              ),
                             )
                           : Container(
                               color: AppColors.primary5,
@@ -601,6 +522,152 @@ class _ReviewCardState extends State<_ReviewCard>
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Clinical medical shimmer effect matching Dr. Hair design system
+const _kReviewsShimmerEffect = ShimmerEffect(
+  baseColor: Color(0xFFE9EEF5),
+  highlightColor: Colors.white,
+  duration: Duration(milliseconds: 1400),
+);
+
+/// Skeleton placeholder for ReviewCard with attractive clinical aesthetics
+class _ReviewCardSkeleton extends StatelessWidget {
+  const _ReviewCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // User info row
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFFE9EEF5),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Container(
+                            height: 14,
+                            constraints: const BoxConstraints(maxWidth: 80),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE9EEF5),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          height: 14,
+                          width: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE9EEF5),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Container(
+                      height: 11,
+                      width: 75,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE9EEF5),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(
+                  5,
+                  (i) => const Padding(
+                    padding: EdgeInsets.only(left: 2),
+                    child: Icon(
+                      LucideIcons.star,
+                      color: Color(0xFFE9EEF5),
+                      size: 15,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Category tag pill
+          Container(
+            height: 22,
+            width: 95,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE9EEF5),
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Testimonial comment lines
+          Container(
+            height: 12,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE9EEF5),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            height: 12,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE9EEF5),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(height: 6),
+          FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: 0.65,
+            child: Container(
+              height: 12,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE9EEF5),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -7,6 +7,36 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() {
+  testWidgets(
+    'restores allergy, medication, and condition text on the safety step',
+    (tester) async {
+      final cubit = HairTestCubit();
+      cubit.emit(
+        cubit.state.copyWith(
+          currentStep: 8,
+          allergyStatus: 'Yes, I have allergies',
+          allergyDetails: 'Penicillin',
+          currentMedicationsStatus: 'Yes',
+          currentMedications: 'Vitamin D',
+          medicalConditions: 'Thyroid condition',
+        ),
+      );
+
+      await tester.pumpWidget(MaterialApp(home: HairTestView(cubit: cubit)));
+      await tester.pumpAndSettle();
+
+      final fields = tester.widgetList<TextFormField>(
+        find.byType(TextFormField),
+      );
+      expect(
+        fields.map((field) => field.initialValue),
+        containsAll(['Penicillin', 'Vitamin D', 'Thyroid condition']),
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await cubit.close();
+    },
+  );
+
   testWidgets('shows branded custom-painted waiting screen during AI work', (
     tester,
   ) async {
@@ -64,7 +94,7 @@ void main() {
       await tester.ensureVisible(find.text('Continue'));
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
-      expect(find.text('Step 1 of 8'), findsOneWidget);
+      expect(find.text('Step 1 of 10'), findsOneWidget);
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
 
@@ -106,7 +136,7 @@ void main() {
 
       // Should show Step 1 Questionnaire, NOT Assessment Report
       expect(find.text('Hair & Scalp Assessment'), findsOneWidget);
-      expect(find.text('Step 1 of 8'), findsOneWidget);
+      expect(find.text('Step 1 of 10'), findsOneWidget);
       expect(find.text('Assessment complete'), findsNothing);
       expect(find.text('Your Hair Loss Root Causes'), findsNothing);
 
@@ -158,9 +188,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('Clinical Scalp Photos'), findsOneWidget);
-      expect(find.text('Intake Sent'), findsOneWidget);
+      expect(find.text('Intake Done'), findsOneWidget);
+      expect(find.text('AI Review Done'), findsOneWidget);
       expect(find.text('Doctor Review'), findsOneWidget);
-      expect(find.text('Regimen Prescribed'), findsOneWidget);
 
       cubit.close();
     },
@@ -213,49 +243,49 @@ void main() {
       });
 
       final cubit = HairTestCubit();
-      // Fast forward to step 7 (Upload Scalp Photos)
+      // Fast forward to the final step (Upload Scalp Photos)
       cubit.selectPrimaryConcern('Stage 1 - Receding hairline at temples');
       cubit.selectDuration('1 - 3 years');
       cubit.selectDandruff('Occasional flakes or itching');
       cubit.selectStressLevel('Moderate');
       cubit.selectGutHealth('Normal');
       cubit.selectFamilyHistory("Mother's side");
+      cubit.selectHairFallTrend('No, it has been gradual or stable');
+      cubit.selectScalpSymptoms('No');
       cubit.setAllergyStatus('No known allergies');
       cubit.setCurrentMedicationsStatus('No');
 
-      // 1. Set a valid hair photo for Front Hairline
-      await cubit.setPhoto(
-        'Front Hairline',
-        '/tmp/front_scalp.jpg',
-        HairPhotoAnalysis(
-          label: 'Front Hairline',
-          photoPath: '/tmp/front_scalp.jpg',
-          status: HairDetectionStatus.hairDetected,
-          confidence: 0.95,
-          message: 'Scalp confirmed',
-          details: 'A clear scalp photo was detected.',
+      const frontPath = '/tmp/front_scalp.jpg';
+      const crownPath = '/tmp/non_hair_car.jpg';
+      cubit.emit(
+        cubit.state.copyWith(
+          currentStep: 9,
+          photos: const {'Front Hairline': frontPath, 'Crown / Top': crownPath},
+          optimizedPhotos: const {
+            'Front Hairline': frontPath,
+            'Crown / Top': crownPath,
+          },
+          photoAnalysis: {
+            'Front Hairline': HairPhotoAnalysis(
+              label: 'Front Hairline',
+              photoPath: frontPath,
+              status: HairDetectionStatus.hairDetected,
+              confidence: 0.95,
+              message: 'Scalp confirmed',
+              details: 'A clear scalp photo was detected.',
+            ),
+            'Crown / Top': HairPhotoAnalysis(
+              label: 'Crown / Top',
+              photoPath: crownPath,
+              status: HairDetectionStatus.notHair,
+              confidence: 0.9,
+              message: 'Try another photo',
+              details: 'The image does not show a scalp.',
+            ),
+          },
         ),
       );
-
-      // 2. Set a non-hair photo for Crown / Top
-      await cubit.setPhoto(
-        'Crown / Top',
-        '/tmp/non_hair_car.jpg',
-        HairPhotoAnalysis(
-          label: 'Crown / Top',
-          photoPath: '/tmp/non_hair_car.jpg',
-          status: HairDetectionStatus.notHair,
-          confidence: 0.9,
-          message: 'Try another photo',
-          details: 'The image does not show a scalp.',
-        ),
-      );
-
-      // Advance to step 7
-      while (cubit.state.currentStep < 7) {
-        cubit.nextStep();
-      }
-      expect(cubit.state.currentStep, 7);
+      expect(cubit.state.currentStep, 9);
 
       await tester.pumpWidget(MaterialApp(home: HairTestView(cubit: cubit)));
       await tester.pump();

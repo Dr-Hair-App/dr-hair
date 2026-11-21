@@ -8,6 +8,8 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 import '../../../../core/config/razorpay_config.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_toast.dart';
 import '../../data/patient_appointment_api.dart';
 
 class AppointmentPaymentResult {
@@ -35,6 +37,8 @@ class AppointmentPaymentSheet extends StatefulWidget {
   final String timezone;
   final int fee;
   final bool paymentRequired;
+  final bool payAtClinicEnabled;
+  final bool onlinePayEnabled;
   final String? patientToken;
   final String? patientPhone;
   final String? patientName;
@@ -48,6 +52,8 @@ class AppointmentPaymentSheet extends StatefulWidget {
     this.timezone = '',
     required this.fee,
     this.paymentRequired = true,
+    this.payAtClinicEnabled = true,
+    this.onlinePayEnabled = true,
     this.patientToken,
     this.patientPhone,
     this.patientName,
@@ -62,6 +68,8 @@ class AppointmentPaymentSheet extends StatefulWidget {
     String timezone = '',
     required int fee,
     bool paymentRequired = true,
+    bool payAtClinicEnabled = true,
+    bool onlinePayEnabled = true,
     String? patientToken,
     String? patientPhone,
     String? patientName,
@@ -78,6 +86,8 @@ class AppointmentPaymentSheet extends StatefulWidget {
         timezone: timezone,
         fee: fee,
         paymentRequired: paymentRequired,
+        payAtClinicEnabled: payAtClinicEnabled,
+        onlinePayEnabled: onlinePayEnabled,
         patientToken: patientToken,
         patientPhone: patientPhone,
         patientName: patientName,
@@ -102,9 +112,19 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
   void initState() {
     super.initState();
     tz_data.initializeTimeZones();
-    _selectedMethod = (widget.paymentRequired && widget.fee > 0)
-        ? 'UPI'
-        : (widget.fee <= 0 ? 'Free Consultation' : 'Cash at Clinic');
+    final canOnline = widget.onlinePayEnabled && widget.fee > 0;
+    final canClinic = widget.payAtClinicEnabled;
+    if (widget.fee <= 0) {
+      _selectedMethod = 'Free Consultation';
+    } else if (canOnline && !canClinic) {
+      _selectedMethod = 'UPI';
+    } else if (canClinic && !canOnline) {
+      _selectedMethod = 'Cash at Clinic';
+    } else {
+      _selectedMethod = (widget.paymentRequired && widget.fee > 0)
+          ? 'UPI'
+          : 'UPI';
+    }
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
@@ -160,10 +180,9 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
 
   void _handleExternalWallet(ExternalWalletResponse response) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Selected wallet: ${response.walletName ?? 'Wallet'}'),
-      ),
+    AppToast.showInfo(
+      context,
+      'Selected wallet: ${response.walletName ?? 'Wallet'}',
     );
   }
 
@@ -309,7 +328,9 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
               Text(
                 widget.fee <= 0
                     ? 'FREE CONSULTATION CONFIRMATION'
-                    : widget.paymentRequired
+                    : (widget.payAtClinicEnabled && widget.onlinePayEnabled)
+                    ? 'SELECT PAYMENT METHOD'
+                    : widget.onlinePayEnabled
                     ? 'SELECT PAYMENT METHOD'
                     : 'BOOKING CONFIRMATION MODE',
                 style: const TextStyle(
@@ -328,41 +349,38 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
                   subtitle: 'Complimentary consultation slot reservation',
                   icon: LucideIcons.gift,
                 ),
-              ] else if (widget.paymentRequired) ...[
-                _buildPaymentOption(
-                  id: 'UPI',
-                  title: 'UPI (GPay / PhonePe / Paytm / QR)',
-                  subtitle: 'Instant OPD token confirmation with Razorpay',
-                  icon: LucideIcons.smartphone,
-                ),
-                const SizedBox(height: 8),
-                _buildPaymentOption(
-                  id: 'Card',
-                  title: 'Credit / Debit Card',
-                  subtitle: 'Visa, Mastercard, RuPay',
-                  icon: LucideIcons.creditCard,
-                ),
-                const SizedBox(height: 8),
-                _buildPaymentOption(
-                  id: 'Netbanking',
-                  title: 'Netbanking',
-                  subtitle: 'All major Indian banks supported',
-                  icon: LucideIcons.landmark,
-                ),
-                const SizedBox(height: 8),
-                _buildPaymentOption(
-                  id: 'Cash at Clinic',
-                  title: 'Pay Cash at Clinic Desk',
-                  subtitle: 'Pay ₹${widget.fee} upon arrival at reception',
-                  icon: LucideIcons.banknote,
-                ),
               ] else ...[
-                _buildPaymentOption(
-                  id: 'Cash at Clinic',
-                  title: 'Pay Cash at Clinic Desk',
-                  subtitle: 'Pay ₹${widget.fee} upon arrival at reception',
-                  icon: LucideIcons.banknote,
-                ),
+                if (widget.onlinePayEnabled) ...[
+                  _buildPaymentOption(
+                    id: 'UPI',
+                    title: 'UPI (GPay / PhonePe / Paytm / QR)',
+                    subtitle: 'Instant OPD token confirmation with Razorpay',
+                    icon: LucideIcons.smartphone,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildPaymentOption(
+                    id: 'Card',
+                    title: 'Credit / Debit Card',
+                    subtitle: 'Visa, Mastercard, RuPay',
+                    icon: LucideIcons.creditCard,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildPaymentOption(
+                    id: 'Netbanking',
+                    title: 'Netbanking',
+                    subtitle: 'All major Indian banks supported',
+                    icon: LucideIcons.landmark,
+                  ),
+                ],
+                if (widget.payAtClinicEnabled) ...[
+                  if (widget.onlinePayEnabled) const SizedBox(height: 8),
+                  _buildPaymentOption(
+                    id: 'Cash at Clinic',
+                    title: 'Pay Cash at Clinic Desk',
+                    subtitle: 'Pay ₹${widget.fee} upon arrival at reception',
+                    icon: LucideIcons.banknote,
+                  ),
+                ],
               ],
 
               if (_errorMessage != null) ...[
@@ -470,42 +488,26 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
               const SizedBox(height: 18),
 
               // Pay & Confirm Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isProcessing ? null : _handlePayment,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: _isProcessing
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(LucideIcons.checkCircle2, size: 18),
-                  label: Text(
-                    _isProcessing
-                        ? 'Opening Razorpay Checkout…'
-                        : widget.fee <= 0
-                        ? 'Confirm Free Consultation (₹0)'
-                        : _selectedMethod == 'Cash at Clinic'
-                        ? 'Confirm Booking (Pay ₹${widget.fee} at Clinic)'
-                        : 'Pay ₹${widget.fee} & Confirm Visit',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+              AppButton(
+                height: 48,
+                isLoading: _isProcessing,
+                icon: const Icon(
+                  LucideIcons.checkCircle2,
+                  size: 18,
+                  color: Colors.white,
                 ),
+                text: _isProcessing
+                    ? 'Opening Razorpay Checkout…'
+                    : widget.fee <= 0
+                    ? 'Confirm Free Consultation (₹0)'
+                    : _selectedMethod == 'Cash at Clinic'
+                    ? 'Confirm Booking (Pay ₹${widget.fee} at Clinic)'
+                    : 'Pay ₹${widget.fee} & Confirm Visit',
+                variant: AppButtonVariant.filled,
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                onPressed: _isProcessing ? null : _handlePayment,
               ),
             ],
           ),
@@ -612,7 +614,8 @@ class _AppointmentPaymentSheetState extends State<AppointmentPaymentSheet> {
 
     final isCash =
         _selectedMethod == 'Cash at Clinic' ||
-        (!widget.paymentRequired && widget.fee > 0);
+        _selectedMethod == 'Pay at Clinic' ||
+        (!widget.onlinePayEnabled && widget.fee > 0);
     final isFree = widget.fee <= 0 || _selectedMethod == 'Free Consultation';
 
     // 1. Free appointment: confirm immediately with ₹0 fee

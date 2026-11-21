@@ -31,6 +31,17 @@ class AppConfigRepository {
 
   static const String _cacheKey = 'cached_feature_flags_v1';
   static const String _billingCacheKey = 'cached_appointment_billing_v1';
+  static const String _cacheUpdatedAtKey = 'cached_app_config_updated_at_v1';
+  static const Duration cacheFreshness = Duration(minutes: 5);
+
+  bool get hasFreshCache {
+    final updatedAtMs = _cache.getInt(_cacheUpdatedAtKey);
+    if (updatedAtMs == null) return false;
+    final age = DateTime.now().difference(
+      DateTime.fromMillisecondsSinceEpoch(updatedAtMs),
+    );
+    return age >= Duration.zero && age < cacheFreshness;
+  }
 
   static const Map<String, bool> defaultFeatures = <String, bool>{
     'shop': true,
@@ -124,10 +135,19 @@ class AppConfigRepository {
           );
         }
 
+        // Persist freshness with the same Hive store as the cached payload so
+        // a process restart does not immediately refetch unchanged config.
+        await _cache.put(
+          _cacheUpdatedAtKey,
+          DateTime.now().millisecondsSinceEpoch,
+        );
+
         return AppConfigBundle(
           features: featuresResult,
           appointmentBilling: billingResult,
-          versionCheck: AppVersionCheck.fromJson(versionData is Map ? Map<String, dynamic>.from(versionData) : null),
+          versionCheck: AppVersionCheck.fromJson(
+            versionData is Map ? Map<String, dynamic>.from(versionData) : null,
+          ),
         );
       }
     } catch (e) {

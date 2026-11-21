@@ -16,7 +16,7 @@ class ProductRemoteDataSource {
     String? rootCause,
     String? query,
     int page = 1,
-    int limit = 20,
+    int limit = 16,
   }) async {
     final queryParams = <String, dynamic>{'page': page, 'limit': limit};
     if (category != null &&

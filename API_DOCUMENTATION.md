@@ -87,7 +87,7 @@ sequenceDiagram
 | 4 | `/Admin/loginSignup` | `POST` | `multipart/form-data` | ❌ / Optional | `features/auth` / `features/hair_test` |
 | 5 | `/Admin/get_profile` | `POST` | `multipart/form-data` | ✅ | `features/profile` / `features/treatment` |
 | 6 | `/Admin/updateProfile` | `POST` | `multipart/form-data` | ✅ | `features/profile` |
-| 7 | `/api/v1/media/upload` | `POST` | `multipart/form-data` | ✅ | `features/profile`, `features/care`, future media screens |
+| 7 | `/api/v1/users/updateProfile` | `POST` | JSON or `multipart/form-data` | ✅ | `features/profile` |
 | 8 | `/HairTest/submit_form` | `POST` | `multipart/form-data` | ✅ | `features/hair_test` |
 | 9 | `/HairTest/hair_test` | `POST` | `application/json` | ✅ | `features/treatment` |
 | 10 | `/HairTest/get_treatment_history/{id}` | `GET` | `application/json` | ✅ | `features/treatment` |
@@ -95,7 +95,7 @@ sequenceDiagram
 | 12 | `/api/v1/patient/clinical-record` | `GET` | `application/json` | ✅ | `features/treatment` |
 | 13 | `/api/v1/patient/reports/{reportId}/download` | `GET` | `application/json` | ✅ | `features/treatment` |
 | 14 | `/api/v1/patient/progress-checkins` | `GET` | `application/json` | ✅ | `features/care` |
-| 15 | `/api/v1/patient/progress-checkins` | `POST` | `application/json` | ✅ | `features/care` |
+| 15 | `/api/v1/patient/progress-checkins` | `POST` | `multipart/form-data` | ✅ | `features/care` |
 | 16 | `/api/v1/appointments/availability?from=YYYY-MM-DD&to=YYYY-MM-DD` | `GET` | `application/json` | ❌ | `features/appointments` |
 | 17 | `/api/v1/patient/care-events` | `GET` / `PUT` | `application/json` | ✅ | `features/care` |
 
@@ -293,16 +293,15 @@ Updates basic profile text details (name, email, contact).
 
 ---
 
-### 7. Upload Image or Video
-Upload one file as `file`, or up to five mixed files as repeated `files` fields. The backend streams each to Cloudinary and returns each URL and asset ID in `data.items`; for a single-file upload the same asset is also exposed directly as `data.url` and `data.asset_id`. Uploading does not write the URL into another database record; send the returned URL to the relevant profile, assessment, or content API separately.
+### 7. Save a Profile Photo with Profile Changes
+Profile fields continue to accept JSON. When the user selects a new photo, send the profile update and image together as one multipart request; the backend stores the image and updates the profile in the same operation. The backend removes the previously stored profile image after a successful replacement.
 
-- **URL**: `{BASE_URL}/api/v1/media/upload`
+- **URL**: `{BASE_URL}/api/v1/users/updateProfile`
 - **Method**: `POST`
-- **Headers**: `Authorization: Bearer <token>`, optional `X-Media-Purpose: general|profile|assessment|progress|content`
+- **Headers**: `Authorization: Bearer <token>`
 - **Content-Type**: `multipart/form-data`
-- **Request Body**: a `file` field or repeated `files` fields, up to five mixed files. JPEG, PNG, WebP, GIF, AVIF, MP4, MOV, M4V, and WebM are accepted. Images are limited to 10 MB each; the video limit is controlled by `MAX_MEDIA_FILE_SIZE_MB` (100 MB per video by default).
-- To save a profile photo, use `X-Media-Purpose: profile`, then send the returned `data.url` as `profile_url` to `POST /api/v1/users/updateProfile`. Send `profile_url: null` to remove it.
-- For assessment photos, use `X-Media-Purpose: assessment`, then send each returned URL in the matching `photo_front_url`, `photo_top_url`, `photo_left_url`, `photo_right_url`, or `photo_back_url` field to `POST /api/v1/hair-tests/submit_form`. The backend checks the URLs belong to the current patient before saving them.
+- **Multipart fields**: `payload` is a JSON string with profile fields (`name`, `age`, `gender`, `city`, `occupation` and optional `profile_url` clear semantics); optional `profile` is the image file.
+- Send JSON without a file for text-only edits. Send `profile_url: null` to remove the current photo.
 
 ---
 
@@ -526,7 +525,6 @@ class ApiEndpoints {
   static const String registerUser = '/Admin/loginSignup';
   static const String getProfile = '/Admin/get_profile';
   static const String updateProfile = '/Admin/updateProfile';
-  static const String updateProfilePicture = '/Admin/profileUpdate';
 
   // Hair Test & Treatment Endpoints
   static const String submitHairTest = '/HairTest/submit_form';
@@ -562,12 +560,12 @@ Requests a short-lived signed URL for a report already associated with the authe
 - The backend checks the report ID together with the patient ID from the bearer token. Use the returned URL promptly; it expires after 60 seconds.
 
 ### 14. Read and save daily progress check-ins
-The GET response lists only the signed-in patient's check-ins. For POST, upload one to three progress images through the shared `/api/v1/media/upload` endpoint using `X-Media-Purpose: progress`, then pass the returned asset IDs, URLs, and image metadata to the check-in API. The check-in endpoint stores data only; the patient ID comes from the bearer token, and the backend verifies each asset belongs to that patient's progress folder. The check-in ID makes retries idempotent.
+The GET response lists only the signed-in patient's check-ins. For POST, send the check-in details and one to three photos together as multipart form data. The backend stores files in the patient's private progress folder, derives the asset IDs and URLs, and persists the check-in in the same request. The check-in ID makes retries idempotent.
 
 - **URL**: `{BASE_URL}/api/v1/patient/progress-checkins`
 - **Method**: `GET` or `POST`
 - **Headers**: `Authorization: Bearer <token>`
-- **POST JSON fields**: `id`, `date` (ISO-8601), `scalp_region`, `shedding_level`, `notes`, `density_rating` (1–5), and `photos` (one to three objects with `angle`, `public_id`, `url`, `file_name`, `mime_type`, and `bytes`, returned by the shared media upload endpoint).
+- **POST multipart fields**: `payload` is a JSON string with `id`, `date` (ISO-8601), `scalp_region`, `shedding_level`, `notes`, and `density_rating` (1–5); attach one or more files as `photo_front`, `photo_top`, or `photo_back`.
 - **GET response data**: `{ "items": [{ "id": "…", "date": "…", "density_rating": 4, "photos": [{ "angle": "front", "url": "https://…", "file_name": "…" }] }] }`.
 
 ### 15. Get live shipment tracking

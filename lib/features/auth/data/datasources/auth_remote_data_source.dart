@@ -1,12 +1,12 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import '../../../../core/constants/api_endpoints.dart';
-import '../../../../core/media/data/media_upload_api.dart';
 import '../../../../core/network/dio_client.dart';
 
 class AuthRemoteDataSource {
   final Dio _dio;
-  late final MediaUploadApi _mediaUploadApi = MediaUploadApi(dio: _dio);
 
   AuthRemoteDataSource({Dio? dio})
     : _dio = dio ?? DioClient(baseUrl: ApiEndpoints.backendBaseUrl).dio;
@@ -206,35 +206,44 @@ class AuthRemoteDataSource {
     String? occupation,
     String? profileUrl,
     bool clearProfileUrl = false,
+    List<int>? profilePhotoBytes,
+    String? profilePhotoFilename,
   }) async {
+    final payload = <String, dynamic>{
+      'name': ?name,
+      'age': ?age,
+      if (clearAge) 'age': null,
+      'gender': ?gender,
+      'city': ?city,
+      'occupation': ?occupation,
+      'profile_url': ?profileUrl,
+      if (clearProfileUrl) 'profile_url': null,
+    };
+    final photoBytes = profilePhotoBytes;
+    final photoFilename = profilePhotoFilename;
+    final Object requestBody;
+    if (photoBytes != null && photoFilename?.trim().isNotEmpty == true) {
+      final formData = FormData()
+        ..fields.add(MapEntry('payload', jsonEncode(payload)))
+        ..files.add(
+          MapEntry(
+            'profile',
+            MultipartFile.fromBytes(
+              photoBytes,
+              filename: photoFilename!.trim(),
+            ),
+          ),
+        );
+      requestBody = formData;
+    } else {
+      requestBody = payload;
+    }
     final response = await _dio.post<Map<String, dynamic>>(
       ApiEndpoints.userUpdateProfile,
-      data: {
-        'name': ?name,
-        'age': ?age,
-        if (clearAge) 'age': null,
-        'gender': ?gender,
-        'city': ?city,
-        'occupation': ?occupation,
-        'profile_url': ?profileUrl,
-        if (clearProfileUrl) 'profile_url': null,
-      },
+      data: requestBody,
       options: _authorized(token),
     );
     return _asMap(response.data);
-  }
-
-  Future<Map<String, dynamic>> uploadProfilePhoto({
-    required String token,
-    required List<int> bytes,
-    required String filename,
-  }) async {
-    final items = await _mediaUploadApi.uploadFiles(
-      token: token,
-      purpose: 'profile',
-      files: [MultipartFile.fromBytes(bytes, filename: filename)],
-    );
-    return {'status': 'success', 'data': items.first};
   }
 
   Future<Map<String, dynamic>> removeProfilePhoto(String token) async {

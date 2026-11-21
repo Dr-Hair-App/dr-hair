@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/media/data/smart_image_upload_service.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_toast.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
@@ -88,18 +89,16 @@ class _UpdateProfileViewState extends State<UpdateProfileView> {
       onSelectSource: (source) async {
         try {
           final picker = widget.imagePicker ?? ImagePicker();
-          final image = await picker.pickImage(
-            source: source,
-            maxWidth: 1024,
-            maxHeight: 1024,
-            imageQuality: 85,
-          );
+          final image = await picker.pickImage(source: source);
           if (image == null) return;
-          final bytes = await image.readAsBytes();
+          final prepared = await const SmartImageUploadService().prepareBytes(
+            await image.readAsBytes(),
+            filename: image.name,
+          );
           if (!mounted) return;
           setState(() {
-            _selectedImageBytes = bytes;
-            _selectedImageName = image.name;
+            _selectedImageBytes = prepared.bytes;
+            _selectedImageName = prepared.filename;
             _isPhotoRemoved = false;
           });
           HapticFeedback.lightImpact();
@@ -170,19 +169,22 @@ class _UpdateProfileViewState extends State<UpdateProfileView> {
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
+                    child: AppButton(
+                      height: 44,
+                      text: 'Keep photo',
+                      variant: AppButtonVariant.outlined,
                       onPressed: () => Navigator.pop(sheetContext, false),
-                      child: const Text('Keep photo'),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.danger,
-                      ),
+                    child: AppButton(
+                      height: 44,
+                      text: 'Remove photo',
+                      variant: AppButtonVariant.filled,
+                      backgroundColor: AppColors.danger,
+                      foregroundColor: Colors.white,
                       onPressed: () => Navigator.pop(sheetContext, true),
-                      child: const Text('Remove photo'),
                     ),
                   ),
                 ],

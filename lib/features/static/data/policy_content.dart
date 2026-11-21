@@ -17,7 +17,13 @@ class PolicyRepository {
       'Policy details pending business and legal approval. The parameters below represent current draft operational standards and require formal corporate sign-off before commercial release.';
 
   /// Fetches fresh policy details from backend API with instant local fallback
-  static Future<PolicyDocument> fetchPolicy(PolicyType type) async {
+  static Future<PolicyDocument> fetchPolicy(
+    PolicyType type, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _memoryCache.containsKey(type)) {
+      return _memoryCache[type]!;
+    }
     try {
       final slug = type == PolicyType.termsAndConditions
           ? 'terms-conditions'
@@ -36,7 +42,9 @@ class PolicyRepository {
         return doc;
       }
     } catch (_) {}
-    return getPolicy(type);
+    final fallback = getPolicy(type);
+    _memoryCache[type] = fallback;
+    return fallback;
   }
 
   static void clearCache() {

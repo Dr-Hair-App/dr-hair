@@ -10,26 +10,32 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/utils/whatsapp_launcher.dart';
 import '../../../../core/routes/app_destination.dart';
+import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_toast.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../../care/presentation/viewmodels/care_cubit.dart';
 import '../../../care/presentation/viewmodels/care_state.dart';
 import '../../../hair_test/presentation/viewmodels/hair_test_cubit.dart';
 import '../../../hair_test/presentation/viewmodels/hair_test_state.dart';
-import '../../../hair_test/presentation/widgets/assessment_summary_card.dart';
+import '../../../hair_test/presentation/localization/assessment_translations.dart';
+import '../../../hair_test/presentation/widgets/expert_review_notice_card.dart';
 import '../../../shop/data/models/product_model.dart';
 import '../../../shop/data/repositories/product_repository_impl.dart';
 import '../../../shop/domain/repositories/product_repository.dart';
 import '../../../videos/data/repositories/video_repository_impl.dart';
 import '../../../videos/domain/models/video_story_model.dart';
 import '../../../videos/domain/repositories/video_repository.dart';
+import '../../../videos/presentation/viewmodels/video_availability_notifier.dart';
 import '../../data/content_api.dart';
 import '../../../app_config/presentation/viewmodels/app_config_cubit.dart';
+import '../../../app_config/presentation/viewmodels/app_config_state.dart';
 import '../../../auth/presentation/viewmodels/auth_cubit.dart';
 import '../../../reviews/data/datasources/review_remote_data_source.dart';
 import '../../../reviews/data/models/review_model.dart';
 import '../viewmodels/home_journey_selector.dart';
 import '../viewmodels/home_summary_cubit.dart';
-import '../widgets/home_action_cards_section.dart';
+import '../viewmodels/home_summary_state.dart';
+import '../../../treatment/presentation/widgets/clinical_report_card.dart';
 import '../widgets/medicine_card.dart';
 
 class HomeView extends StatefulWidget {
@@ -61,17 +67,32 @@ class _HomeViewState extends State<HomeView>
   Future<List<VideoStoryModel>>? _videoStoriesFuture;
   Future<List<ProductItem>>? _productsFuture;
   Future<List<ReviewModel>>? _reviewsFuture;
-  late final Future<List<ContentItem>> _tipsFuture;
-  late final Future<List<ContentItem>> _faqsFuture;
+  Future<List<ContentItem>>? _tipsFuture;
+  Future<List<ContentItem>>? _faqsFuture;
+  final ContentApi _contentApi = ContentApi();
+  bool _homeContentLoaded = false;
+  bool? _videosEnabled;
+  bool? _shopEnabled;
+  bool? _reviewsEnabled;
   bool _motionConfigured = false;
 
   void _fetchVideoStories() {
     _videoStoriesFuture = widget.videoRepository == null && _isTestExecution
-        ? Future.value(const <VideoStoryModel>[])
+        ? Future.value(const <VideoStoryModel>[]).then((items) {
+            VideoAvailabilityNotifier.instance.updateAvailability(
+              items.isNotEmpty,
+            );
+            return items;
+          })
         : (widget.videoRepository ?? VideoRepositoryImpl())
               .getVideos(limit: 6, placement: 'home')
-              .then((res) => res.items)
-              .catchError((_) => const <VideoStoryModel>[]);
+              .then((res) {
+                final hasStories = res.items.isNotEmpty;
+                VideoAvailabilityNotifier.instance.updateAvailability(
+                  hasStories,
+                );
+                return res.items;
+              });
   }
 
   void _fetchProducts() {
@@ -79,22 +100,72 @@ class _HomeViewState extends State<HomeView>
         ? Future.value(const <ProductItem>[])
         : (widget.productRepository ?? ProductRepositoryImpl())
               .getProducts(limit: 6)
-              .then((res) => res.items)
-              .catchError((_) => const <ProductItem>[]);
+              .then((res) => res.items);
   }
 
   void _fetchReviews() {
     if (widget.reviewDataSource != null) {
-      _reviewsFuture = widget.reviewDataSource!.getReviews().catchError(
-        (_) => const <ReviewModel>[],
-      );
+      _reviewsFuture = widget.reviewDataSource!.getReviews();
     } else {
       _reviewsFuture = _isTestExecution
           ? Future.value(const <ReviewModel>[])
-          : ReviewRemoteDataSource().getReviews().catchError(
-              (_) => const <ReviewModel>[],
-            );
+          : ReviewRemoteDataSource().getReviews();
     }
+  }
+
+  void _loadHomeContent({bool forceRefresh = false}) {
+    if (_isTestExecution) {
+      _tipsFuture = Future.value(const <ContentItem>[]);
+      _faqsFuture = Future.value(const <ContentItem>[]);
+      _homeContentLoaded = true;
+      return;
+    }
+    final content = _contentApi.getPublishedContent(
+      types: const ['tip', 'faq'],
+      placement: 'home',
+      limit: 100,
+      forceRefresh: forceRefresh,
+    );
+    _tipsFuture = content.then(
+      (items) => items.where((item) => item.type == 'tip').toList(),
+    );
+    _faqsFuture = content.then(
+      (items) => items.where((item) => item.type == 'faq').toList(),
+    );
+    _homeContentLoaded = true;
+  }
+
+  void _syncOptionalHomeRequests(AppConfigState? config, {bool force = false}) {
+    if (!_homeContentLoaded) _loadHomeContent();
+    // The root config cubit serves cached flags immediately, then revalidates.
+    // Wait for that first load when no cached flags exist so disabled sections
+    // do not issue avoidable Worker requests during startup.
+    if (config?.isLoading == true) return;
+
+    final videosEnabled = config?.isFeatureEnabled('videos') ?? true;
+    final shopEnabled = config?.isFeatureEnabled('shop') ?? true;
+    final reviewsEnabled = config?.isFeatureEnabled('reviews') ?? true;
+
+    if (videosEnabled && (force || _videosEnabled != true)) {
+      _fetchVideoStories();
+    } else if (!videosEnabled && _videosEnabled != false) {
+      _videoStoriesFuture = Future.value(const <VideoStoryModel>[]);
+      VideoAvailabilityNotifier.instance.updateAvailability(false);
+    }
+    if (shopEnabled && (force || _shopEnabled != true)) {
+      _fetchProducts();
+    } else if (!shopEnabled && _shopEnabled != false) {
+      _productsFuture = Future.value(const <ProductItem>[]);
+    }
+    if (reviewsEnabled && (force || _reviewsEnabled != true)) {
+      _fetchReviews();
+    } else if (!reviewsEnabled && _reviewsEnabled != false) {
+      _reviewsFuture = Future.value(const <ReviewModel>[]);
+    }
+
+    _videosEnabled = videosEnabled;
+    _shopEnabled = shopEnabled;
+    _reviewsEnabled = reviewsEnabled;
   }
 
   static const bool _isFlutterTest = bool.fromEnvironment(
@@ -109,18 +180,6 @@ class _HomeViewState extends State<HomeView>
   @override
   void initState() {
     super.initState();
-    _fetchVideoStories();
-    _fetchProducts();
-    _fetchReviews();
-
-    _tipsFuture = _isTestExecution
-        ? Future.value(const <ContentItem>[])
-        : ContentApi().getPublishedContent(type: 'tip', placement: 'home');
-
-    _faqsFuture = _isTestExecution
-        ? Future.value(const <ContentItem>[])
-        : ContentApi().getPublishedContent(type: 'faq', placement: 'home');
-
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1150),
@@ -162,6 +221,7 @@ class _HomeViewState extends State<HomeView>
     if (token != null && token.isNotEmpty && homeCubit?.sessionToken != token) {
       homeCubit?.loadHomeSummary(token);
     }
+    _syncOptionalHomeRequests(context.read<AppConfigCubit?>()?.state);
   }
 
   @override
@@ -180,11 +240,34 @@ class _HomeViewState extends State<HomeView>
   Future<void> _launchWhatsapp() async {
     final success = await WhatsAppLauncher.launchGeneralConsultation();
     if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open WhatsApp. Please try again.'),
-        ),
+      AppToast.showError(context, 'Could not open WhatsApp. Please try again.');
+    }
+  }
+
+  Future<void> _requestDoctorReview(HairTestState state) async {
+    final user = context.read<AuthCubit?>()?.state.user;
+    final patientDatabaseId = user?.id.trim() ?? '';
+    final patientCode = state.patientId?.trim().isNotEmpty == true
+        ? state.patientId!.trim()
+        : user?.patientId.trim() ?? '';
+    final referenceNo = state.referenceNo?.trim() ?? '';
+    if (patientDatabaseId.isEmpty ||
+        patientCode.isEmpty ||
+        referenceNo.isEmpty) {
+      AppToast.showError(
+        context,
+        'Assessment details are not ready yet. Please try again shortly.',
       );
+      return;
+    }
+
+    final launched = await WhatsAppLauncher.launchAssessmentReviewRequest(
+      patientDatabaseId: patientDatabaseId,
+      patientCode: patientCode,
+      referenceNo: referenceNo,
+    );
+    if (!launched && mounted) {
+      AppToast.showError(context, 'Could not open WhatsApp. Please try again.');
     }
   }
 
@@ -200,19 +283,19 @@ class _HomeViewState extends State<HomeView>
     return BlocBuilder<HairTestCubit, HairTestState>(
       builder: (context, hairState) {
         final completed = hairState.isCompleted && !hairState.isRetesting;
+        final doctorReviewComplete =
+            hairState.assessmentStatus == 'reviewed' ||
+            hairState.doctorCarePlan != null;
+        final aiReviewComplete =
+            hairState.aiAssessment?.isAvailable == true &&
+            !hairState.aiAssessment!.requiresClinician &&
+            hairState.assessmentStatus != 'under_review';
+        final assessmentReviewComplete =
+            doctorReviewComplete || aiReviewComplete;
         final homeSummaryState = widget.homeSummaryCubit != null
             ? widget.homeSummaryCubit!.state
             : context.watch<HomeSummaryCubit?>()?.state;
         final hasDynamicCards = homeSummaryState?.hasCards ?? false;
-        final bool isAssessmentCritical =
-            hairState.aiAssessment?.isCritical == true ||
-            hairState.aiAssessment?.nextStepType == 'doctor_appointment';
-        final suppressProducts =
-            (homeSummaryState?.actionCards.any((c) => c.isClinicianUrgent) ??
-                false) ||
-            isAssessmentCritical ||
-            (hairState.aiAssessment != null &&
-                !hairState.aiAssessment!.shopEnabled);
         final showPendingStepper =
             !completed &&
             !(homeSummaryState?.actionCards.any((c) => c.isPendingAssessment) ??
@@ -221,91 +304,136 @@ class _HomeViewState extends State<HomeView>
         return RefreshIndicator(
           color: AppColors.primary,
           onRefresh: () async {
-            _fetchVideoStories();
-            _fetchProducts();
-            _fetchReviews();
-            context.read<AppConfigCubit?>()?.loadConfig();
-            context.read<HairTestCubit?>()?.loadSavedState();
+            final configCubit = context.read<AppConfigCubit?>();
+            final hairTestCubit = context.read<HairTestCubit?>();
             final cubit =
                 widget.homeSummaryCubit ?? context.read<HomeSummaryCubit?>();
-            await cubit?.refresh();
+            if (configCubit != null) {
+              await configCubit.loadConfig(force: true);
+            }
+            _syncOptionalHomeRequests(configCubit?.state, force: true);
+            _loadHomeContent(forceRefresh: true);
+            final clinicalRefresh = hairTestCubit?.refreshClinicalReports();
+            if (mounted) setState(() {});
+            Future<void> settle<T>(Future<T> future) async {
+              try {
+                await future;
+              } catch (_) {
+                // FutureBuilder owns the section-level error and retry state.
+              }
+            }
+
+            await Future.wait([
+              if (_videosEnabled == true)
+                settle(
+                  _videoStoriesFuture ??
+                      Future.value(const <VideoStoryModel>[]),
+                ),
+              if (_shopEnabled == true)
+                settle(_productsFuture ?? Future.value(const <ProductItem>[])),
+              if (_reviewsEnabled == true)
+                settle(_reviewsFuture ?? Future.value(const <ReviewModel>[])),
+              settle(_tipsFuture ?? Future.value(const <ContentItem>[])),
+              settle(_faqsFuture ?? Future.value(const <ContentItem>[])),
+              settle(clinicalRefresh ?? Future<void>.value()),
+              settle(cubit?.refresh() ?? Future<void>.value()),
+            ]);
             if (mounted) setState(() {});
           },
-          child: SingleChildScrollView(
+          child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _revealSection(0, _buildHeroSection(context)),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.only(bottom: 24),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    _revealSection(0, _buildHeroSection(context)),
 
-                const SizedBox(height: 16),
-                // DYNAMIC CARE DASHBOARD: Priorities 1-6 (Urgent care, Pending action, Shared report, Care plan, Products, Appointments)
-                const SizedBox(height: 16),
-                _revealSection(
-                  1,
-                  HomeActionCardsSection(cubit: widget.homeSummaryCubit),
+                    if (showPendingStepper) ...[
+                      const SizedBox(height: 16),
+                      _buildPendingAssessmentStepper(context, hairState),
+                    ],
+
+                    if (completed) ...[
+                      const SizedBox(height: 16),
+                      if (assessmentReviewComplete)
+                        _buildTodayCard(context)
+                      else
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: ExpertReviewNoticeCard(
+                            state: hairState,
+                            isReviewed: doctorReviewComplete,
+                            isUnderReview:
+                                hairState.assessmentStatus == 'under_review',
+                            layout: ExpertReviewCardLayout.detailed,
+                            showProgress: true,
+                            showReviewer: true,
+                            actionLabel: AssessmentTranslations.t(
+                              'review_action_view',
+                              AssessmentLanguage.english,
+                            ),
+                            onPressed: () =>
+                                context.push(RouteNames.assessmentResult),
+                            secondaryActionLabel: AssessmentTranslations.t(
+                              'review_action_request',
+                              AssessmentLanguage.english,
+                            ),
+                            onSecondaryPressed: () =>
+                                _requestDoctorReview(hairState),
+                          ),
+                        ),
+                    ],
+
+                    _revealSection(
+                      1,
+                      _buildNewClinicalReportSection(context, homeSummaryState),
+                    ),
+
+                    if (showClinicAppointment) ...[
+                      const SizedBox(height: 16),
+                      _revealSection(2, _buildClinicAppointmentCard(context)),
+                    ],
+
+                    if (showShop) ...[
+                      const SizedBox(height: 16),
+                      _revealSection(3, _buildEssentialProducts(context)),
+                    ],
+
+                    if (!hasDynamicCards) ...[
+                      const SizedBox(height: 16),
+                      _revealSection(4, _buildUrgentCareCard()),
+                    ],
+
+                    if (showReviews) ...[
+                      const SizedBox(height: 16),
+                      _revealSection(5, _buildReviewsSection(context)),
+                    ],
+
+                    if (showVideos) ...[
+                      _revealSection(6, _buildVideoStories(context)),
+                    ],
+
+                    const SizedBox(height: 16),
+                    _revealSection(7, _buildExpertTips()),
+
+                    const SizedBox(height: 16),
+                    _revealSection(8, _buildWhyTrustDrHair()),
+
+                    const SizedBox(height: 16),
+                    _revealSection(10, _buildFaqSection()),
+
+                    const SizedBox(height: 16),
+                    _revealSection(11, _buildCertifications()),
+
+                    const SizedBox(height: 16),
+                    _buildMedicalDisclaimer(),
+
+                    const SizedBox(height: 28),
+                  ]),
                 ),
-
-                if (showPendingStepper) ...[
-                  const SizedBox(height: 16),
-                  _buildPendingAssessmentStepper(context, hairState),
-                ],
-
-                if (completed) ...[
-                  const SizedBox(height: 16),
-                  AssessmentSummaryCard(
-                    state: hairState,
-                    onViewReport: () =>
-                        context.push(RouteNames.assessmentResult),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTodayCard(context),
-                ],
-
-                if (showShop && !suppressProducts) ...[
-                  const SizedBox(height: 20),
-                  _revealSection(2, _buildEssentialProducts(context)),
-                ],
-
-                if (showClinicAppointment) ...[
-                  const SizedBox(height: 20),
-                  _revealSection(3, _buildClinicAppointmentCard(context)),
-                ],
-
-                if (!hasDynamicCards) ...[
-                  const SizedBox(height: 20),
-                  _revealSection(4, _buildUrgentCareCard()),
-                ],
-
-                if (showReviews) ...[
-                  const SizedBox(height: 20),
-                  _revealSection(5, _buildReviewsSection(context)),
-                ],
-
-                if (showVideos) ...[
-                  const SizedBox(height: 20),
-                  _revealSection(6, _buildVideoStories(context)),
-                ],
-
-                const SizedBox(height: 20),
-                _revealSection(7, _buildExpertTips()),
-
-                const SizedBox(height: 20),
-                _revealSection(8, _buildWhyTrustDrHair()),
-
-                const SizedBox(height: 20),
-                _revealSection(10, _buildFaqSection()),
-
-                const SizedBox(height: 20),
-                _revealSection(11, _buildCertifications()),
-
-                const SizedBox(height: 20),
-                _buildMedicalDisclaimer(),
-
-                const SizedBox(height: 28),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
@@ -458,49 +586,36 @@ class _HomeViewState extends State<HomeView>
                       ),
                       const SizedBox(height: 15),
                       // CTA Button
-                      SizedBox(
+                      AppButton(
                         height: 38,
-                        child: ElevatedButton(
-                          onPressed: hasCompletedAssessment
-                              ? _launchWhatsapp
-                              : widget.onStartHairTest,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            elevation: 5,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(25),
-                            ),
-                          ),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  hasCompletedAssessment
-                                      ? 'Connect with us'
-                                      : hasAssessmentProgress
-                                      ? 'Continue Test'
-                                      : 'Free Hair Test',
-                                  style: const TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Icon(
-                                  hasCompletedAssessment
-                                      ? LucideIcons.messageCircle
-                                      : LucideIcons.arrowRight,
-                                  size: 14,
-                                ),
-                              ],
-                            ),
-                          ),
+                        text: hasCompletedAssessment
+                            ? 'Connect with us'
+                            : hasAssessmentProgress
+                            ? 'Continue Test'
+                            : 'Free Hair Test',
+                        trailingIcon: hasCompletedAssessment
+                            ? Image.asset(
+                                "assets/icons/whatsapp.png",
+                                height: 15,
+                              )
+                            : Icon(
+                                LucideIcons.arrowRight,
+                                size: 14,
+                                color: Colors.white,
+                              ),
+                        variant: AppButtonVariant.filled,
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        borderRadius: BorderRadius.circular(25),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        textStyle: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
                         ),
+                        onPressed: hasCompletedAssessment
+                            ? _launchWhatsapp
+                            : widget.onStartHairTest,
                       ),
                     ],
                   ),
@@ -513,10 +628,161 @@ class _HomeViewState extends State<HomeView>
     );
   }
 
+  Widget _buildNewClinicalReportSection(
+    BuildContext context,
+    HomeSummaryState? summaryState,
+  ) {
+    if (summaryState == null) return const SizedBox.shrink();
+
+    final reportData = summaryState.data?.latestReport;
+    final sharedCard = summaryState.actionCards
+        .where((c) => c.isSharedReport)
+        .firstOrNull;
+
+    final reportId =
+        reportData?['id']?.toString() ?? sharedCard?.entityId ?? '';
+    if (reportId.isEmpty) return const SizedBox.shrink();
+
+    final activeCubit =
+        widget.homeSummaryCubit ?? context.read<HomeSummaryCubit?>();
+    final isUnread = activeCubit?.isReportUnread(reportId) ?? true;
+    if (!isUnread) return const SizedBox.shrink();
+
+    final title =
+        reportData?['title']?.toString() ??
+        (sharedCard?.title.isNotEmpty == true
+            ? sharedCard!.title
+            : 'Clinical Doctor\'s Report');
+    final fileName =
+        reportData?['file_name']?.toString() ?? 'clinical_report.pdf';
+    final bytes = reportData?['bytes'];
+    final fileSize = bytes is num && bytes > 0
+        ? _formatBytes(bytes)
+        : 'PDF Document';
+    final uploadedBy =
+        reportData?['uploaded_by']?.toString() ?? 'Dr. Jai Bansal';
+    final createdAtRaw =
+        reportData?['created_at'] ?? sharedCard?.createdAt?.toIso8601String();
+    final uploadDate = _formatReportDate(createdAtRaw);
+
+    final isOpening = summaryState.openingReportId == reportId;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, left: 16, right: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Expanded(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        'Clinical Reports',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primaryDark,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  context.push('${RouteNames.treatmentDetails}?tab=reports');
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View all',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      SizedBox(width: 2),
+                      Icon(
+                        LucideIcons.chevronRight,
+                        size: 15,
+                        color: AppColors.primary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClinicalReportCard(
+            title: title,
+            fileName: fileName,
+            fileSize: fileSize,
+            uploadedBy: 'Shared by $uploadedBy',
+            uploadDate: uploadDate,
+            isNew: true,
+            isLoading: isOpening,
+            onTap: () async {
+              await activeCubit?.markSharedReportViewed(reportId);
+              if (context.mounted) {
+                context.push(
+                  '${RouteNames.treatmentDetails}?tab=reports&report_id=$reportId',
+                );
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatReportDate(dynamic raw) {
+    if (raw == null) return 'Recent';
+    final date = DateTime.tryParse(raw.toString());
+    if (date == null) return 'Recent';
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  String _formatBytes(num bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    if (bytes >= 1024) {
+      return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    }
+    return '${bytes.toInt()} B';
+  }
+
   // --- SECTION 2: URGENT CARE CARD ---
   Widget _buildUrgentCareCard() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -596,7 +862,13 @@ class _HomeViewState extends State<HomeView>
 
   // --- SECTION 4: ESSENTIAL PRODUCTS ---
   Widget _buildEssentialProducts(BuildContext context) {
-    return _EssentialProductsSection(productsFuture: _productsFuture);
+    return _EssentialProductsSection(
+      productsFuture: _productsFuture,
+      onRetry: () {
+        _fetchProducts();
+        if (mounted) setState(() {});
+      },
+    );
   }
 
   Widget _buildTodayCard(BuildContext context) {
@@ -978,7 +1250,7 @@ class _HomeViewState extends State<HomeView>
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Complete all steps to unlock doctor-verified root cause analysis & custom care plan.',
+                      'Complete the assessment to view your screening result and next steps. Any clinician review will be shown separately.',
                       style: TextStyle(
                         fontSize: 11,
                         height: 1.35,
@@ -993,31 +1265,27 @@ class _HomeViewState extends State<HomeView>
             const SizedBox(height: 12),
 
             // CTA Button to Resume / Start Assessment
-            SizedBox(
+            AppButton(
               width: double.infinity,
               height: 42,
-              child: ElevatedButton.icon(
-                onPressed: widget.onStartHairTest,
-                icon: const Icon(LucideIcons.playCircle, size: 16),
-                label: Text(
-                  hasProgress
-                      ? 'Resume Assessment (Step ${currentStep + 1} of ${hairState.totalSteps})'
-                      : 'Start Free Hair Assessment',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(21),
-                  ),
-                ),
+              text: hasProgress
+                  ? 'Resume Assessment (Step ${currentStep + 1} of ${hairState.totalSteps})'
+                  : 'Start Free Hair Assessment',
+              icon: const Icon(
+                LucideIcons.playCircle,
+                size: 16,
+                color: Colors.white,
               ),
+              variant: AppButtonVariant.filled,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              borderRadius: BorderRadius.circular(21),
+              textStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+              ),
+              onPressed: widget.onStartHairTest,
             ),
           ],
         ),
@@ -1055,7 +1323,7 @@ class _HomeViewState extends State<HomeView>
     ];
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.only(top: 16, left: 16, right: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1067,10 +1335,10 @@ class _HomeViewState extends State<HomeView>
               color: AppColors.primaryDark,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           const Text(
             'Clinical standards, verified ingredients, and personalized trichology care.',
-            style: TextStyle(fontSize: 11, color: AppColors.secondaryDark),
+            style: TextStyle(fontSize: 10, color: AppColors.secondaryDark),
           ),
           const SizedBox(height: 16),
           GridView.builder(
@@ -1135,112 +1403,142 @@ class _HomeViewState extends State<HomeView>
   }
 
   Widget _buildVideoStories(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Expanded(
-                child: Text(
-                  'Real Patient Stories',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primaryDark,
+    return FutureBuilder<List<VideoStoryModel>>(
+      future: _videoStoriesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!VideoAvailabilityNotifier.instance.value) {
+            return const SizedBox.shrink();
+          }
+          return Padding(
+            padding: const EdgeInsets.only(top: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildVideoStoriesHeader(context),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 240,
+                  child: Skeletonizer(
+                    enabled: true,
+                    effect: _kHomeShimmerEffect,
+                    containersColor: Colors.white,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: 4,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(width: 16),
+                      itemBuilder: (context, index) =>
+                          const _VideoCardSkeleton(),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () {
-                  final shell = StatefulNavigationShell.maybeOf(context);
-                  if (shell != null) {
-                    shell.goBranch(2);
-                  }
-                  context.go(RouteNames.videos);
-                },
-                child: const Text(
-                  'Watch All',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  ),
+              ],
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: TextButton.icon(
+              onPressed: () {
+                _fetchVideoStories();
+                if (mounted) setState(() {});
+              },
+              icon: const Icon(LucideIcons.refreshCw, size: 16),
+              label: const Text('Stories could not load. Tap to retry.'),
+            ),
+          );
+        }
+
+        final stories = snapshot.data ?? const <VideoStoryModel>[];
+        if (stories.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildVideoStoriesHeader(context),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 240,
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: stories.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 16),
+                  itemBuilder: (context, index) {
+                    final story = stories[index];
+                    return GestureDetector(
+                      onTap: () {
+                        final shell = StatefulNavigationShell.maybeOf(context);
+                        if (shell != null) {
+                          shell.goBranch(2);
+                        }
+                        context.go(
+                          '${RouteNames.videos}?videoId=${Uri.encodeComponent(story.id)}',
+                          extra: story.id,
+                        );
+                      },
+                      child: _buildVideoCard(
+                        image: story.effectiveThumbnail,
+                        title: story.name,
+                        subtitle: story.treatment.isNotEmpty
+                            ? story.treatment
+                            : story.caption,
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 240,
-          child: FutureBuilder<List<VideoStoryModel>>(
-            future: _videoStoriesFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Skeletonizer(
-                  enabled: true,
-                  effect: _kHomeShimmerEffect,
-                  containersColor: Colors.white,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: 4,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(width: 16),
-                    itemBuilder: (context, index) => const _VideoCardSkeleton(),
-                  ),
-                );
-              }
+        );
+      },
+    );
+  }
 
-              if (snapshot.hasError) {
-                return _buildHomeDataMessage(
-                  'Video stories are temporarily unavailable.',
-                );
-              }
-
-              final stories = snapshot.data ?? const <VideoStoryModel>[];
-              if (stories.isEmpty) {
-                return _buildHomeDataMessage(
-                  'No video stories are published yet.',
-                );
-              }
-
-              return ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                scrollDirection: Axis.horizontal,
-                itemCount: stories.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 16),
-                itemBuilder: (context, index) {
-                  final story = stories[index];
-                  return GestureDetector(
-                    onTap: () {
-                      final shell = StatefulNavigationShell.maybeOf(context);
-                      if (shell != null) {
-                        shell.goBranch(2);
-                      }
-                      context.go(
-                        '${RouteNames.videos}?videoId=${Uri.encodeComponent(story.id)}',
-                        extra: story.id,
-                      );
-                    },
-                    child: _buildVideoCard(
-                      image: story.effectiveThumbnail,
-                      title: story.name,
-                      subtitle: story.treatment.isNotEmpty
-                          ? story.treatment
-                          : story.caption,
-                    ),
-                  );
-                },
-              );
-            },
+  Widget _buildVideoStoriesHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Expanded(
+            child: Text(
+              'Real Patient Stories',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primaryDark,
+              ),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () {
+              final shell = StatefulNavigationShell.maybeOf(context);
+              if (shell != null) {
+                shell.goBranch(2);
+              }
+              context.go(RouteNames.videos);
+            },
+            child: const Text(
+              'Watch All',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1315,64 +1613,93 @@ class _HomeViewState extends State<HomeView>
     );
   }
 
-  Widget _buildHomeDataMessage(String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-        ),
-      ),
-    );
-  }
-
   Widget _buildClinicAppointmentCard(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 20),
-    child: Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary100),
-      ),
-      child: Row(
-        children: [
-          const CircleAvatar(
-            backgroundColor: AppColors.primary5,
-            child: Icon(LucideIcons.calendarDays, color: AppColors.primary),
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 420;
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE2EAF3)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.045),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Clinic Consultation',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primaryDark,
-                  ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.primary50,
+                  borderRadius: BorderRadius.circular(13),
                 ),
-                SizedBox(height: 3),
-                Text(
-                  'Request an in-person clinic appointment.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.secondaryDark,
-                  ),
+                child: const Icon(
+                  LucideIcons.calendarDays,
+                  color: AppColors.primary,
+                  size: 20,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Clinic Consultation',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.primaryDark,
+                        fontSize: 14,
+                        height: 1.2,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Meet our care team in person.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 11,
+                        height: 1.3,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              AppButton(
+                height: 40,
+                text: compact ? 'Book' : 'Book visit',
+                trailingIcon: const Icon(
+                  LucideIcons.arrowRight,
+                  size: 15,
+                  color: Colors.white,
+                ),
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                semanticLabel: 'Book an in-clinic appointment',
+                onPressed: () => context.push(RouteNames.clinicAppointment),
+              ),
+            ],
           ),
-          IconButton.filled(
-            tooltip: 'Request clinic appointment',
-            onPressed: () => context.push(RouteNames.clinicAppointment),
-            icon: const Icon(LucideIcons.arrowRight, size: 18),
-          ),
-        ],
-      ),
+        );
+      },
     ),
   );
 
@@ -1381,6 +1708,25 @@ class _HomeViewState extends State<HomeView>
     return FutureBuilder<List<ReviewModel>>(
       future: _reviewsFuture,
       builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: LinearProgressIndicator(minHeight: 2),
+          );
+        }
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: TextButton.icon(
+              onPressed: () {
+                _fetchReviews();
+                if (mounted) setState(() {});
+              },
+              icon: const Icon(LucideIcons.refreshCw, size: 16),
+              label: const Text('Reviews could not load. Tap to retry.'),
+            ),
+          );
+        }
         final reviews = snapshot.data ?? const <ReviewModel>[];
         if (reviews.isEmpty) {
           return const SizedBox.shrink();
@@ -1554,7 +1900,7 @@ class _HomeViewState extends State<HomeView>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
+              padding: EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 'Expert Tips',
                 style: TextStyle(
@@ -1568,7 +1914,7 @@ class _HomeViewState extends State<HomeView>
             SizedBox(
               height: 156,
               child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 scrollDirection: Axis.horizontal,
                 itemCount: tips.length,
                 separatorBuilder: (context, index) => const SizedBox(width: 14),
@@ -1771,7 +2117,7 @@ class _HomeViewState extends State<HomeView>
 
   Widget _buildMedicalDisclaimer() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -1803,8 +2149,9 @@ class _HomeViewState extends State<HomeView>
 
 class _EssentialProductsSection extends StatelessWidget {
   final Future<List<ProductItem>>? productsFuture;
+  final VoidCallback? onRetry;
 
-  const _EssentialProductsSection({this.productsFuture});
+  const _EssentialProductsSection({this.productsFuture, this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -1822,7 +2169,7 @@ class _EssentialProductsSection extends StatelessWidget {
               _buildHeader(context),
               const SizedBox(height: 12),
               SizedBox(
-                height: 260,
+                height: 270,
                 child: Skeletonizer(
                   enabled: true,
                   effect: _kHomeShimmerEffect,
@@ -1842,7 +2189,14 @@ class _EssentialProductsSection extends StatelessWidget {
           );
         }
         if (snapshot.hasError) {
-          return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(LucideIcons.refreshCw, size: 16),
+              label: const Text('Products could not load. Tap to retry.'),
+            ),
+          );
         }
         final products = snapshot.data ?? const <ProductItem>[];
         if (products.isEmpty) {
@@ -1854,19 +2208,19 @@ class _EssentialProductsSection extends StatelessWidget {
             _buildHeader(context),
             const SizedBox(height: 12),
             SizedBox(
-              height: 260,
+              height: 270,
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 scrollDirection: Axis.horizontal,
                 itemCount: products.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(width: 14),
+                separatorBuilder: (context, index) => const SizedBox(width: 14),
                 itemBuilder: (context, index) {
                   final item = products[index];
                   return MedicineCard(
                     width: 200,
                     title: item.name,
                     desc: item.subtitle,
+                    heroTag: 'product_image_${item.id}_0',
                     price: item.supplyPlans.isEmpty
                         ? 'Price unavailable'
                         : '₹${item.supplyPlans.first.price}',
@@ -1879,6 +2233,7 @@ class _EssentialProductsSection extends StatelessWidget {
                     onTap: () => context.push(
                       AppDestination.product(item.id).location ??
                           RouteNames.products,
+                      extra: item,
                     ),
                   );
                 },

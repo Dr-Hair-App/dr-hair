@@ -4,17 +4,23 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../localization/assessment_translations.dart';
 import '../viewmodels/hair_test_state.dart';
+import 'assessment_language_sheet.dart';
 
 /// Clinical Assessment Overview Card displaying patient demographic details,
 /// self-reported stage illustration, diagnosed severity, and primary concern.
+/// Provides an in-card Language selector that propagates changes via [onLanguageChanged].
 class AssessmentOverviewCard extends StatelessWidget {
   final HairTestState state;
   final AssessmentLanguage language;
+
+  /// Called when the user selects a different language from the in-card sheet.
+  final ValueChanged<AssessmentLanguage>? onLanguageChanged;
 
   const AssessmentOverviewCard({
     super.key,
     required this.state,
     this.language = AssessmentLanguage.english,
+    this.onLanguageChanged,
   });
 
   static ({String label, String asset})? selectedPatternIllustration(
@@ -70,7 +76,7 @@ class AssessmentOverviewCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -86,11 +92,8 @@ class AssessmentOverviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 6,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
                 AssessmentTranslations.t('assessment_overview', language),
@@ -100,21 +103,57 @@ class AssessmentOverviewCard extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.7,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
-              if (state.referenceNo != null && state.referenceNo!.isNotEmpty)
+              const SizedBox(width: 6),
+              if (state.referenceNo != null &&
+                  state.referenceNo!.isNotEmpty) ...[
                 Text(
                   state.referenceNo!,
                   style: const TextStyle(
                     fontFamily: 'monospace',
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: FontWeight.bold,
                     color: AppColors.secondaryDark,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(width: 6),
+              ],
+              Spacer(),
+              // Language selector icon-only button (icon + compact label)
+              if (onLanguageChanged != null)
+                Builder(
+                  builder: (ctx) => GestureDetector(
+                    onTap: () => AssessmentLanguageSheet.show(
+                      ctx,
+                      currentLanguage: language,
+                      onSelect: onLanguageChanged!,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary5,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.22),
+                        ),
+                      ),
+                      child: const Icon(
+                        LucideIcons.languages,
+                        size: 16,
+                        color: AppColors.primary,
+                      ),
+                    ),
                   ),
                 ),
             ],
           ),
           if (pattern != null) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -140,7 +179,10 @@ class AssessmentOverviewCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          AssessmentTranslations.t('selected_pattern', language),
+                          AssessmentTranslations.t(
+                            'selected_pattern',
+                            language,
+                          ),
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -174,9 +216,9 @@ class AssessmentOverviewCard extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
           ] else ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
           ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,15 +231,15 @@ class AssessmentOverviewCard extends StatelessWidget {
                       displayName,
                       style: const TextStyle(
                         color: AppColors.secondaryDark,
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 4),
+
                     Text(
                       localizedStageTitle,
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: FontWeight.w800,
                         color: AppColors.primaryDark,
                         letterSpacing: -0.3,
@@ -208,8 +250,8 @@ class AssessmentOverviewCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Container(
-                width: 48,
-                height: 48,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: AppColors.primary5,
                   borderRadius: BorderRadius.circular(14),
@@ -217,15 +259,15 @@ class AssessmentOverviewCard extends StatelessWidget {
                 child: const Icon(
                   LucideIcons.clipboardCheck,
                   color: AppColors.primary,
-                  size: 25,
+                  size: 23,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: const Color(0xFFF0FDF4),
               borderRadius: BorderRadius.circular(14),

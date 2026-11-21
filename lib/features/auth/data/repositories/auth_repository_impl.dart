@@ -296,7 +296,10 @@ class AuthRepositoryImpl implements AuthRepository {
         nextStep: nextStep,
       );
     } on DioException catch (error) {
-      throw _mapError(error, fallback: 'Social sign-in could not be completed.');
+      throw _mapError(
+        error,
+        fallback: 'Social sign-in could not be completed.',
+      );
     }
   }
 
@@ -362,7 +365,10 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       await _remote.forgotPassword(login);
     } on DioException catch (error) {
-      throw _mapError(error, fallback: 'Could not send the password reset code.');
+      throw _mapError(
+        error,
+        fallback: 'Could not send the password reset code.',
+      );
     }
   }
 
@@ -538,6 +544,8 @@ class AuthRepositoryImpl implements AuthRepository {
     String? occupation,
     String? profileUrl,
     bool clearProfileUrl = false,
+    Uint8List? profilePhotoBytes,
+    String? profilePhotoFilename,
   }) async {
     final token = await _requireToken();
     try {
@@ -551,6 +559,8 @@ class AuthRepositoryImpl implements AuthRepository {
         occupation: occupation,
         profileUrl: profileUrl,
         clearProfileUrl: clearProfileUrl,
+        profilePhotoBytes: profilePhotoBytes,
+        profilePhotoFilename: profilePhotoFilename,
       );
       final profile = _mapValue(response['data']);
       if (profile == null) {
@@ -561,30 +571,6 @@ class AuthRepositoryImpl implements AuthRepository {
       return UserModel.fromJson(profile);
     } on DioException catch (error) {
       throw _mapError(error, fallback: 'Could not update your profile.');
-    }
-  }
-
-  @override
-  Future<String?> uploadProfilePhoto({
-    required Uint8List bytes,
-    required String filename,
-  }) async {
-    final token = await _requireToken();
-    try {
-      final response = await _remote.uploadProfilePhoto(
-        token: token,
-        bytes: bytes,
-        filename: filename,
-      );
-      final url = _mapValue(response['data'])?['url']?.toString();
-      if (url == null || url.isEmpty) {
-        throw const AuthRepositoryException(
-          'The media service returned no uploaded file URL.',
-        );
-      }
-      return url;
-    } on DioException catch (error) {
-      throw _mapError(error, fallback: 'Could not upload your profile photo.');
     }
   }
 
@@ -735,7 +721,9 @@ class AuthRepositoryImpl implements AuthRepository {
     String key, {
     bool fallback = false,
   }) =>
-      response[key] == true || data?[key] == true || (fallback && response[key] == null && data?[key] == null);
+      response[key] == true ||
+      data?[key] == true ||
+      (fallback && response[key] == null && data?[key] == null);
 
   Map<String, dynamic>? _profileFromResponse(Map<String, dynamic>? data) {
     if (data == null) return null;

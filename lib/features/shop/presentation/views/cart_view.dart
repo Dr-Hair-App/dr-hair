@@ -6,6 +6,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
+import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_text_form_field.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../data/datasources/cart_remote_data_source.dart';
 import '../viewmodels/cart_cubit.dart';
@@ -177,19 +179,22 @@ class _CartViewState extends State<CartView> {
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton(
+                        child: AppButton(
+                          height: 44,
+                          text: 'Keep items',
+                          variant: AppButtonVariant.outlined,
                           onPressed: () => Navigator.pop(sheetContext, false),
-                          child: const Text('Keep items'),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.danger,
-                          ),
+                        child: AppButton(
+                          height: 44,
+                          text: confirmLabel,
+                          variant: AppButtonVariant.filled,
+                          backgroundColor: AppColors.danger,
+                          foregroundColor: Colors.white,
                           onPressed: () => Navigator.pop(sheetContext, true),
-                          child: Text(confirmLabel),
                         ),
                       ),
                     ],
@@ -400,34 +405,24 @@ class _CartViewState extends State<CartView> {
           const SizedBox(height: 28),
 
           // Explore Treatments Button
-          SizedBox(
+          AppButton(
             height: 45,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                if (Navigator.of(context).canPop()) {
-                  Navigator.of(context).pop();
-                } else {
-                  context.go(RouteNames.mainShell);
-                }
-              },
-              // icon: const Icon(LucideIcons.sparkles, size: 16),
-              label: const Text(
-                'Explore Treatments',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 5,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
+            text: 'Explore Treatments',
+            variant: AppButtonVariant.filled,
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 5,
             ),
+            onPressed: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                context.go(RouteNames.mainShell);
+              }
+            },
           ),
           const SizedBox(height: 16),
         ],
@@ -736,9 +731,15 @@ class _CartViewState extends State<CartView> {
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(
+                      child: AppTextFormField(
                         controller: _couponController,
-                        textCapitalization: TextCapitalization.characters,
+                        hintText: 'Enter coupon code',
+                        prefixIcon: const Icon(LucideIcons.tag, size: 16),
+                        borderRadius: BorderRadius.circular(12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         onChanged: (value) {
                           setState(() {
                             if (_appliedCouponCode != null &&
@@ -751,70 +752,30 @@ class _CartViewState extends State<CartView> {
                             _couponError = null;
                           });
                         },
-                        decoration: InputDecoration(
-                          hintText: 'Enter coupon code',
-                          hintStyle: const TextStyle(
-                            fontSize: 12.5,
-                            color: AppColors.textSecondary,
-                          ),
-                          prefixIcon: const Icon(LucideIcons.tag, size: 16),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: AppColors.border,
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: AppColors.border,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: AppColors.primary,
-                            ),
-                          ),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     if (_couponApplied)
-                      OutlinedButton(
+                      AppButton(
+                        height: 40,
+                        text: 'Remove',
+                        variant: AppButtonVariant.outlined,
+                        foregroundColor: AppColors.danger,
+                        borderColor: AppColors.danger,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        borderRadius: BorderRadius.circular(12),
                         onPressed: _removeCoupon,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.danger,
-                          side: const BorderSide(color: AppColors.danger),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text('Remove'),
                       )
                     else
-                      FilledButton(
+                      AppButton(
+                        height: 40,
+                        text: 'Apply',
+                        variant: AppButtonVariant.filled,
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        borderRadius: BorderRadius.circular(12),
                         onPressed: _applyCoupon,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text('Apply'),
                       ),
                   ],
                 ),
@@ -953,34 +914,22 @@ class _CartViewState extends State<CartView> {
               const SizedBox(width: 12),
               Expanded(
                 flex: 6,
-                child: ElevatedButton(
+                child: AppButton(
+                  height: 48,
+                  text: 'Proceed to Checkout',
+                  trailingIcon: const Icon(
+                    LucideIcons.arrowRight,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                  variant: AppButtonVariant.filled,
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
                   onPressed: () {
                     HapticFeedback.lightImpact();
                     context.push(RouteNames.checkout);
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Proceed to Checkout',
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(width: 6),
-                      Icon(LucideIcons.arrowRight, size: 16),
-                    ],
-                  ),
                 ),
               ),
             ],

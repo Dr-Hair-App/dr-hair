@@ -7,7 +7,7 @@ abstract class ProductRepository {
     String? rootCause,
     String? query,
     int page = 1,
-    int limit = 20,
+    int limit = 16,
   });
 
   Future<ProductItem?> getProductById(String id);

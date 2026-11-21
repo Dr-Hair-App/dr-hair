@@ -294,7 +294,6 @@ class RemindersView extends StatelessWidget {
                         height: 45,
                         text: 'Add First Reminder',
                         variant: AppButtonVariant.filled,
-                        size: AppButtonSize.medium,
                         onPressed: () => AddReminderBottomSheet.show(context),
                       ),
                     ],

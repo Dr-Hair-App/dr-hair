@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
+import '../../../../core/widgets/app_button.dart';
 import '../../domain/models/home_action_card.dart';
 import '../viewmodels/home_summary_cubit.dart';
 import '../viewmodels/home_summary_state.dart';
@@ -38,13 +39,13 @@ class HomeActionCardsSection extends StatelessWidget {
         final disableAnimations = MediaQuery.disableAnimationsOf(context);
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ...state.actionCards.map((card) {
                 final cardWidget = Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.only(top: 14),
                   child: _buildCardItem(context, card, state),
                 );
 
@@ -226,28 +227,24 @@ class HomeActionCardsSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
+          AppButton(
             height: 36,
-            child: ElevatedButton.icon(
-              onPressed: () => context.push(RouteNames.clinicAppointment),
-              icon: const Icon(LucideIcons.calendarDays, size: 15),
-              label: Text(
-                card.actionLabel,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE11D48),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                elevation: 0,
-              ),
+            text: card.actionLabel,
+            icon: const Icon(
+              LucideIcons.calendarDays,
+              size: 15,
+              color: Colors.white,
             ),
+            variant: AppButtonVariant.filled,
+            backgroundColor: const Color(0xFFE11D48),
+            foregroundColor: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            textStyle: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
+            onPressed: () => context.push(RouteNames.clinicAppointment),
           ),
         ],
       ),
@@ -321,28 +318,24 @@ class HomeActionCardsSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
+          AppButton(
             height: 36,
-            child: ElevatedButton.icon(
-              onPressed: () => context.push(RouteNames.hairTest),
-              icon: const Icon(LucideIcons.arrowRight, size: 15),
-              label: Text(
-                card.actionLabel,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFD97706),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                elevation: 0,
-              ),
+            text: card.actionLabel,
+            icon: const Icon(
+              LucideIcons.arrowRight,
+              size: 15,
+              color: Colors.white,
             ),
+            variant: AppButtonVariant.filled,
+            backgroundColor: const Color(0xFFD97706),
+            foregroundColor: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            textStyle: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
+            onPressed: () => context.push(RouteNames.hairTest),
           ),
         ],
       ),
@@ -423,28 +416,24 @@ class HomeActionCardsSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
+          AppButton(
             height: 36,
-            child: ElevatedButton.icon(
-              onPressed: () => context.push(RouteNames.clinicAppointment),
-              icon: const Icon(LucideIcons.arrowRight, size: 15),
-              label: Text(
-                card.actionLabel,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                elevation: 0,
-              ),
+            text: card.actionLabel,
+            icon: const Icon(
+              LucideIcons.arrowRight,
+              size: 15,
+              color: Colors.white,
             ),
+            variant: AppButtonVariant.filled,
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            textStyle: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
+            onPressed: () => context.push(RouteNames.clinicAppointment),
           ),
         ],
       ),
@@ -530,60 +519,49 @@ class HomeActionCardsSection extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              SizedBox(
+              AppButton(
                 height: 36,
-                child: ElevatedButton.icon(
-                  onPressed: isOpening
-                      ? null
-                      : () async {
-                          final reportId = card.entityId;
-                          if (reportId == null || reportId.isEmpty) {
-                            context.push(RouteNames.treatmentDetails);
-                            return;
-                          }
-                          final cubit = context.read<HomeSummaryCubit>();
-                          final uri = await cubit.getReportDownloadUri(
-                            reportId,
-                          );
-                          if (uri != null) {
-                            final launched = await launchUrl(
-                              uri,
-                              mode: LaunchMode.externalApplication,
-                            );
-                            if (!launched && context.mounted) {
-                              context.push(RouteNames.treatmentDetails);
-                            }
-                          } else if (context.mounted) {
-                            context.push(RouteNames.treatmentDetails);
-                          }
-                        },
-                  icon: isOpening
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(LucideIcons.download, size: 15),
-                  label: Text(
-                    isOpening ? 'Opening…' : card.actionLabel,
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF059669),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    elevation: 0,
-                  ),
+                isLoading: isOpening,
+                text: isOpening ? 'Opening…' : card.actionLabel,
+                icon: const Icon(
+                  LucideIcons.download,
+                  size: 15,
+                  color: Colors.white,
                 ),
+                variant: AppButtonVariant.filled,
+                backgroundColor: const Color(0xFF059669),
+                foregroundColor: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                textStyle: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
+                onPressed: isOpening
+                    ? null
+                    : () async {
+                        final reportId = card.entityId;
+                        if (reportId == null || reportId.isEmpty) {
+                          context.push(RouteNames.treatmentDetails);
+                          return;
+                        }
+                        final homeCubit =
+                            cubit ?? context.read<HomeSummaryCubit>();
+                        final uri = await homeCubit.getReportDownloadUri(
+                          reportId,
+                        );
+                        if (uri != null) {
+                          final launched = await launchUrl(
+                            uri,
+                            mode: LaunchMode.externalApplication,
+                          );
+                          if (!launched && context.mounted) {
+                            context.push(RouteNames.treatmentDetails);
+                          }
+                        } else if (context.mounted) {
+                          context.push(RouteNames.treatmentDetails);
+                        }
+                      },
               ),
               const SizedBox(width: 8),
               TextButton(
@@ -675,28 +653,24 @@ class HomeActionCardsSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
+          AppButton(
             height: 36,
-            child: ElevatedButton.icon(
-              onPressed: () => context.push(RouteNames.treatmentDetails),
-              icon: const Icon(LucideIcons.arrowRight, size: 15),
-              label: Text(
-                card.actionLabel,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0D9488),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                elevation: 0,
-              ),
+            text: card.actionLabel,
+            icon: const Icon(
+              LucideIcons.arrowRight,
+              size: 15,
+              color: Colors.white,
             ),
+            variant: AppButtonVariant.filled,
+            backgroundColor: const Color(0xFF0D9488),
+            foregroundColor: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            textStyle: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
+            onPressed: () => context.push(RouteNames.treatmentDetails),
           ),
         ],
       ),
@@ -839,28 +813,24 @@ class HomeActionCardsSection extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          SizedBox(
+          AppButton(
             height: 36,
-            child: ElevatedButton.icon(
-              onPressed: () => context.push(RouteNames.products),
-              icon: const Icon(LucideIcons.shoppingBag, size: 15),
-              label: Text(
-                card.actionLabel,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                elevation: 0,
-              ),
+            text: card.actionLabel,
+            icon: const Icon(
+              LucideIcons.shoppingBag,
+              size: 15,
+              color: Colors.white,
             ),
+            variant: AppButtonVariant.filled,
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            textStyle: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
+            onPressed: () => context.push(RouteNames.products),
           ),
         ],
       ),
@@ -941,28 +911,24 @@ class HomeActionCardsSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
+          AppButton(
             height: 36,
-            child: ElevatedButton.icon(
-              onPressed: () => context.push(RouteNames.clinicAppointment),
-              icon: const Icon(LucideIcons.calendarDays, size: 15),
-              label: Text(
-                card.actionLabel,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                elevation: 0,
-              ),
+            text: card.actionLabel,
+            icon: const Icon(
+              LucideIcons.calendarDays,
+              size: 15,
+              color: Colors.white,
             ),
+            variant: AppButtonVariant.filled,
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            textStyle: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
+            onPressed: () => context.push(RouteNames.clinicAppointment),
           ),
         ],
       ),
@@ -999,25 +965,19 @@ class HomeActionCardsSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (card.destinationRoute != null)
-            SizedBox(
+            AppButton(
               height: 36,
-              child: ElevatedButton(
-                onPressed: () => context.push(card.destinationRoute!),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
-                child: Text(
-                  card.actionLabel,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+              text: card.actionLabel,
+              variant: AppButtonVariant.filled,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              textStyle: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
               ),
+              onPressed: () => context.push(card.destinationRoute!),
             ),
         ],
       ),

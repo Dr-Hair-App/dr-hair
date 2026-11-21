@@ -16,6 +16,7 @@ import '../routes/app_router.dart';
 import '../routes/route_names.dart';
 import '../services/crashlytics_service.dart';
 import '../storage/app_local_cache.dart';
+import '../widgets/app_button.dart';
 import '../widgets/app_toast.dart';
 
 /// Central coordinator managing the authenticated patient lifecycle,
@@ -420,7 +421,13 @@ class SessionCoordinator {
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton(
+                        child: AppButton(
+                          height: 44,
+                          text: 'Call Support',
+                          variant: AppButtonVariant.outlined,
+                          foregroundColor: const Color(0xFF2D3748),
+                          borderColor: const Color(0xFFCBD5E0),
+                          borderRadius: BorderRadius.circular(12),
                           onPressed: () async {
                             Navigator.of(dialogCtx).pop();
                             _isBlockedDialogShowing = false;
@@ -431,25 +438,17 @@ class SessionCoordinator {
                               }
                             } catch (_) {}
                           },
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFFCBD5E0)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text(
-                            'Call Support',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF2D3748),
-                            ),
-                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: ElevatedButton(
+                        child: AppButton(
+                          height: 44,
+                          text: 'Sign Out',
+                          variant: AppButtonVariant.filled,
+                          backgroundColor: const Color(0xFF1A365D),
+                          foregroundColor: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
                           onPressed: () async {
                             Navigator.of(dialogCtx).pop();
                             _isBlockedDialogShowing = false;
@@ -473,21 +472,6 @@ class SessionCoordinator {
                               AppRouter.router.go(RouteNames.signin);
                             } catch (_) {}
                           },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1A365D),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text(
-                            'Sign Out',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
                         ),
                       ),
                     ],

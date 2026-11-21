@@ -213,6 +213,8 @@ class FakeAuthRepository implements AuthRepository {
     String? occupation,
     String? profileUrl,
     bool clearProfileUrl = false,
+    Uint8List? profilePhotoBytes,
+    String? profilePhotoFilename,
   }) async => _user('9876543210').copyWith(
     name: name,
     age: clearAge ? null : age,
@@ -222,12 +224,6 @@ class FakeAuthRepository implements AuthRepository {
     photoUrl: profileUrl,
     clearPhotoUrl: clearProfileUrl,
   );
-
-  @override
-  Future<String?> uploadProfilePhoto({
-    required Uint8List bytes,
-    required String filename,
-  }) async => 'https://example.test/profile.jpg';
 
   @override
   Future<void> removeProfilePhoto() async {}

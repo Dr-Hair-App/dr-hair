@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/utils/whatsapp_launcher.dart';
+import '../../../../core/widgets/app_toast.dart';
 
 /// Branded, full-screen waiting state while the assessment pathway is prepared.
 class AiAnalysisLoadingOverlay extends StatefulWidget {
@@ -73,10 +74,9 @@ class _AiAnalysisLoadingOverlayState extends State<AiAnalysisLoadingOverlay>
           'Hello Dr. Hair Clinical Support, my assessment is taking longer than usual to prepare. Could you please assist me?\n• Portal: https://drhairindia.com',
     );
     if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open WhatsApp. Please retry.'),
-        ),
+      AppToast.showError(
+        context,
+        'Could not open WhatsApp. Please retry.',
       );
     }
   }

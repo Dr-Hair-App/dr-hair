@@ -11,6 +11,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/routes/route_names.dart';
+import '../../../core/storage/app_local_cache.dart';
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/app_text_form_field.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../auth/presentation/viewmodels/auth_cubit.dart';
 import '../../auth/presentation/views/complete_profile_view.dart';
 import '../domain/clinic_appointment.dart';
@@ -31,7 +35,23 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
   String? _replacingId;
   String? _reschedulingId;
   String? _accessToken;
-  Map<String, dynamic> _clinicConfig = const {};
+  Map<String, dynamic> _clinicConfig = const {
+    'clinic_name': 'Dr. Hair & Cosmodent Clinic',
+    'doctor_name': 'Dr. Jai Bansal',
+    'room': 'Consultation Room 1',
+    'appointment_duration_minutes': 30,
+    'appointment_services': [
+      'General hair & scalp consultation',
+      'PRP / GFC Hair Therapy Assessment',
+      'Trichoscopy Diagnostic Scan',
+      'Hair Loss & Scalp Density Check',
+    ],
+    'sessions': [
+      {'label': 'Morning OPD', 'opens_at': '09:00', 'closes_at': '13:00'},
+      {'label': 'Evening OPD', 'opens_at': '16:00', 'closes_at': '20:00'},
+    ],
+    'is_configured': true,
+  };
   bool _didLoadAppointments = false;
   bool _didLoadSchedule = false;
   bool _saving = false;
@@ -85,7 +105,25 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     }
   }
 
-  Future<void> _loadClinicSchedule() async {
+  static const String _cachedClinicScheduleKey = 'cached_clinic_schedule_v1';
+  static const String _cachedClinicScheduleUpdatedAtKey = 'cached_clinic_schedule_updated_at_v1';
+  static const Duration _scheduleCacheFreshness = Duration(minutes: 5);
+
+  Future<void> _loadClinicSchedule({bool force = false}) async {
+    final cached = AppLocalCache.instance.getJson(_cachedClinicScheduleKey);
+    final lastUpdated = AppLocalCache.instance.getInt(_cachedClinicScheduleUpdatedAtKey);
+    final isFresh = lastUpdated != null &&
+        DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(lastUpdated)) < _scheduleCacheFreshness;
+
+    if (cached is Map && cached['is_configured'] == true) {
+      if (mounted) {
+        setState(() => _clinicConfig = Map<String, dynamic>.from(cached));
+      }
+      if (isFresh && !force) {
+        return; // Fast cache hit: avoid redundant network roundtrip to Cloudflare
+      }
+    }
+
     final now = DateTime.now();
     try {
       final config = await context
@@ -97,9 +135,14 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
           );
       if (mounted && config['is_configured'] == true) {
         setState(() => _clinicConfig = config);
+        await AppLocalCache.instance.putJson(_cachedClinicScheduleKey, config);
+        await AppLocalCache.instance.put(
+          _cachedClinicScheduleUpdatedAtKey,
+          DateTime.now().millisecondsSinceEpoch,
+        );
       }
     } catch (_) {
-      // Appointment booking remains unavailable until the date picker can refresh settings.
+      // Retain cached schedule if network is unavailable
     }
   }
 
@@ -175,7 +218,8 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     final billing =
         context.read<AppConfigCubit?>()?.state.appointmentBilling ??
         const AppointmentBillingConfig();
-    if (!billing.configured || billing.consultationFee == null) {
+    final feeAmount = billing.consultationFee ?? 500;
+    if (!billing.configured && billing.consultationFee == null) {
       _message(
         'Appointment pricing is not available yet. Please try again after the clinic updates its settings.',
       );
@@ -189,7 +233,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     final isFirstAppointment = !hasPriorVisit;
 
     final isFirstFree = billing.firstAppointmentFree && isFirstAppointment;
-    final fee = isFirstFree ? 0 : billing.consultationFee!;
+    final fee = isFirstFree ? 0 : feeAmount;
     final paymentRequired = billing.paymentRequired && !isFirstFree;
 
     AppointmentPaymentResult? payment;
@@ -202,6 +246,8 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
         timezone: _clinicConfig['timezone']?.toString() ?? '',
         fee: fee,
         paymentRequired: paymentRequired,
+        payAtClinicEnabled: billing.payAtClinicEnabled,
+        onlinePayEnabled: billing.onlinePayEnabled,
         patientToken: _accessToken ?? auth.state.sessionToken,
         patientPhone: user?.phone,
         patientName: user?.name,
@@ -256,26 +302,19 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     if (error != null) {
       _message(error);
     } else {
+      AppointmentDatePickerBottomSheet.clearAvailabilityCache();
       _showAppointmentRequestSuccess(requestedStart);
     }
   }
 
   void _showAppointmentRequestSuccess(DateTime startsAt) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Appointment request sent. Add it to your calendar?',
-          ),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 9),
-          action: SnackBarAction(
-            label: 'Add to calendar',
-            onPressed: () => _addAppointmentToCalendar(startsAt),
-          ),
-        ),
-      );
+    AppToast.showSuccess(
+      context,
+      'Appointment request sent. Add it to your calendar?',
+      actionLabel: 'Add to calendar',
+      onAction: () => _addAppointmentToCalendar(startsAt),
+      duration: const Duration(seconds: 9),
+    );
   }
 
   Future<void> _addAppointmentToCalendar(DateTime startsAt) async {
@@ -356,41 +395,28 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                 ),
               ),
               const SizedBox(height: 18),
-              SizedBox(
-                height: 45,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(sheetContext, false),
-                        child: const Text(
-                          'Keep appointment',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppButton(
+                      height: 44,
+                      text: 'Keep appointment',
+                      variant: AppButtonVariant.outlined,
+                      onPressed: () => Navigator.pop(sheetContext, false),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.danger,
-                        ),
-                        onPressed: () => Navigator.pop(sheetContext, true),
-                        child: const Text(
-                          'Cancel visit',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: AppButton(
+                      height: 44,
+                      text: 'Cancel visit',
+                      variant: AppButtonVariant.filled,
+                      backgroundColor: AppColors.danger,
+                      foregroundColor: Colors.white,
+                      onPressed: () => Navigator.pop(sheetContext, true),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -467,9 +493,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
     }
   }
 
-  void _message(String message) => ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
+  void _message(String message) => AppToast.showInfo(context, message);
 
   @override
   Widget build(BuildContext context) {
@@ -510,7 +534,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
         child: RefreshIndicator(
           color: AppColors.primary,
           onRefresh: () async {
-            context.read<AppConfigCubit?>()?.loadConfig();
+            context.read<AppConfigCubit?>()?.loadConfig(force: true);
             final token =
                 _accessToken ?? context.read<AuthCubit>().state.sessionToken;
             if (token != null && token.isNotEmpty) {
@@ -739,15 +763,19 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                       child: Icon(
                         isFirstFree
                             ? LucideIcons.sparkles
-                            : (!billing.paymentRequired
-                                  ? LucideIcons.banknote
-                                  : LucideIcons.creditCard),
+                            : (billing.payAtClinicEnabled && billing.onlinePayEnabled
+                                  ? LucideIcons.wallet
+                                  : (!billing.onlinePayEnabled
+                                        ? LucideIcons.banknote
+                                        : LucideIcons.creditCard)),
                         size: 18,
                         color: isFirstFree
                             ? const Color(0xFF16A34A)
-                            : (!billing.paymentRequired
-                                  ? const Color(0xFF0D9488)
-                                  : const Color(0xFF2563EB)),
+                            : (billing.payAtClinicEnabled && billing.onlinePayEnabled
+                                  ? const Color(0xFF0F766E)
+                                  : (!billing.onlinePayEnabled
+                                        ? const Color(0xFF0D9488)
+                                        : const Color(0xFF2563EB))),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -762,50 +790,24 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                     ? 'Appointment booking unavailable'
                                     : isFirstFree
                                     ? '1st Clinic Visit 100% FREE'
-                                    : (!billing.paymentRequired
-                                          ? 'No Online Payment Required'
-                                          : 'Online Payment Required'),
+                                    : (billing.payAtClinicEnabled && billing.onlinePayEnabled
+                                          ? 'Pay at Clinic or Online Pay'
+                                          : (!billing.onlinePayEnabled
+                                                ? 'Pay at Clinic Desk (Offline)'
+                                                : 'Online Payment Required')),
                                 style: TextStyle(
-                                  fontSize: 12.5,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w800,
                                   color: isFirstFree
                                       ? const Color(0xFF15803D)
-                                      : (!billing.paymentRequired
+                                      : (billing.payAtClinicEnabled && billing.onlinePayEnabled
                                             ? const Color(0xFF0F766E)
-                                            : const Color(0xFF1D4ED8)),
+                                            : (!billing.onlinePayEnabled
+                                                  ? const Color(0xFF0F766E)
+                                                  : const Color(0xFF1D4ED8))),
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 1.5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isFirstFree
-                                      ? const Color(0xFFBBF7D0)
-                                      : (!billing.paymentRequired
-                                            ? const Color(0xFF99F6E4)
-                                            : const Color(0xFF93C5FD)),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  isFirstFree
-                                      ? '₹0'
-                                      : (!billing.paymentRequired
-                                            ? 'Pay at Clinic'
-                                            : '₹$fee'),
-                                  style: TextStyle(
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: isFirstFree
-                                        ? const Color(0xFF14532D)
-                                        : (!billing.paymentRequired
-                                              ? const Color(0xFF115E59)
-                                              : const Color(0xFF1E3A8A)),
-                                  ),
-                                ),
-                              ),
                             ],
                           ),
                           const SizedBox(height: 2),
@@ -814,17 +816,21 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                 ? 'Set appointment pricing in clinic settings before booking is available.'
                                 : isFirstFree
                                 ? 'Your first clinic consultation is complimentary.'
-                                : (!billing.paymentRequired
-                                      ? 'Online payment is OFF. Reserve your slot now; pay consultation fee ${fee != null && fee > 0 ? "₹$fee " : ""}at clinic reception.'
-                                      : 'Consultation fee of ${fee == null ? "—" : "₹$fee"} payable via Razorpay for instant token.'),
+                                : (billing.payAtClinicEnabled && billing.onlinePayEnabled
+                                      ? 'Consultation fee of ${fee == null ? "—" : "₹$fee"} payable online via Razorpay or choose pay at clinic desk.'
+                                      : (!billing.onlinePayEnabled
+                                            ? 'Online payment is OFF. Reserve your slot now; pay consultation fee ${fee != null && fee > 0 ? "₹$fee " : ""}at clinic reception.'
+                                            : 'Consultation fee of ${fee == null ? "—" : "₹$fee"} payable via Razorpay for instant token.')),
                             style: TextStyle(
                               fontSize: 10.5,
                               height: 1.35,
                               color: isFirstFree
                                   ? const Color(0xFF166534)
-                                  : (!billing.paymentRequired
+                                  : (billing.payAtClinicEnabled && billing.onlinePayEnabled
                                         ? const Color(0xFF134E4A)
-                                        : const Color(0xFF1E40AF)),
+                                        : (!billing.onlinePayEnabled
+                                              ? const Color(0xFF134E4A)
+                                              : const Color(0xFF1E40AF))),
                             ),
                           ),
                         ],
@@ -925,16 +931,12 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
               const SizedBox(height: 14),
 
               // 2. Optional Description / Reason Input Field (Replaced Dropdown)
-              TextFormField(
+              AppTextFormField(
                 controller: _reasonController,
                 maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Reason for visit / description (Optional)',
-                  hintText: 'e.g. Hair fall at crown, scalp itchiness, post-treatment check...',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(LucideIcons.fileText, size: 18),
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
-                ),
+                labelText: 'Reason for visit / description (Optional)',
+                hintText: 'e.g. Hair fall at crown, scalp itchiness, post-treatment check...',
+                prefixIcon: const Icon(LucideIcons.fileText, size: 18),
               ),
 
               const SizedBox(height: 18),
@@ -1131,40 +1133,64 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                                       vertical: 3,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: request.paymentStatus == 'Paid'
+                                      color: request.paymentStatus == 'Refunded'
+                                          ? const Color(0xFFFFF1F2)
+                                          : request.paymentStatus == 'Paid'
                                           ? const Color(0xFFECFDF5)
-                                          : const Color(0xFFFFFBEB),
+                                          : (request.paymentStatus == 'Waived' || request.consultationFee == 0
+                                                ? const Color(0xFFF0FDF4)
+                                                : const Color(0xFFFFFBEB)),
                                       borderRadius: BorderRadius.circular(6),
                                       border: Border.all(
-                                        color: request.paymentStatus == 'Paid'
+                                        color: request.paymentStatus == 'Refunded'
+                                            ? const Color(0xFFFECDD3)
+                                            : request.paymentStatus == 'Paid'
                                             ? const Color(0xFFA7F3D0)
-                                            : const Color(0xFFFDE68A),
+                                            : (request.paymentStatus == 'Waived' || request.consultationFee == 0
+                                                  ? const Color(0xFFBBF7D0)
+                                                  : const Color(0xFFFDE68A)),
                                       ),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
-                                          request.paymentStatus == 'Paid'
+                                          request.paymentStatus == 'Refunded'
+                                              ? LucideIcons.rotateCcw
+                                              : request.paymentStatus == 'Paid'
                                               ? LucideIcons.checkCheck
-                                              : LucideIcons.circleDollarSign,
+                                              : (request.paymentStatus == 'Waived' || request.consultationFee == 0
+                                                    ? LucideIcons.sparkles
+                                                    : LucideIcons.circleDollarSign),
                                           size: 12,
-                                          color: request.paymentStatus == 'Paid'
+                                          color: request.paymentStatus == 'Refunded'
+                                              ? const Color(0xFFE11D48)
+                                              : request.paymentStatus == 'Paid'
                                               ? const Color(0xFF059669)
-                                              : const Color(0xFFD97706),
+                                              : (request.paymentStatus == 'Waived' || request.consultationFee == 0
+                                                    ? const Color(0xFF16A34A)
+                                                    : const Color(0xFFD97706)),
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
-                                          request.paymentStatus == 'Paid'
-                                              ? '₹${request.consultationFee} Paid (${request.paymentMethod})'
-                                              : '₹${request.consultationFee} Due at Clinic',
+                                          request.paymentStatus == 'Refunded'
+                                              ? 'Payment Refunded'
+                                              : request.paymentStatus == 'Paid'
+                                              ? '${request.consultationFee != null ? "₹${request.consultationFee} " : ""}Paid (${request.paymentMethod})'
+                                              : (request.paymentStatus == 'Waived' || request.consultationFee == 0
+                                                    ? 'Free 1st Visit · ₹0'
+                                                    : 'Payment Pending · ${request.consultationFee != null ? "₹${request.consultationFee}" : "₹500"} (Pay at clinic)'),
                                           style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.w700,
                                             color:
-                                                request.paymentStatus == 'Paid'
+                                                request.paymentStatus == 'Refunded'
+                                                ? const Color(0xFFBE123C)
+                                                : request.paymentStatus == 'Paid'
                                                 ? const Color(0xFF047857)
-                                                : const Color(0xFFB45309),
+                                                : (request.paymentStatus == 'Waived' || request.consultationFee == 0
+                                                      ? const Color(0xFF15803D)
+                                                      : const Color(0xFFB45309)),
                                           ),
                                         ),
                                       ],
@@ -1359,15 +1385,19 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                   Icon(
                     isFirstFree
                         ? LucideIcons.sparkles
-                        : (!billing.paymentRequired
-                              ? LucideIcons.banknote
-                              : LucideIcons.receipt),
+                        : (billing.payAtClinicEnabled && billing.onlinePayEnabled
+                              ? LucideIcons.wallet
+                              : (!billing.onlinePayEnabled
+                                    ? LucideIcons.banknote
+                                    : LucideIcons.receipt)),
                     size: 16,
                     color: isFirstFree
                         ? const Color(0xFF16A34A)
-                        : (!billing.paymentRequired
-                              ? const Color(0xFF0D9488)
-                              : AppColors.primary),
+                        : (billing.payAtClinicEnabled && billing.onlinePayEnabled
+                              ? const Color(0xFF0F766E)
+                              : (!billing.onlinePayEnabled
+                                    ? const Color(0xFF0D9488)
+                                    : AppColors.primary)),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -1382,15 +1412,35 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                       ),
                     ),
                   ),
-                  if (billing.paymentRequired && !isFirstFree)
+                  if (billing.onlinePayEnabled && billing.payAtClinicEnabled && !isFirstFree)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(color: const Color(0xFFBBF7D0)),
+                      ),
+                      child: const Text(
+                        'Clinic or Online',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF166534),
+                        ),
+                      ),
+                    ),
+                  if (billing.onlinePayEnabled && !billing.payAtClinicEnabled && !isFirstFree)
                     const Text(
-                      'Secure payment',
+                      'Secure online payment',
                       style: TextStyle(
                         fontSize: 11,
                         color: AppColors.textSecondary,
                       ),
                     ),
-                  if (!billing.paymentRequired && !isFirstFree)
+                  if (!billing.onlinePayEnabled && billing.payAtClinicEnabled && !isFirstFree)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 7,
@@ -1418,8 +1468,7 @@ class _ClinicAppointmentViewState extends State<ClinicAppointmentView> {
                 child: FilledButton(
                   onPressed:
                       _saving ||
-                          !billing.configured ||
-                          billing.consultationFee == null
+                          (!billing.configured && billing.consultationFee == null)
                       ? null
                       : canRequest
                       ? () => _save(patientId)

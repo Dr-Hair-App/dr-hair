@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/app_toast.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../../../core/widgets/photo_source_bottom_sheet.dart';
 import '../viewmodels/hair_test_cubit.dart';
@@ -51,8 +52,9 @@ class _HairDetectionAnalysisWidgetState
       duration: const Duration(seconds: 3),
     );
 
-    final isTesting =
-        WidgetsBinding.instance.runtimeType.toString().contains('Test');
+    final isTesting = WidgetsBinding.instance.runtimeType.toString().contains(
+      'Test',
+    );
     if (!isTesting) {
       _animController.repeat(reverse: true);
     }
@@ -84,26 +86,16 @@ class _HairDetectionAnalysisWidgetState
       onSelectSource: (source) async {
         try {
           final picker = widget.imagePicker ?? ImagePicker();
-          final image = await picker.pickImage(
-            source: source,
-            maxWidth: 1400,
-            maxHeight: 1400,
-            imageQuality: 88,
-          );
+          final image = await picker.pickImage(source: source);
           if (image == null || !mounted) return;
           setState(() {
             _locallyAddedPhotoPath = image.path;
           });
-          widget.cubit?.setPhoto(_selectedAngle, image.path);
+          await widget.cubit?.setPhoto(_selectedAngle, image.path);
           HapticFeedback.lightImpact();
         } catch (_) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              behavior: SnackBarBehavior.floating,
-              content: Text('Could not access camera or gallery.'),
-            ),
-          );
+          AppToast.showError(context, 'Could not access camera or gallery.');
         }
       },
     );
@@ -115,7 +107,8 @@ class _HairDetectionAnalysisWidgetState
     if (_locallyAddedPhotoPath != null) {
       photoMap[_selectedAngle] = _locallyAddedPhotoPath!;
     }
-    final activePhoto = photoMap[_selectedAngle] ??
+    final activePhoto =
+        photoMap[_selectedAngle] ??
         (_locallyAddedPhotoPath ?? photoMap.values.firstOrNull);
 
     final currentAnalysis = widget.state.getAnalysis(_selectedAngle);
@@ -128,17 +121,19 @@ class _HairDetectionAnalysisWidgetState
         ? widget.state.dandruff!
         : 'Balanced';
 
-    final int dynamicDensity = (currentAnalysis != null && currentAnalysis.isHair)
-        ? (densityScore + ((currentAnalysis.confidence - 0.85) * 16).toInt()).clamp(48, 120)
+    final int dynamicDensity =
+        (currentAnalysis != null && currentAnalysis.isHair)
+        ? (densityScore + ((currentAnalysis.confidence - 0.85) * 16).toInt())
+              .clamp(48, 120)
         : densityScore;
 
     final String confidenceDisplay = isAnalyzing
         ? 'SCANNING...'
         : (currentAnalysis != null && currentAnalysis.isHair)
-            ? 'CONFIDENCE: ${(currentAnalysis.confidence * 100).toStringAsFixed(1)}%'
-            : (currentAnalysis != null && currentAnalysis.isNotHair)
-                ? 'NON-HAIR PHOTO'
-                : 'CONFIDENCE: 92.0%';
+        ? 'CONFIDENCE: ${(currentAnalysis.confidence * 100).toStringAsFixed(1)}%'
+        : (currentAnalysis != null && currentAnalysis.isNotHair)
+        ? 'NON-HAIR PHOTO'
+        : 'CONFIDENCE: 92.0%';
 
     return Container(
       width: double.infinity,
@@ -314,7 +309,9 @@ class _HairDetectionAnalysisWidgetState
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.primaryDark.withValues(alpha: 0.85),
+                            color: AppColors.primaryDark.withValues(
+                              alpha: 0.85,
+                            ),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -323,8 +320,8 @@ class _HairDetectionAnalysisWidgetState
                               color: isAnalyzing
                                   ? const Color(0xFFFDE047)
                                   : (currentAnalysis?.isNotHair == true)
-                                      ? const Color(0xFFF87171)
-                                      : const Color(0xFF86EFAC),
+                                  ? const Color(0xFFF87171)
+                                  : const Color(0xFF86EFAC),
                               fontSize: 9,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.6,
@@ -340,11 +337,17 @@ class _HairDetectionAnalysisWidgetState
                         left: 12,
                         right: 12,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.82),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF38BDF8), width: 1),
+                            border: Border.all(
+                              color: const Color(0xFF38BDF8),
+                              width: 1,
+                            ),
                           ),
                           child: const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -414,7 +417,11 @@ class _HairDetectionAnalysisWidgetState
                               ),
                               child: Text(
                                 stageStr.contains('-')
-                                    ? stageStr.split('-').first.trim().toUpperCase()
+                                    ? stageStr
+                                          .split('-')
+                                          .first
+                                          .trim()
+                                          .toUpperCase()
                                     : stageStr.toUpperCase(),
                                 style: const TextStyle(
                                   color: Color(0xFFFDE047),
@@ -446,17 +453,17 @@ class _HairDetectionAnalysisWidgetState
                   currentAnalysis?.isHair == true
                       ? '✓ Scalp & follicles verified via computer vision'
                       : currentAnalysis?.isNotHair == true
-                          ? '⚠️ Scalp not clearly detected in this angle'
-                          : activePhoto != null
-                              ? 'Photo analyzed via computer vision'
-                              : 'Sample scalp scan displayed',
+                      ? '⚠️ Scalp not clearly detected in this angle'
+                      : activePhoto != null
+                      ? 'Photo analyzed via computer vision'
+                      : 'Sample scalp scan displayed',
                   style: TextStyle(
                     fontSize: 11,
                     color: currentAnalysis?.isHair == true
                         ? const Color(0xFF16A34A)
                         : currentAnalysis?.isNotHair == true
-                            ? const Color(0xFFDC2626)
-                            : AppColors.secondaryDark,
+                        ? const Color(0xFFDC2626)
+                        : AppColors.secondaryDark,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -577,15 +584,23 @@ class _HairDetectionAnalysisWidgetState
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (hasPhoto) ...[
-                    const Icon(LucideIcons.check, size: 12, color: AppColors.secondary),
+                    const Icon(
+                      LucideIcons.check,
+                      size: 12,
+                      color: AppColors.secondary,
+                    ),
                     const SizedBox(width: 4),
                   ],
                   Text(
                     angle,
                     style: TextStyle(
                       fontSize: 11,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                      color: isSelected ? AppColors.primaryDark : AppColors.secondaryDark,
+                      fontWeight: isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      color: isSelected
+                          ? AppColors.primaryDark
+                          : AppColors.secondaryDark,
                     ),
                   ),
                 ],
@@ -617,10 +632,7 @@ class _HairDetectionAnalysisWidgetState
     if (photoPathOrUrl != null && photoPathOrUrl.isNotEmpty) {
       if (photoPathOrUrl.startsWith('http://') ||
           photoPathOrUrl.startsWith('https://')) {
-        return CustomCachedImage(
-          imageUrl: photoPathOrUrl,
-          fit: BoxFit.cover,
-        );
+        return CustomCachedImage(imageUrl: photoPathOrUrl, fit: BoxFit.cover);
       }
       final file = File(photoPathOrUrl);
       if (file.existsSync()) {
@@ -640,10 +652,7 @@ class _HairDetectionAnalysisWidgetState
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF1E293B),
-            Color(0xFF0F172A),
-          ],
+          colors: [Color(0xFF1E293B), Color(0xFF0F172A)],
         ),
       ),
       child: Stack(
@@ -684,10 +693,7 @@ class _HairDetectionAnalysisWidgetState
               const SizedBox(height: 4),
               const Text(
                 'Upload a photo above for live scalp analysis',
-                style: TextStyle(
-                  color: Colors.white60,
-                  fontSize: 10,
-                ),
+                style: TextStyle(color: Colors.white60, fontSize: 10),
               ),
             ],
           ),
@@ -799,20 +805,52 @@ class _HairDetectionOverlayPainter extends CustomPainter {
     const len = 24.0;
 
     // Top-Left
-    canvas.drawLine(const Offset(margin, margin + len), const Offset(margin, margin), bracketPaint);
-    canvas.drawLine(const Offset(margin, margin), const Offset(margin + len, margin), bracketPaint);
+    canvas.drawLine(
+      const Offset(margin, margin + len),
+      const Offset(margin, margin),
+      bracketPaint,
+    );
+    canvas.drawLine(
+      const Offset(margin, margin),
+      const Offset(margin + len, margin),
+      bracketPaint,
+    );
 
     // Top-Right
-    canvas.drawLine(Offset(size.width - margin - len, margin), Offset(size.width - margin, margin), bracketPaint);
-    canvas.drawLine(Offset(size.width - margin, margin), Offset(size.width - margin, margin + len), bracketPaint);
+    canvas.drawLine(
+      Offset(size.width - margin - len, margin),
+      Offset(size.width - margin, margin),
+      bracketPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width - margin, margin),
+      Offset(size.width - margin, margin + len),
+      bracketPaint,
+    );
 
     // Bottom-Left
-    canvas.drawLine(Offset(margin, size.height - margin - len), Offset(margin, size.height - margin), bracketPaint);
-    canvas.drawLine(Offset(margin, size.height - margin), Offset(margin + len, size.height - margin), bracketPaint);
+    canvas.drawLine(
+      Offset(margin, size.height - margin - len),
+      Offset(margin, size.height - margin),
+      bracketPaint,
+    );
+    canvas.drawLine(
+      Offset(margin, size.height - margin),
+      Offset(margin + len, size.height - margin),
+      bracketPaint,
+    );
 
     // Bottom-Right
-    canvas.drawLine(Offset(size.width - margin - len, size.height - margin), Offset(size.width - margin, size.height - margin), bracketPaint);
-    canvas.drawLine(Offset(size.width - margin, size.height - margin), Offset(size.width - margin, size.height - margin - len), bracketPaint);
+    canvas.drawLine(
+      Offset(size.width - margin - len, size.height - margin),
+      Offset(size.width - margin, size.height - margin),
+      bracketPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width - margin, size.height - margin),
+      Offset(size.width - margin, size.height - margin - len),
+      bracketPaint,
+    );
 
     // 2. Draw Detected Thinning Zone Contour (Dotted ellipse / curve)
     final center = Offset(size.width * 0.5, size.height * 0.48);
@@ -843,7 +881,10 @@ class _HairDetectionOverlayPainter extends CustomPainter {
       final angleR = rng.nextDouble() * 2 * math.pi;
       final radX = (rng.nextDouble() * 0.28 + 0.05) * size.width;
       final radY = (rng.nextDouble() * 0.22 + 0.05) * size.height;
-      final node = Offset(center.dx + math.cos(angleR) * radX, center.dy + math.sin(angleR) * radY);
+      final node = Offset(
+        center.dx + math.cos(angleR) * radX,
+        center.dy + math.sin(angleR) * radY,
+      );
 
       canvas.drawCircle(node, 4.0, follicleGlowPaint);
       canvas.drawCircle(node, 1.8, follicleCorePaint);
@@ -860,7 +901,10 @@ class _HairDetectionOverlayPainter extends CustomPainter {
         ],
       ).createShader(Rect.fromLTWH(0, scanY, size.width, 3));
 
-    canvas.drawRect(Rect.fromLTWH(0, scanY - 1, size.width, 2.5), scanlinePaint);
+    canvas.drawRect(
+      Rect.fromLTWH(0, scanY - 1, size.width, 2.5),
+      scanlinePaint,
+    );
   }
 
   @override

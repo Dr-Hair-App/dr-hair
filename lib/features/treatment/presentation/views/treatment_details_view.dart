@@ -6,15 +6,19 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/utils/whatsapp_launcher.dart';
+import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/apple_bottom_sheet.dart';
 import '../../../auth/presentation/viewmodels/auth_cubit.dart';
 import '../../data/patient_clinical_api.dart';
+import '../widgets/clinical_report_card.dart';
+import '../widgets/clinical_report_viewer_sheet.dart';
 
-enum DocumentFormat { pdf, doc, image }
+enum DocumentFormat { pdf, doc, spreadsheet, presentation, text, image, other }
 
 class ClinicalReportItem {
   final String id;
@@ -24,7 +28,9 @@ class ClinicalReportItem {
   final String fileSize;
   final String uploadedBy;
   final String uploadDate;
+  final DateTime? createdAt;
   final String uploaderRole;
+  final String mimeType;
 
   const ClinicalReportItem({
     required this.id,
@@ -35,6 +41,8 @@ class ClinicalReportItem {
     required this.uploadedBy,
     required this.uploadDate,
     required this.uploaderRole,
+    this.createdAt,
+    this.mimeType = '',
   });
 }
 
@@ -63,11 +71,13 @@ class PrescribedMedicine {
 class TreatmentDetailsView extends StatefulWidget {
   final PatientClinicalApi? clinicalApi;
   final String? initialReportId;
+  final bool initialReportsTab;
 
   const TreatmentDetailsView({
     super.key,
     this.clinicalApi,
     this.initialReportId,
+    this.initialReportsTab = false,
   });
 
   @override
@@ -81,7 +91,6 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
 
-  String _selectedReportFilter = 'All';
   late final PatientClinicalApi _clinicalApi =
       widget.clinicalApi ?? PatientClinicalApi();
 
@@ -102,7 +111,11 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
     _tabController = TabController(
       length: 2,
       vsync: this,
-      initialIndex: widget.initialReportId?.trim().isNotEmpty == true ? 1 : 0,
+      initialIndex:
+          widget.initialReportsTab ||
+              widget.initialReportId?.trim().isNotEmpty == true
+          ? 1
+          : 0,
     );
     _animController = AnimationController(
       vsync: this,
@@ -166,11 +179,19 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
             final format = row['format']?.toString().toLowerCase() ?? '';
             final image =
                 mime.startsWith('image/') ||
-                ['jpg', 'jpeg', 'png', 'webp'].contains(format);
+                ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'].contains(format);
+            final reportFormat = _documentFormat(
+              image
+                  ? mime
+                  : format.isNotEmpty
+                  ? format
+                  : row['file_name']?.toString() ?? '',
+              mime,
+            );
             return ClinicalReportItem(
               id: row['id']?.toString() ?? '',
               title: row['title']?.toString() ?? 'Clinical report',
-              format: image ? DocumentFormat.image : DocumentFormat.pdf,
+              format: reportFormat,
               fileName: row['file_name']?.toString() ?? 'report',
               fileSize: _formatBytes(row['bytes']),
               uploadedBy:
@@ -179,10 +200,18 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
                   : 'Dr. Jai Bansal',
               uploaderRole: 'Clinic',
               uploadDate: _formatDate(row['created_at']),
+              createdAt: DateTime.tryParse(row['created_at']?.toString() ?? ''),
+              mimeType: mime,
             );
           })
           .where((report) => report.id.isNotEmpty)
           .toList();
+
+      reports.sort((a, b) {
+        final aTime = a.createdAt?.millisecondsSinceEpoch ?? 0;
+        final bTime = b.createdAt?.millisecondsSinceEpoch ?? 0;
+        return bTime.compareTo(aTime);
+      });
 
       if (!mounted) return;
       setState(() {
@@ -286,30 +315,50 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
+  DocumentFormat _documentFormat(String value, String mime) {
+    final normalized = value.toLowerCase();
+    final extension = normalized.contains('.')
+        ? normalized.split('.').last
+        : normalized;
+    if (mime.startsWith('image/') ||
+        {'jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'}.contains(extension)) {
+      return DocumentFormat.image;
+    }
+    if (extension == 'pdf' || mime == 'application/pdf') {
+      return DocumentFormat.pdf;
+    }
+    if ({'xls', 'xlsx', 'xlsm', 'csv', 'tsv'}.contains(extension)) {
+      return DocumentFormat.spreadsheet;
+    }
+    if ({'ppt', 'pptx', 'pptm'}.contains(extension)) {
+      return DocumentFormat.presentation;
+    }
+    if ({'txt', 'rtf'}.contains(extension) || mime.startsWith('text/')) {
+      return DocumentFormat.text;
+    }
+    if ({'doc', 'docx', 'docm'}.contains(extension) ||
+        mime.contains('wordprocessingml') ||
+        mime == 'application/msword') {
+      return DocumentFormat.doc;
+    }
+    return DocumentFormat.other;
+  }
+
   Future<void> _downloadReport(ClinicalReportItem report) async {
     final token = _accessToken;
     if (token == null) return;
     HapticFeedback.lightImpact();
     setState(() => _downloadingReportId = report.id);
     try {
-      final uri = await _clinicalApi.getReportDownloadUri(
+      await showClinicalReportViewer(
+        context,
+        api: _clinicalApi,
         accessToken: token,
         reportId: report.id,
+        reportName: report.title,
+        fileName: report.fileName,
+        mimeType: report.mimeType,
       );
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened) {
-        throw StateError('The secure report link could not be opened.');
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Color(0xFF1E293B),
-            content: Text('Could not open this report. Please try again.'),
-          ),
-        );
-      }
     } finally {
       if (mounted) setState(() => _downloadingReportId = null);
     }
@@ -326,126 +375,121 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent,
-        centerTitle: false,
-        title: const Text(
-          'Medical Reports & Prescription',
-          style: TextStyle(
-            color: AppColors.primaryDark,
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.2,
-          ),
-        ),
-        leading: IconButton(
-          icon: const Icon(
-            LucideIcons.arrowLeft,
-            color: AppColors.primaryDark,
-            size: 20,
-          ),
-          onPressed: () => Navigator.maybePop(context),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            icon: const Icon(
-              LucideIcons.rotateCw,
-              color: AppColors.secondary,
-              size: 18,
-            ),
-            onPressed: () {
-              final token = _accessToken;
-              if (token != null) {
-                HapticFeedback.selectionClick();
-                unawaited(_loadClinicalRecord(token));
-              }
-            },
-          ),
-          const SizedBox(width: 4),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(45),
-          child: Container(
-            height: 45,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicatorSize: TabBarIndicatorSize.tab,
-              indicator: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight + 45),
+        child: ValueListenableBuilder<int>(
+          valueListenable: AppleSheetMotion.activeSheetCount,
+          builder: (context, activeSheets, _) {
+            final sheetIsOpen = activeSheets > 0;
+            return AppBar(
+              backgroundColor: sheetIsOpen
+                  ? const Color(0xFFE8EEF5)
+                  : Colors.white,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              surfaceTintColor: Colors.transparent,
+              centerTitle: false,
+              title: Text(
+                'Medical Reports & Prescription',
+                style: TextStyle(
+                  color: AppColors.primaryDark,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
+                ),
               ),
-              labelColor: AppColors.primary,
-              unselectedLabelColor: AppColors.secondaryDark,
-              labelStyle: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.1,
+              leading: IconButton(
+                icon: Icon(
+                  LucideIcons.arrowLeft,
+                  color: AppColors.primaryDark,
+                  size: 20,
+                ),
+                onPressed: () => Navigator.maybePop(context),
               ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-              dividerColor: Colors.transparent,
-              tabs: const [
-                Tab(
-                  iconMargin: EdgeInsets.zero,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(LucideIcons.pill, size: 14),
-                      SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          'Prescription',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.1,
-                          ),
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(45),
+                child: Container(
+                  height: 45,
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: sheetIsOpen
+                        ? const Color(0xFFDCE6F1)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: TabBar(
+                    controller: _tabController,
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    indicator: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    labelColor: AppColors.primary,
+                    unselectedLabelColor: AppColors.secondaryDark,
+                    labelStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.1,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    dividerColor: Colors.transparent,
+                    tabs: const [
+                      Tab(
+                        iconMargin: EdgeInsets.zero,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(LucideIcons.pill, size: 14),
+                            SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                'Prescription',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.1,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Tab(
+                        iconMargin: EdgeInsets.zero,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(LucideIcons.fileText, size: 14),
+                            SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                'Reports',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.1,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-                Tab(
-                  iconMargin: EdgeInsets.zero,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(LucideIcons.fileText, size: 14),
-                      SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          'Reports',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
       body: TabBarView(
@@ -759,13 +803,22 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          side: const BorderSide(color: Color(0xFF25D366)),
+                      child: AppButton(
+                        height: 42,
+                        text: 'Ask on WhatsApp',
+                        icon: const Icon(
+                          LucideIcons.messageCircle,
+                          size: 15,
+                          color: Color(0xFF25D366),
+                        ),
+                        variant: AppButtonVariant.outlined,
+                        borderColor: const Color(0xFF25D366),
+                        foregroundColor: const Color(0xFF0F5132),
+                        borderRadius: BorderRadius.circular(12),
+                        textStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F5132),
                         ),
                         onPressed: () {
                           WhatsAppLauncher.launchCarePlanInquiry(
@@ -773,50 +826,31 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
                             referenceNo: refNo.isNotEmpty ? refNo : null,
                           );
                         },
-                        icon: const Icon(
-                          LucideIcons.messageCircle,
-                          size: 15,
-                          color: Color(0xFF25D366),
-                        ),
-                        label: const Text(
-                          'Ask on WhatsApp',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF0F5132),
-                          ),
-                        ),
                       ),
                     ),
                     if (nextReviewDate.isNotEmpty) ...[
                       const SizedBox(width: 10),
                       Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(vertical: 11),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: () {
-                            HapticFeedback.lightImpact();
-                            context.push(RouteNames.clinicAppointment);
-                          },
+                        child: AppButton(
+                          height: 42,
+                          text: 'Book Review',
                           icon: const Icon(
                             LucideIcons.calendarPlus,
                             size: 14,
                             color: Colors.white,
                           ),
-                          label: const Text(
-                            'Book Review',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
+                          variant: AppButtonVariant.filled,
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          textStyle: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
                           ),
+                          onPressed: () {
+                            context.push(RouteNames.clinicAppointment);
+                          },
                         ),
                       ),
                     ],
@@ -1026,34 +1060,27 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
           ],
           if (med.catalogId.isNotEmpty) ...[
             const SizedBox(height: 12),
-            SizedBox(
+            AppButton(
+              height: 38,
               width: double.infinity,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 9),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  side: const BorderSide(color: AppColors.primary),
-                ),
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  context.push(RouteNames.productPath(med.catalogId));
-                },
-                icon: const Icon(
-                  LucideIcons.shoppingBag,
-                  size: 13,
-                  color: AppColors.primary,
-                ),
-                label: const Text(
-                  'Order from Clinic Shop',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  ),
-                ),
+              text: 'Order from Clinic Shop',
+              icon: const Icon(
+                LucideIcons.shoppingBag,
+                size: 13,
+                color: AppColors.primary,
               ),
+              variant: AppButtonVariant.outlined,
+              borderColor: AppColors.primary,
+              foregroundColor: AppColors.primary,
+              borderRadius: BorderRadius.circular(10),
+              textStyle: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+              onPressed: () {
+                context.push(RouteNames.productPath(med.catalogId));
+              },
             ),
           ],
         ],
@@ -1198,21 +1225,6 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
       );
     }
 
-    final filteredReports = _selectedReportFilter == 'All'
-        ? _reports
-        : _reports.where((r) {
-            if (_selectedReportFilter == 'PDF') {
-              return r.format == DocumentFormat.pdf;
-            }
-            if (_selectedReportFilter == 'Images') {
-              return r.format == DocumentFormat.image;
-            }
-            if (_selectedReportFilter == 'Docs') {
-              return r.format == DocumentFormat.doc;
-            }
-            return true;
-          }).toList();
-
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: () async {
@@ -1225,42 +1237,10 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
         children: [
           _buildReportsHeaderCard(),
           const SizedBox(height: 16),
-          if (_reports.isNotEmpty) ...[
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildFilterChip('All', _reports.length),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(
-                    'PDF',
-                    _reports
-                        .where((r) => r.format == DocumentFormat.pdf)
-                        .length,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(
-                    'Images',
-                    _reports
-                        .where((r) => r.format == DocumentFormat.image)
-                        .length,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(
-                    'Docs',
-                    _reports
-                        .where((r) => r.format == DocumentFormat.doc)
-                        .length,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (filteredReports.isEmpty)
+          if (_reports.isEmpty)
             _buildEmptyReportsState()
           else
-            ...filteredReports.map(_buildReportCard),
+            ..._reports.map(_buildReportCard),
         ],
       ),
     );
@@ -1318,185 +1298,20 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
     );
   }
 
-  Widget _buildFilterChip(String label, int count) {
-    final isSelected = _selectedReportFilter == label;
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        setState(() => _selectedReportFilter = label);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? Colors.white : AppColors.secondaryDark,
-              ),
-            ),
-            const SizedBox(width: 5),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? Colors.white.withValues(alpha: 0.25)
-                    : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                count.toString(),
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  color: isSelected ? Colors.white : AppColors.primaryDark,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildReportCard(ClinicalReportItem report) {
     final isDownloading = _downloadingReportId == report.id;
     final openedFromNotification = report.id == widget.initialReportId;
-    final (icon, color, badge) = switch (report.format) {
-      DocumentFormat.pdf => (
-        LucideIcons.fileText,
-        const Color(0xFFDC2626),
-        'PDF',
-      ),
-      DocumentFormat.image => (LucideIcons.image, AppColors.secondary, 'IMAGE'),
-      DocumentFormat.doc => (
-        LucideIcons.fileText,
-        const Color(0xFF2563EB),
-        'DOCUMENT',
-      ),
-    };
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: openedFromNotification ? AppColors.primary : AppColors.border,
-          width: openedFromNotification ? 1.5 : 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        badge,
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ),
-                    if (openedFromNotification) ...[
-                      const SizedBox(width: 6),
-                      const Text(
-                        'NEW',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  report.title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primaryDark,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '${report.fileName} · ${report.fileSize}',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AppColors.secondaryDark,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Shared by ${report.uploadedBy} · ${report.uploadDate}',
-                  style: const TextStyle(
-                    fontSize: 9,
-                    color: AppColors.secondaryDark,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Open secure report download',
-            onPressed: isDownloading
-                ? null
-                : () => unawaited(_downloadReport(report)),
-            icon: isDownloading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.primary,
-                    ),
-                  )
-                : const Icon(
-                    LucideIcons.download,
-                    size: 18,
-                    color: AppColors.primary,
-                  ),
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ClinicalReportCard(
+        title: report.title,
+        fileName: report.fileName,
+        fileSize: report.fileSize,
+        uploadedBy: 'Shared by ${report.uploadedBy}',
+        uploadDate: report.uploadDate,
+        isNew: openedFromNotification,
+        isLoading: isDownloading,
+        onTap: () => unawaited(_downloadReport(report)),
       ),
     );
   }
@@ -1505,46 +1320,49 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
   // SHARED STATES & PLACEHOLDERS
   // ==========================================
   Widget _buildSkeletonLoader() {
-    return ListView(
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      children: [
-        Container(
-          height: 180,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _shimmerBar(width: 140, height: 12),
-                const SizedBox(height: 12),
-                _shimmerBar(width: 220, height: 18),
-                const SizedBox(height: 16),
-                _shimmerBar(width: double.infinity, height: 40),
-                const Spacer(),
-                Row(
-                  children: [
-                    _shimmerBar(width: 80, height: 24),
-                    const SizedBox(width: 8),
-                    _shimmerBar(width: 90, height: 24),
-                  ],
-                ),
-              ],
+    return Skeletonizer(
+      enabled: true,
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            height: 180,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _shimmerBar(width: 140, height: 12),
+                  const SizedBox(height: 12),
+                  _shimmerBar(width: 220, height: 18),
+                  const SizedBox(height: 16),
+                  _shimmerBar(width: double.infinity, height: 40),
+                  const Spacer(),
+                  Row(
+                    children: [
+                      _shimmerBar(width: 80, height: 24),
+                      const SizedBox(width: 8),
+                      _shimmerBar(width: 90, height: 24),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 20),
-        _shimmerBar(width: 180, height: 14),
-        const SizedBox(height: 12),
-        _skeletonCard(),
-        const SizedBox(height: 10),
-        _skeletonCard(),
-      ],
+          const SizedBox(height: 20),
+          _shimmerBar(width: 180, height: 14),
+          const SizedBox(height: 12),
+          _skeletonCard(),
+          const SizedBox(height: 10),
+          _skeletonCard(),
+        ],
+      ),
     );
   }
 
@@ -1649,28 +1467,23 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
           ),
           if (onRetry != null) ...[
             const SizedBox(height: 16),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-              ),
-              onPressed: onRetry,
+            AppButton(
+              height: 42,
+              text: isAuthPrompt ? 'Sign in to Continue' : 'Try again',
               icon: Icon(
                 isAuthPrompt ? LucideIcons.logIn : LucideIcons.rotateCw,
                 size: 15,
+                color: Colors.white,
               ),
-              label: Text(
-                isAuthPrompt ? 'Sign in to Continue' : 'Try again',
-                style: const TextStyle(fontWeight: FontWeight.w700),
+              variant: AppButtonVariant.filled,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 10,
               ),
+              onPressed: onRetry,
             ),
           ],
         ],
@@ -1724,52 +1537,42 @@ class _TreatmentDetailsViewState extends State<TreatmentDetailsView>
           Row(
             children: [
               Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 11),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    side: const BorderSide(color: Color(0xFF25D366)),
+                child: AppButton(
+                  height: 42,
+                  text: 'Chat on WhatsApp',
+                  variant: AppButtonVariant.outlined,
+                  borderColor: const Color(0xFF25D366),
+                  foregroundColor: const Color(0xFF0F5132),
+                  borderRadius: BorderRadius.circular(12),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F5132),
                   ),
                   onPressed: () {
                     WhatsAppLauncher.launchCarePlanInquiry(
                       treatmentName: 'Personalized Clinical Care Plan',
                     );
                   },
-                  child: const Text(
-                    'Chat on WhatsApp',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F5132),
-                    ),
-                  ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 11),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                child: AppButton(
+                  height: 42,
+                  text: 'Take Hair Test',
+                  variant: AppButtonVariant.filled,
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
                   ),
                   onPressed: () {
-                    HapticFeedback.lightImpact();
                     context.push(RouteNames.hairTest);
                   },
-                  child: const Text(
-                    'Take Hair Test',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
                 ),
               ),
             ],

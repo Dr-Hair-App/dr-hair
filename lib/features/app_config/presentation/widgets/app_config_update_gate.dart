@@ -2,6 +2,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_toast.dart';
 import '../viewmodels/app_config_cubit.dart';
 import '../viewmodels/app_config_state.dart';
 
@@ -21,8 +23,9 @@ class _AppConfigUpdateGateState extends State<AppConfigUpdateGate> {
     final uri = value == null ? null : Uri.tryParse(value);
     if (uri == null || uri.scheme != 'https' || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('The app store link is not available. Please try again later.')),
+        AppToast.showError(
+          context,
+          'The app store link is not available. Please try again later.',
         );
       }
     }
@@ -63,10 +66,17 @@ class _AppConfigUpdateGateState extends State<AppConfigUpdateGate> {
                               ],
                               if (!policy.maintenanceMode) ...[
                                 const SizedBox(height: 24),
-                                FilledButton.icon(
-                                  onPressed: () => _openStore(policy.downloadUrl),
-                                  icon: const Icon(Icons.open_in_new_rounded),
-                                  label: const Text('Update app'),
+                                AppButton(
+                                  height: 46,
+                                  text: 'Update app',
+                                  icon: const Icon(
+                                    Icons.open_in_new_rounded,
+                                    size: 18,
+                                    color: Colors.white,
+                                  ),
+                                  variant: AppButtonVariant.filled,
+                                  onPressed: () =>
+                                      _openStore(policy.downloadUrl),
                                 ),
                               ],
                             ],

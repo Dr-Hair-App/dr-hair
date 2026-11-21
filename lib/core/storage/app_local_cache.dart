@@ -8,14 +8,17 @@ class AppLocalCache {
   AppLocalCache._({this._box, this._memoryStore});
 
   static const String boxName = 'dr_hair_cache';
+  static const String productCatalogCachePrefix = 'cache_products_catalog_';
   static Box<dynamic>? _sharedBox;
   static final Map<String, Object?> _fallbackMemoryStore = <String, Object?>{};
 
   final Box<dynamic>? _box;
   final Map<String, Object?>? _memoryStore;
 
-  static AppLocalCache get instance =>
-      AppLocalCache._(box: _sharedBox, memoryStore: _sharedBox == null ? _fallbackMemoryStore : null);
+  static AppLocalCache get instance => AppLocalCache._(
+    box: _sharedBox,
+    memoryStore: _sharedBox == null ? _fallbackMemoryStore : null,
+  );
 
   @visibleForTesting
   factory AppLocalCache.inMemory([Map<String, Object?>? values]) =>
@@ -81,6 +84,22 @@ class AppLocalCache {
     }
   }
 
+  /// Removes only entries owned by a namespaced cache, preserving unrelated
+  /// Hive values such as the signed-in session and user preferences.
+  Future<void> removeByPrefix(String prefix) async {
+    if (prefix.isEmpty) return;
+    final box = _box;
+    if (box != null) {
+      final keys = box.keys
+          .where((key) => key.toString().startsWith(prefix))
+          .toList(growable: false);
+      for (final key in keys) {
+        await box.delete(key);
+      }
+    }
+    _memoryStore?.removeWhere((key, _) => key.startsWith(prefix));
+  }
+
   /// Generates a namespaced key for patient-specific state.
   static String patientKey(String patientId, String key) {
     final cleanId = patientId.trim();
@@ -105,7 +124,9 @@ class AppLocalCache {
     }
     final memoryStore = _memoryStore;
     if (memoryStore != null) {
-      memoryStore.removeWhere((k, _) => k.startsWith(prefix) || k.contains(cleanId));
+      memoryStore.removeWhere(
+        (k, _) => k.startsWith(prefix) || k.contains(cleanId),
+      );
     }
   }
 

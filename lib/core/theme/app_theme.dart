@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
+
 import '../constants/app_colors.dart';
+import '../widgets/apple_bottom_sheet.dart';
 
 class AppTheme {
   AppTheme._();
@@ -7,6 +9,7 @@ class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
+      pageTransitionsTheme: appleSheetPageTransitionsTheme,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         primary: AppColors.primary,
@@ -33,7 +36,9 @@ class AppTheme {
           foregroundColor: Colors.white,
           elevation: 0,
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -43,7 +48,9 @@ class AppTheme {
           foregroundColor: AppColors.primary,
           side: const BorderSide(color: AppColors.primary100),
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
         ),
       ),
       snackBarTheme: SnackBarThemeData(
@@ -56,7 +63,10 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 15,
+        ),
         hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 14),
         labelStyle: const TextStyle(color: AppColors.secondaryDark),
         border: OutlineInputBorder(

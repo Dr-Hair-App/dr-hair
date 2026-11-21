@@ -17,11 +17,16 @@ import '../viewmodels/auth_state.dart';
 
 /// Full-screen view for the /complete-profile route.
 class CompleteProfileView extends StatelessWidget {
-  const CompleteProfileView({super.key});
+  final bool requireGender;
+
+  const CompleteProfileView({super.key, this.requireGender = false});
 
   @override
   Widget build(BuildContext context) {
-    return const CompleteProfileSheetContent(isBottomSheet: false);
+    return CompleteProfileSheetContent(
+      isBottomSheet: false,
+      requireGender: requireGender,
+    );
   }
 }
 
@@ -76,6 +81,7 @@ class CompleteProfileBottomSheet extends StatelessWidget {
 class CompleteProfileSheetContent extends StatefulWidget {
   final bool isBottomSheet;
   final bool requireAgeAndGender;
+  final bool requireGender;
   final String? title;
   final String? subtitle;
 
@@ -83,6 +89,7 @@ class CompleteProfileSheetContent extends StatefulWidget {
     super.key,
     required this.isBottomSheet,
     this.requireAgeAndGender = false,
+    this.requireGender = false,
     this.title,
     this.subtitle,
   });
@@ -119,13 +126,25 @@ class _CompleteProfileSheetContentState
   void initState() {
     super.initState();
     final user = context.read<AuthCubit>().state.user;
-    _nameController = TextEditingController(text: user?.name ?? '');
+    final socialName = context.read<AuthCubit>().state.socialName?.trim();
+    _nameController = TextEditingController(
+      text: user?.name.trim().isNotEmpty == true
+          ? user!.name
+          : socialName ?? '',
+    );
     _ageController = TextEditingController(
       text: user?.age != null ? '${user!.age}' : '',
     );
     _cityController = TextEditingController(text: user?.city ?? '');
     _occupationController = TextEditingController(text: user?.occupation ?? '');
-    _gender = _genderOptions.contains(user?.gender) ? user?.gender : null;
+    final existingGender = user?.gender?.trim().toLowerCase();
+    _gender = null;
+    for (final option in _genderOptions) {
+      if (option.toLowerCase() == existingGender) {
+        _gender = option;
+        break;
+      }
+    }
     _existingPhotoUrl = user?.photoUrl;
   }
 
@@ -252,6 +271,7 @@ class _CompleteProfileSheetContentState
 
   Widget _buildFormFields(bool isBusy) {
     final requireAgeAndGender = widget.requireAgeAndGender;
+    final requireGender = widget.requireGender || requireAgeAndGender;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,7 +344,7 @@ class _CompleteProfileSheetContentState
         // Gender (Optional unless requireAgeAndGender is true)
         AppDropdownFormField<String>(
           initialValue: _gender,
-          labelText: requireAgeAndGender ? 'Gender *' : 'Gender (optional)',
+          labelText: requireGender ? 'Gender *' : 'Gender (optional)',
           prefixIcon: const Icon(LucideIcons.usersRound, size: 20),
           items: _genderOptions
               .map(
@@ -333,8 +353,7 @@ class _CompleteProfileSheetContentState
               )
               .toList(),
           validator: (value) {
-            if (requireAgeAndGender &&
-                (value == null || value.trim().isEmpty)) {
+            if (requireGender && (value == null || value.trim().isEmpty)) {
               return 'Please select your gender';
             }
             return null;

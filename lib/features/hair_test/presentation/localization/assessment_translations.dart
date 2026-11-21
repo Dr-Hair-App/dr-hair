@@ -1,8 +1,4 @@
-enum AssessmentLanguage {
-  english,
-  hindi,
-  hinglish,
-}
+enum AssessmentLanguage { english, hindi, hinglish }
 
 extension AssessmentLanguageExtension on AssessmentLanguage {
   String get displayName {
@@ -76,8 +72,7 @@ class AssessmentTranslations {
           'A clinician care plan has been added to this assessment.',
       AssessmentLanguage.hindi:
           'इस रिपोर्ट में डॉक्टर द्वारा व्यक्तिगत उपचार योजना जोड़ दी गई है।',
-      AssessmentLanguage.hinglish:
-          'Aapke assessment ke liye doctor ka personalized care plan add kar diya gaya hai.',
+      AssessmentLanguage.hinglish: 'Aapke assessment ke liye doctor ka personalized care plan add kar diya gaya hai.',
     },
     'clinical_review_recorded': {
       AssessmentLanguage.english:
@@ -98,12 +93,10 @@ class AssessmentTranslations {
       AssessmentLanguage.hinglish: 'Doctor review abhi chal raha hai',
     },
     'photos_under_review_desc': {
-      AssessmentLanguage.english:
-          'Your assessment is with the clinical team. We will show their review here when it is ready.',
+      AssessmentLanguage.english: 'Your assessment is with the clinical team. We will show their review here when it is ready.',
       AssessmentLanguage.hindi:
           'आपकी रिपोर्ट क्लिनिकल टीम के पास है। तैयार होने पर यहाँ दिखेगी।',
-      AssessmentLanguage.hinglish:
-          'Aapki report clinical team ke paas hai. Doctor review ready hote hi yahan dikh jayegi.',
+      AssessmentLanguage.hinglish: 'Aapki report clinical team ke paas hai. Doctor review ready hote hi yahan dikh jayegi.',
     },
     'assessment_submitted': {
       AssessmentLanguage.english: 'Assessment Submitted',
@@ -128,8 +121,7 @@ class AssessmentTranslations {
           'Your assessment summary and available next steps are shown below.',
       AssessmentLanguage.hindi:
           'आपकी रिपोर्ट का सारांश और उपलब्ध अगले कदम नीचे दिए गए हैं।',
-      AssessmentLanguage.hinglish:
-          'Aapka assessment summary aur aage ke available steps neeche diye gaye hain.',
+      AssessmentLanguage.hinglish: 'Aapka assessment summary aur aage ke available steps neeche diye gaye hain.',
     },
 
     // Timeline Steps
@@ -147,6 +139,173 @@ class AssessmentTranslations {
       AssessmentLanguage.english: 'Regimen Prescribed',
       AssessmentLanguage.hindi: 'उपचार योजना निर्धारित',
       AssessmentLanguage.hinglish: 'Regimen Prescribed',
+    },
+
+    // Updated 3-step tracker labels
+    'intake_done': {
+      AssessmentLanguage.english: 'Intake Done',
+      AssessmentLanguage.hindi: 'जानकारी दर्ज',
+      AssessmentLanguage.hinglish: 'Intake Done',
+    },
+    'ai_review_done': {
+      AssessmentLanguage.english: 'AI Review Done',
+      AssessmentLanguage.hindi: 'AI समीक्षा पूर्ण',
+      AssessmentLanguage.hinglish: 'AI Review Done',
+    },
+    'doctor_review_step': {
+      AssessmentLanguage.english: 'Doctor Review',
+      AssessmentLanguage.hindi: 'डॉक्टर समीक्षा',
+      AssessmentLanguage.hinglish: 'Doctor Review',
+    },
+    'review_timeline_intake': {
+      AssessmentLanguage.english: 'Submitted',
+      AssessmentLanguage.hindi: 'जमा हुआ',
+      AssessmentLanguage.hinglish: 'Submit hua',
+    },
+    'review_timeline_result': {
+      AssessmentLanguage.english: 'Result',
+      AssessmentLanguage.hindi: 'रिज़ल्ट',
+      AssessmentLanguage.hinglish: 'Result',
+    },
+    'review_timeline_clinician': {
+      AssessmentLanguage.english: 'Clinician',
+      AssessmentLanguage.hindi: 'डॉक्टर',
+      AssessmentLanguage.hinglish: 'Doctor',
+    },
+    'review_timeline_optional': {
+      AssessmentLanguage.english: 'Optional',
+      AssessmentLanguage.hindi: 'ज़रूरी नहीं',
+      AssessmentLanguage.hinglish: 'Optional',
+    },
+    'review_status_processing_badge': {
+      AssessmentLanguage.english: 'PREPARING',
+      AssessmentLanguage.hindi: 'तैयार हो रहा है',
+      AssessmentLanguage.hinglish: 'READY HO RAHA HAI',
+    },
+    'review_status_processing_title': {
+      AssessmentLanguage.english: 'Preparing your result',
+      AssessmentLanguage.hindi: 'आपका रिज़ल्ट तैयार हो रहा है',
+      AssessmentLanguage.hinglish: 'Aapka result ready ho raha hai',
+    },
+    'review_status_processing_body': {
+      AssessmentLanguage.english: 'Your assessment is being processed.',
+      AssessmentLanguage.hindi: 'आपकी जाँच पर काम चल रहा है।',
+      AssessmentLanguage.hinglish: 'Aapki assessment process ho rahi hai.',
+    },
+    'review_status_clinician_badge': {
+      AssessmentLanguage.english: 'Assessment Submitted',
+      AssessmentLanguage.hindi: 'जाँच जमा की गई',
+      AssessmentLanguage.hinglish: 'Assessment Submit Ho Chuka Hai',
+    },
+    'review_status_clinician_title': {
+      AssessmentLanguage.english: 'Your assessment is ready',
+      AssessmentLanguage.hindi: 'आपकी रिपोर्ट तैयार है',
+      AssessmentLanguage.hinglish: 'Aapki assessment report ready hai',
+    },
+    'review_status_clinician_body': {
+      AssessmentLanguage.english:
+          'A clinician review is needed before care suggestions are shown.',
+      AssessmentLanguage.hindi:
+          'देखभाल के सुझाव देखने से पहले डॉक्टर की समीक्षा आवश्यक है।',
+      AssessmentLanguage.hinglish:
+          'Care suggestions dekhne ke liye pehle doctor ka review zaroori hai.',
+    },
+    'review_status_under_review_badge': {
+      AssessmentLanguage.english: 'UNDER REVIEW',
+      AssessmentLanguage.hindi: 'समीक्षा जारी',
+      AssessmentLanguage.hinglish: 'REVIEW CHAL RAHA HAI',
+    },
+    'review_status_under_review_title': {
+      AssessmentLanguage.english: 'Doctor review in progress',
+      AssessmentLanguage.hindi: 'डॉक्टर की समीक्षा जारी है',
+      AssessmentLanguage.hinglish: 'Doctor review chal raha hai',
+    },
+    'review_status_under_review_body': {
+      AssessmentLanguage.english: 'We’ll show the update here when ready.',
+      AssessmentLanguage.hindi: 'अपडेट तैयार होने पर यहाँ दिखेगा।',
+      AssessmentLanguage.hinglish: 'Update ready hote hi yahan dikhega.',
+    },
+    'review_status_reviewed_badge': {
+      AssessmentLanguage.english: 'REVIEW COMPLETE',
+      AssessmentLanguage.hindi: 'समीक्षा पूरी',
+      AssessmentLanguage.hinglish: 'REVIEW COMPLETE',
+    },
+    'review_status_reviewed_title': {
+      AssessmentLanguage.english: 'Doctor review complete',
+      AssessmentLanguage.hindi: 'डॉक्टर की समीक्षा पूरी',
+      AssessmentLanguage.hinglish: 'Doctor review poora hua',
+    },
+    'review_status_reviewed_body': {
+      AssessmentLanguage.english: 'Your care plan is ready to view.',
+      AssessmentLanguage.hindi: 'आपकी केयर योजना देखने के लिए तैयार है।',
+      AssessmentLanguage.hinglish: 'Aapka care plan dekhne ke liye ready hai.',
+    },
+    'review_status_reviewed_note': {
+      AssessmentLanguage.english: 'Your doctor’s note is ready to view.',
+      AssessmentLanguage.hindi: 'डॉक्टर का नोट देखने के लिए तैयार है।',
+      AssessmentLanguage.hinglish: 'Doctor ka note dekhne ke liye ready hai.',
+    },
+    'review_status_reviewed_recorded': {
+      AssessmentLanguage.english: 'Your review has been recorded.',
+      AssessmentLanguage.hindi: 'आपकी समीक्षा दर्ज कर ली गई है।',
+      AssessmentLanguage.hinglish: 'Aapka review record ho gaya hai.',
+    },
+    'review_status_ready_badge': {
+      AssessmentLanguage.english: 'RESULT READY',
+      AssessmentLanguage.hindi: 'रिज़ल्ट तैयार',
+      AssessmentLanguage.hinglish: 'RESULT READY',
+    },
+    'review_status_ready_title': {
+      AssessmentLanguage.english: 'Assessment ready',
+      AssessmentLanguage.hindi: 'जाँच तैयार है',
+      AssessmentLanguage.hinglish: 'Assessment ready hai',
+    },
+    'review_status_ready_body': {
+      AssessmentLanguage.english: 'Your summary and next steps are ready.',
+      AssessmentLanguage.hindi: 'आपका सारांश और अगले कदम तैयार हैं।',
+      AssessmentLanguage.hinglish: 'Aapka summary aur next steps ready hain.',
+    },
+    'review_status_failed_badge': {
+      AssessmentLanguage.english: 'RESULT UNAVAILABLE',
+      AssessmentLanguage.hindi: 'रिज़ल्ट उपलब्ध नहीं',
+      AssessmentLanguage.hinglish: 'RESULT NAHI MILA',
+    },
+    'review_status_failed_title': {
+      AssessmentLanguage.english: 'Result not ready yet',
+      AssessmentLanguage.hindi: 'रिज़ल्ट अभी तैयार नहीं',
+      AssessmentLanguage.hinglish: 'Result abhi ready nahi hai',
+    },
+    'review_status_failed_body': {
+      AssessmentLanguage.english: 'Open your report to check the next step.',
+      AssessmentLanguage.hindi: 'अगला कदम देखने के लिए रिपोर्ट खोलें।',
+      AssessmentLanguage.hinglish: 'Agla step dekhne ke liye report kholein.',
+    },
+    'review_action_view': {
+      AssessmentLanguage.english: 'View report',
+      AssessmentLanguage.hindi: 'रिपोर्ट देखें',
+      AssessmentLanguage.hinglish: 'Report dekhein',
+    },
+    'review_action_request': {
+      AssessmentLanguage.english: 'Contact doctor on WhatsApp',
+      AssessmentLanguage.hindi: 'डॉक्टर से WhatsApp करें',
+      AssessmentLanguage.hinglish: 'Contact doctor on WhatsApp',
+    },
+    'whatsapp_doctor_btn': {
+      AssessmentLanguage.english: 'Ask Doctor',
+      AssessmentLanguage.hindi: 'डॉक्टर से पूछें',
+      AssessmentLanguage.hinglish: 'Doctor Se Puchein',
+    },
+
+    // Bottom nav buttons
+    'whatsapp_doctor_bottom': {
+      AssessmentLanguage.english: 'WhatsApp Doctor',
+      AssessmentLanguage.hindi: 'डॉक्टर से WhatsApp करें',
+      AssessmentLanguage.hinglish: 'WhatsApp Doctor',
+    },
+    'retake_hair_test': {
+      AssessmentLanguage.english: 'Retest',
+      AssessmentLanguage.hindi: 'पुनः जाँच',
+      AssessmentLanguage.hinglish: 'Retest Karein',
     },
 
     // Overview & Diagnosis Card
@@ -181,16 +340,14 @@ class AssessmentTranslations {
       AssessmentLanguage.hinglish: 'Aapke Scalp Photos',
     },
     'scalp_photos_notice': {
-      AssessmentLanguage.english:
-          'AI checks that photos show a scalp; it does not diagnose from images.',
-      AssessmentLanguage.hindi:
-          'एआई केवल फ़ोटो की गुणवत्ता जाँचता है; अंतिम निदान डॉक्टर द्वारा किया जाता है।',
-      AssessmentLanguage.hinglish:
-          'AI photos verify karta hai; complete diagnosis clinical review se hoti hai.',
+      AssessmentLanguage.english: 'AI checks that photos show a scalp; it does not diagnose from images.',
+      AssessmentLanguage.hindi: 'एआई केवल फ़ोटो की गुणवत्ता जाँचता है; अंतिम निदान डॉक्टर द्वारा किया जाता है।',
+      AssessmentLanguage.hinglish: 'AI photos verify karta hai; complete diagnosis clinical review se hoti hai.',
     },
     'tap_to_zoom': {
       AssessmentLanguage.english: 'Tap any photo to view full-screen & zoom',
-      AssessmentLanguage.hindi: 'बड़ा करके देखने और ज़ूम करने के लिए फ़ोटो छुएँ',
+      AssessmentLanguage.hindi:
+          'बड़ा करके देखने और ज़ूम करने के लिए फ़ोटो छुएँ',
       AssessmentLanguage.hinglish:
           'Full-screen zoom ke liye kisi bhi photo par tap karein',
     },
@@ -200,12 +357,9 @@ class AssessmentTranslations {
       AssessmentLanguage.hinglish: 'Koi scalp photo attach nahi hai',
     },
     'scalp_photos_benefit_desc': {
-      AssessmentLanguage.english:
-          'Clear scalp photos help doctors review follicle density and crown patterns more accurately.',
-      AssessmentLanguage.hindi:
-          'स्पष्ट तस्वीरें डॉक्टरों को फॉलिकल डेंसिटी और क्राउन पैटर्न का सटीक विश्लेषण करने में मदद करती हैं।',
-      AssessmentLanguage.hinglish:
-          'Clear photos se doctor follicle density aur crown pattern accurate analyze kar paate hain.',
+      AssessmentLanguage.english: 'Clear scalp photos help doctors review follicle density and crown patterns more accurately.',
+      AssessmentLanguage.hindi: 'स्पष्ट तस्वीरें डॉक्टरों को फॉलिकल डेंसिटी और क्राउन पैटर्न का सटीक विश्लेषण करने में मदद करती हैं।',
+      AssessmentLanguage.hinglish: 'Clear photos se doctor follicle density aur crown pattern accurate analyze kar paate hain.',
     },
     'photo_front': {
       AssessmentLanguage.english: 'Front Hairline',
@@ -216,6 +370,11 @@ class AssessmentTranslations {
       AssessmentLanguage.english: 'Top View',
       AssessmentLanguage.hindi: 'ऊपर का हिस्सा',
       AssessmentLanguage.hinglish: 'Top View',
+    },
+    'photo_top_crown': {
+      AssessmentLanguage.english: 'Top / Crown',
+      AssessmentLanguage.hindi: 'ऊपर / क्राउन',
+      AssessmentLanguage.hinglish: 'Top / Crown Area',
     },
     'photo_crown': {
       AssessmentLanguage.english: 'Crown Vertex',
@@ -236,6 +395,31 @@ class AssessmentTranslations {
       AssessmentLanguage.english: 'Back Scalp',
       AssessmentLanguage.hindi: 'सिर का पिछला हिस्सा',
       AssessmentLanguage.hinglish: 'Back Scalp',
+    },
+    'ai_verified_badge': {
+      AssessmentLanguage.english: 'AI Verified',
+      AssessmentLanguage.hindi: 'एआई सत्यापित',
+      AssessmentLanguage.hinglish: 'AI Verified',
+    },
+    'assessment_intake_badge': {
+      AssessmentLanguage.english: 'Assessment Intake',
+      AssessmentLanguage.hindi: 'मूल्यांकन तस्वीरें',
+      AssessmentLanguage.hinglish: 'Intake Photos',
+    },
+    'ai_clinical_observation': {
+      AssessmentLanguage.english: 'AI Scalp Analysis & Observations',
+      AssessmentLanguage.hindi: 'एआई स्कैल्प विश्लेषण और टिप्पणियाँ',
+      AssessmentLanguage.hinglish: 'AI Scalp Analysis & Insights',
+    },
+    'not_uploaded': {
+      AssessmentLanguage.english: 'Not uploaded',
+      AssessmentLanguage.hindi: 'अपलोड नहीं है',
+      AssessmentLanguage.hinglish: 'Uploaded nahi hai',
+    },
+    'close': {
+      AssessmentLanguage.english: 'Close',
+      AssessmentLanguage.hindi: 'बंद करें',
+      AssessmentLanguage.hinglish: 'Close',
     },
 
     // Doctor Prescribed Care Plan
@@ -352,12 +536,9 @@ class AssessmentTranslations {
       AssessmentLanguage.hinglish: 'Is Result Ko Kaise Use Karein',
     },
     'disclaimer_desc': {
-      AssessmentLanguage.english:
-          'This summary is based on your answers and is not a medical diagnosis. A qualified clinician can assess your symptoms and discuss suitable care.',
-      AssessmentLanguage.hindi:
-          'यह सारांश आपके जवाबों पर आधारित है और यह चिकित्सकीय निदान नहीं है। उपयुक्त देखभाल के लिए डॉक्टर से परामर्श लें।',
-      AssessmentLanguage.hinglish:
-          'Ye summary aapke answers par based hai aur final medical diagnosis nahi hai. Sahi guidance ke liye clinic doctor se consult karein.',
+      AssessmentLanguage.english: 'This summary is based on your answers and is not a medical diagnosis. A qualified clinician can assess your symptoms and discuss suitable care.',
+      AssessmentLanguage.hindi: 'यह सारांश आपके जवाबों पर आधारित है और यह चिकित्सकीय निदान नहीं है। उपयुक्त देखभाल के लिए डॉक्टर से परामर्श लें।',
+      AssessmentLanguage.hinglish: 'Ye summary aapke answers par based hai aur final medical diagnosis nahi hai. Sahi guidance ke liye clinic doctor se consult karein.',
     },
 
     // Next steps & actions
@@ -367,12 +548,9 @@ class AssessmentTranslations {
       AssessmentLanguage.hinglish: 'Aapke Next Steps',
     },
     'next_steps_desc': {
-      AssessmentLanguage.english:
-          'Start with these simple, non-prescription care steps. Products are optional; a clinician can guide treatment when needed.',
-      AssessmentLanguage.hindi:
-          'इन आसान दैनिक देखभाल चरणों से शुरुआत करें। उत्पाद वैकल्पिक हैं; आवश्यकता पड़ने पर डॉक्टर मार्गदर्शन करेंगे।',
-      AssessmentLanguage.hinglish:
-          'In simple daily care steps se start karein. Products optional hain; zarurat padne par doctor guidance denge.',
+      AssessmentLanguage.english: 'Start with these simple, non-prescription care steps. Products are optional; a clinician can guide treatment when needed.',
+      AssessmentLanguage.hindi: 'इन आसान दैनिक देखभाल चरणों से शुरुआत करें। उत्पाद वैकल्पिक हैं; आवश्यकता पड़ने पर डॉक्टर मार्गदर्शन करेंगे।',
+      AssessmentLanguage.hinglish: 'In simple daily care steps se start karein. Products optional hain; zarurat padne par doctor guidance denge.',
     },
     'open_daily_care_routine': {
       AssessmentLanguage.english: 'Open daily care routine',
@@ -400,12 +578,10 @@ class AssessmentTranslations {
       AssessmentLanguage.hinglish: 'Share Summary',
     },
     'in_person_consultation_recommended': {
-      AssessmentLanguage.english:
-          'In-Person Clinical Consultation Recommended',
+      AssessmentLanguage.english: 'In-Person Clinical Consultation Recommended',
       AssessmentLanguage.hindi:
           'क्लिनिक में प्रत्यक्ष परामर्श की सलाह दी जाती है',
-      AssessmentLanguage.hinglish:
-          'In-Person Clinic Consultation Recommended',
+      AssessmentLanguage.hinglish: 'In-Person Clinic Consultation Recommended',
     },
     'contact_doctor_whatsapp': {
       AssessmentLanguage.english: 'Contact doctor on WhatsApp',
@@ -499,7 +675,10 @@ class AssessmentTranslations {
   }
 
   /// Dynamic Root Cause Factor translation
-  static String translateRootCauseFactor(String factor, AssessmentLanguage lang) {
+  static String translateRootCauseFactor(
+    String factor,
+    AssessmentLanguage lang,
+  ) {
     if (lang == AssessmentLanguage.english) return factor;
     final f = factor.toLowerCase();
 
@@ -523,7 +702,9 @@ class AssessmentTranslations {
           ? 'स्कैल्प में कम रक्त संचार'
           : 'Scalp Blood Flow / Circulation Issue';
     }
-    if (f.contains('dandruff') || f.contains('sebum') || f.contains('seborrheic')) {
+    if (f.contains('dandruff') ||
+        f.contains('sebum') ||
+        f.contains('seborrheic')) {
       return lang == AssessmentLanguage.hindi
           ? 'रूसी और सीबम जमाव (Dandruff Build-up)'
           : 'Dandruff & Scalp Buildup';
@@ -538,7 +719,8 @@ class AssessmentTranslations {
     String originalExplanation,
     AssessmentLanguage lang,
   ) {
-    if (lang == AssessmentLanguage.english || originalExplanation.trim().isEmpty) {
+    if (lang == AssessmentLanguage.english ||
+        originalExplanation.trim().isEmpty) {
       return originalExplanation;
     }
 

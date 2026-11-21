@@ -14,6 +14,7 @@ class ShellBottomNavBar extends StatefulWidget {
   final int cartItemCount;
   final int? cartSubtotal;
   final bool isShopEnabled;
+  final bool isVideosEnabled;
   final VoidCallback? onShopPressed;
 
   const ShellBottomNavBar({
@@ -26,6 +27,7 @@ class ShellBottomNavBar extends StatefulWidget {
     this.cartItemCount = 0,
     this.cartSubtotal,
     this.isShopEnabled = false,
+    this.isVideosEnabled = true,
     this.onShopPressed,
   });
 
@@ -38,9 +40,16 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
   int _lastPillIndex = 0;
 
   int? _getPillIndex(int tabIndex) {
-    if (tabIndex >= 0 && tabIndex <= 3) {
-      return tabIndex;
+    if (widget.isVideosEnabled) {
+      if (tabIndex >= 0 && tabIndex <= 3) {
+        return tabIndex;
+      }
+      return null;
     }
+    // When videos tab is hidden (3 visible tabs: 0: Home, 1: Reviews, 3: Profile)
+    if (tabIndex == 0) return 0;
+    if (tabIndex == 1) return 1;
+    if (tabIndex == 3) return 2;
     return null;
   }
 
@@ -55,7 +64,7 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
     final bool isIOS = Theme.of(context).platform == TargetPlatform.iOS;
     final Duration motionDuration = disableMotion
         ? Duration.zero
-        : const Duration(milliseconds: 180);
+        : const Duration(milliseconds: 360);
     final double barHeight = isIOS ? 53 : 55;
 
     final int? currentPillIndex = _getPillIndex(widget.currentIndex);
@@ -113,13 +122,19 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
                     ignoring: widget.isHidden,
                     child: AnimatedSlide(
                       duration: motionDuration,
-                      curve: Curves.easeOutCubic,
-                      offset: Offset(0, widget.isHidden ? 1.25 : 0),
-                      child: AnimatedOpacity(
+                      curve: Curves.easeInOutCubic,
+                      offset: Offset(0, widget.isHidden ? 1.4 : 0),
+                      child: AnimatedScale(
                         duration: motionDuration,
-                        curve: Curves.easeOutCubic,
-                        opacity: widget.isHidden ? 0 : 1,
-                        child: _buildCartSummaryBar(),
+                        curve: Curves.easeInOutCubic,
+                        scale: widget.isHidden ? 0.7 : 1.0,
+                        alignment: Alignment.bottomCenter,
+                        child: AnimatedOpacity(
+                          duration: motionDuration,
+                          curve: Curves.easeInOutCubic,
+                          opacity: widget.isHidden ? 0 : 1,
+                          child: _buildCartSummaryBar(),
+                        ),
                       ),
                     ),
                   ),
@@ -132,36 +147,51 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
                 padding: const EdgeInsets.symmetric(horizontal: 16)
                     .copyWith(bottom: isIOS ? 0 : 10),
                 child: Center(
-                  child: widget.isShopEnabled
-                      ? Row(
+                  child: Builder(
+                    builder: (context) {
+                      final int slotCount = widget.isVideosEnabled ? 4 : 3;
+                      const double maxTabWidth = 70.0;
+                      final double maxPillWidth =
+                          (slotCount * maxTabWidth) + 8.0;
+
+                      if (widget.isShopEnabled) {
+                        return Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 300),
+                              constraints: BoxConstraints(
+                                maxWidth: maxPillWidth,
+                              ),
                               child: _buildPill(
                                 barHeight: barHeight,
                                 motionDuration: motionDuration,
                                 targetSlotIndex: targetSlotIndex,
                                 isPillIndicatorVisible: isPillIndicatorVisible,
+                                maxTabWidth: maxTabWidth,
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 12),
                             _buildShopActionButton(
                               barHeight: barHeight,
                               motionDuration: motionDuration,
                             ),
                           ],
-                        )
-                      : ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 300),
-                          child: _buildPill(
-                            barHeight: barHeight,
-                            motionDuration: motionDuration,
-                            targetSlotIndex: targetSlotIndex,
-                            isPillIndicatorVisible: isPillIndicatorVisible,
-                          ),
+                        );
+                      }
+
+                      return ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: maxPillWidth),
+                        child: _buildPill(
+                          barHeight: barHeight,
+                          motionDuration: motionDuration,
+                          targetSlotIndex: targetSlotIndex,
+                          isPillIndicatorVisible: isPillIndicatorVisible,
+                          maxTabWidth: maxTabWidth,
                         ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
@@ -176,97 +206,118 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
     required Duration motionDuration,
     required int targetSlotIndex,
     required bool isPillIndicatorVisible,
+    double maxTabWidth = 70.0,
   }) {
+    final int slotCount = widget.isVideosEnabled ? 4 : 3;
+    final double maxPillWidth = (slotCount * maxTabWidth) + 8.0;
+
     return IgnorePointer(
       ignoring: widget.isHidden,
       child: AnimatedSlide(
         duration: motionDuration,
         curve: Curves.easeInOutCubic,
         offset: Offset(0, widget.isHidden ? 1.5 : 0),
-        child: AnimatedOpacity(
+        child: AnimatedScale(
           duration: motionDuration,
           curve: Curves.easeInOutCubic,
-          opacity: widget.isHidden ? 0 : 1,
-          child: Container(
-            width: double.infinity,
-            height: barHeight,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(36),
-              border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final double slotWidth = constraints.maxWidth / 4;
-                final double indicatorLeft = (targetSlotIndex * slotWidth) + 2;
+          scale: widget.isHidden ? 0.5 : 1.0,
+          alignment: Alignment.bottomCenter,
+          child: AnimatedOpacity(
+            duration: motionDuration,
+            curve: Curves.easeInOutCubic,
+            opacity: widget.isHidden ? 0 : 1,
+            child: Container(
+              width: maxPillWidth,
+              constraints: BoxConstraints(maxWidth: maxPillWidth),
+              height: barHeight,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(36),
+                border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 2,
+                    offset: const Offset(0, 0),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final double slotWidth = (constraints.maxWidth / slotCount)
+                      .clamp(0.0, maxTabWidth);
+                  final double indicatorLeft =
+                      (targetSlotIndex * slotWidth) + 2;
 
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // Fluid Sliding Capsule Indicator
-                    AnimatedPositioned(
-                      duration: motionDuration,
-                      curve: Curves.easeOutCubic,
-                      left: indicatorLeft,
-                      top: 2,
-                      bottom: 2,
-                      width: slotWidth - 4,
-                      child: AnimatedOpacity(
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // Fluid Sliding Capsule Indicator
+                      AnimatedPositioned(
                         duration: motionDuration,
-                        opacity: isPillIndicatorVisible ? 1.0 : 0.0,
                         curve: Curves.easeOutCubic,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F3F5),
-                            borderRadius: BorderRadius.circular(25),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.025),
-                                blurRadius: 6,
-                                offset: const Offset(0, 1),
-                              ),
-                            ],
+                        left: indicatorLeft,
+                        top: 2,
+                        bottom: 2,
+                        width: slotWidth - 4,
+                        child: AnimatedOpacity(
+                          duration: motionDuration,
+                          opacity: isPillIndicatorVisible ? 1.0 : 0.0,
+                          curve: Curves.easeOutCubic,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F3F5),
+                              borderRadius: BorderRadius.circular(25),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.025),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
 
-                    // Tab Items Row
-                    Positioned.fill(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildTabItem(
-                            index: 0,
-                            icon: LucideIcons.home,
-                            label: 'Home',
-                            motionDuration: motionDuration,
-                          ),
-                          _buildTabItem(
-                            index: 1,
-                            icon: LucideIcons.listChecks,
-                            label: 'Reviews',
-                            motionDuration: motionDuration,
-                          ),
-                          _buildTabItem(
-                            index: 2,
-                            icon: LucideIcons.circlePlay,
-                            label: 'Videos',
-                            motionDuration: motionDuration,
-                          ),
-                          _buildTabItem(
-                            index: 3,
-                            icon: LucideIcons.userRound,
-                            label: 'Profile',
-                            motionDuration: motionDuration,
-                          ),
-                        ],
+                      // Tab Items Row
+                      Positioned.fill(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildTabItem(
+                              index: 0,
+                              icon: LucideIcons.home,
+                              label: 'Home',
+                              motionDuration: motionDuration,
+                            ),
+                            _buildTabItem(
+                              index: 1,
+                              icon: LucideIcons.listChecks,
+                              label: 'Reviews',
+                              motionDuration: motionDuration,
+                            ),
+                            if (widget.isVideosEnabled)
+                              _buildTabItem(
+                                index: 2,
+                                icon: LucideIcons.circlePlay,
+                                label: 'Videos',
+                                motionDuration: motionDuration,
+                              ),
+                            _buildTabItem(
+                              index: 3,
+                              icon: LucideIcons.userRound,
+                              label: 'Profile',
+                              motionDuration: motionDuration,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                );
-              },
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -449,39 +500,44 @@ class _ShellBottomNavBarState extends State<ShellBottomNavBar> {
       child: AnimatedSlide(
         duration: motionDuration,
         curve: Curves.easeInOutCubic,
-        offset: Offset(0, widget.isHidden ? 1.5 : 0),
-        child: AnimatedOpacity(
+        offset: Offset(widget.isHidden ? 2.2 : 0, 0),
+        child: AnimatedScale(
           duration: motionDuration,
           curve: Curves.easeInOutCubic,
-          opacity: widget.isHidden ? 0 : 1,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                widget.onShopPressed?.call();
-              },
-              borderRadius: BorderRadius.circular(36),
-              child: Container(
-                width: barHeight,
-                height: barHeight,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.35),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+          scale: widget.isHidden ? 0.1 : 1.0,
+          alignment: Alignment.centerRight,
+          child: AnimatedOpacity(
+            duration: motionDuration,
+            curve: Curves.easeInOutCubic,
+            opacity: widget.isHidden ? 0 : 1,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  widget.onShopPressed?.call();
+                },
+                borderRadius: BorderRadius.circular(36),
+                child: Tooltip(
+                  message: 'Medicines & Products',
+                  child: Container(
+                    width: barHeight,
+                    height: barHeight,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFFF1F5F9),
+                        width: 1.2,
+                      ),
                     ),
-                  ],
-                ),
-                child: const Center(
-                  child: Icon(
-                    LucideIcons.shoppingBag,
-                    size: 20,
-                    color: Colors.white,
+                    child: const Center(
+                      child: Icon(
+                        LucideIcons.pill,
+                        size: 20,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ),

@@ -9,6 +9,7 @@ import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_s
 import 'package:dr_hair/features/appointments/data/patient_appointment_api.dart';
 import 'package:dr_hair/features/appointments/presentation/clinic_appointment_cubit.dart';
 import 'package:dr_hair/features/appointments/presentation/clinic_appointment_view.dart';
+import 'package:dr_hair/features/appointments/presentation/widgets/appointment_date_picker_bottom_sheet.dart';
 import 'package:dr_hair/features/appointments/presentation/widgets/appointment_payment_sheet.dart';
 import 'package:dr_hair/features/auth/domain/models/user_model.dart';
 import 'package:dr_hair/features/auth/presentation/viewmodels/auth_cubit.dart';
@@ -107,7 +108,7 @@ class _FakeAppConfigCubit extends AppConfigCubit {
   }
 
   @override
-  Future<void> loadConfig() async {
+  Future<void> loadConfig({bool force = false}) async {
     // Keep mocked billing state without triggering real network request in tests
   }
 }
@@ -140,6 +141,8 @@ void main() {
       final appConfigCubit = _FakeAppConfigCubit(
         const AppointmentBillingConfig(
           configured: true,
+          payAtClinicEnabled: false,
+          onlinePayEnabled: true,
           paymentRequired: true,
           consultationFee: 500,
           effectiveFee: 500,
@@ -458,6 +461,8 @@ void main() {
       final appConfigCubit = _FakeAppConfigCubit(
         const AppointmentBillingConfig(
           configured: true,
+          payAtClinicEnabled: true,
+          onlinePayEnabled: false,
           paymentRequired: false,
           consultationFee: 450,
           firstAppointmentFree: false,
@@ -478,7 +483,60 @@ void main() {
 
       expect(find.text('Consultation · ₹450'), findsOneWidget);
       expect(find.text('Continue · Pay at clinic'), findsOneWidget);
-      expect(find.text('No Online Payment Required'), findsOneWidget);
+      expect(find.text('Pay at Clinic Desk (Offline)'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'renders dual payment options UI when both online pay and pay at clinic are active',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final cache = AppLocalCache.inMemory();
+      final appointmentCubit = ClinicAppointmentCubit(
+        cache: cache,
+        api: _MockAppointmentApi(),
+      );
+      final user = const UserModel(
+        id: '994',
+        patientId: 'PAT-994',
+        name: 'Dual Mode Patient',
+        emailOrPhone: '9876500004',
+        phone: '9876500004',
+        age: 32,
+        gender: 'Male',
+        isGuest: false,
+      );
+      final authCubit = _FakeAuthCubit(user);
+      final appConfigCubit = _FakeAppConfigCubit(
+        const AppointmentBillingConfig(
+          configured: true,
+          payAtClinicEnabled: true,
+          onlinePayEnabled: true,
+          paymentRequired: false,
+          consultationFee: 500,
+          firstAppointmentFree: false,
+        ),
+      );
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<AuthCubit>.value(value: authCubit),
+            BlocProvider<ClinicAppointmentCubit>.value(value: appointmentCubit),
+            BlocProvider<AppConfigCubit>.value(value: appConfigCubit),
+          ],
+          child: const MaterialApp(home: ClinicAppointmentView()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pay at Clinic or Online Pay'), findsOneWidget);
+      expect(find.text('Clinic or Online'), findsOneWidget);
+      expect(find.text('Continue · Pay at clinic'), findsOneWidget);
     },
   );
 
@@ -665,4 +723,259 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'AppointmentPaymentSheet displays dual payment options (online pay & pay at clinic) and returns Pending for pay at clinic',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      AppointmentPaymentResult? result;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result = await AppointmentPaymentSheet.show(
+                      context,
+                      startsAt: DateTime(2026, 12, 1, 11, 00),
+                      doctorName: 'Dr. Jai Bansal',
+                      fee: 500,
+                      payAtClinicEnabled: true,
+                      onlinePayEnabled: true,
+                    );
+                  },
+                  child: const Text('Open Dual Payment Sheet'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Dual Payment Sheet'));
+      await tester.pumpAndSettle();
+
+      // Verify both online options and Pay at Clinic option are present
+      expect(find.textContaining('UPI (GPay / PhonePe / Paytm / QR)'), findsOneWidget);
+      expect(find.text('Pay Cash at Clinic Desk'), findsOneWidget);
+
+      // Select Pay Cash at Clinic
+      await tester.tap(find.text('Pay Cash at Clinic Desk'));
+      await tester.pumpAndSettle();
+
+      // Confirm Booking
+      final confirmButton = find.text('Confirm Booking (Pay ₹500 at Clinic)');
+      expect(confirmButton, findsOneWidget);
+      await tester.tap(confirmButton);
+      await tester.pumpAndSettle();
+
+      expect(result, isNotNull);
+      expect(result?.amount, 500);
+      expect(result?.paymentMethod, 'Pay at clinic');
+      expect(result?.paymentStatus, 'Pending');
+    },
+  );
+
+  testWidgets(
+    'AppointmentPaymentSheet displays only Pay at Clinic when online pay is disabled by admin',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      AppointmentPaymentResult? result;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result = await AppointmentPaymentSheet.show(
+                      context,
+                      startsAt: DateTime(2026, 12, 1, 11, 00),
+                      doctorName: 'Dr. Jai Bansal',
+                      fee: 500,
+                      payAtClinicEnabled: true,
+                      onlinePayEnabled: false,
+                    );
+                  },
+                  child: const Text('Open Clinic Only Sheet'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Clinic Only Sheet'));
+      await tester.pumpAndSettle();
+
+      // Only Pay at clinic option is visible, UPI is not visible
+      expect(find.textContaining('UPI (GPay'), findsNothing);
+      expect(find.text('Pay Cash at Clinic Desk'), findsOneWidget);
+
+      final confirmButton = find.text('Confirm Booking (Pay ₹500 at Clinic)');
+      expect(confirmButton, findsOneWidget);
+      await tester.tap(confirmButton);
+      await tester.pumpAndSettle();
+
+      expect(result, isNotNull);
+      expect(result?.paymentStatus, 'Pending');
+      expect(result?.paymentMethod, 'Pay at clinic');
+    },
+  );
+
+  testWidgets(
+    'ClinicAppointmentView renders Refunded and Fee-fallback badges on appointment cards without null strings',
+    (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final user = const UserModel(
+        id: 'user-77',
+        patientId: 'DHP0077',
+        emailOrPhone: '9876543210',
+        phone: '9876543210',
+        name: 'Test Patient',
+        gender: 'Male',
+        age: 30,
+      );
+      final authCubit = _FakeAuthCubit(user);
+      final appConfigCubit = _FakeAppConfigCubit(
+        const AppointmentBillingConfig(
+          configured: true,
+          consultationFee: 500,
+          payAtClinicEnabled: true,
+          onlinePayEnabled: true,
+        ),
+      );
+
+      final mockApi = _MockAppointmentApi([
+        {
+          'id': 'apt-refunded',
+          'userId': 'user-77',
+          'patient_code': 'DHP0077',
+          'starts_at': '2026-12-05T10:00:00.000Z',
+          'reason': 'PRP assessment',
+          'status': 'Cancelled',
+          'consultation_fee': 500,
+          'payment_status': 'Refunded',
+          'payment_method': 'Razorpay',
+        },
+        {
+          'id': 'apt-pending-nullfee',
+          'userId': 'user-77',
+          'patient_code': 'DHP0077',
+          'starts_at': '2026-12-08T11:00:00.000Z',
+          'reason': 'Scalp consultation',
+          'status': 'Requested',
+          'consultation_fee': null,
+          'payment_status': 'Pending',
+          'payment_method': 'Pay at clinic',
+        },
+      ]);
+
+      final appointmentCubit = ClinicAppointmentCubit(
+        api: mockApi,
+        cache: AppLocalCache.inMemory(),
+      );
+      await appointmentCubit.loadFromApi('test-token', true);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MultiBlocProvider(
+            providers: [
+              BlocProvider<AuthCubit>.value(value: authCubit),
+              BlocProvider<AppConfigCubit>.value(value: appConfigCubit),
+              BlocProvider<ClinicAppointmentCubit>.value(value: appointmentCubit),
+            ],
+            child: const ClinicAppointmentView(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Ensure Refunded badge is rendered
+      expect(find.text('Payment Refunded'), findsOneWidget);
+      // Ensure fallback pending fee is rendered without '₹null'
+      expect(find.text('Payment Pending · ₹500 (Pay at clinic)'), findsOneWidget);
+      expect(find.textContaining('₹null'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'AppointmentDatePickerBottomSheet availability cache returns fast and can be cleared',
+    (tester) async {
+      AppointmentDatePickerBottomSheet.clearAvailabilityCache();
+      var callCount = 0;
+      final countingApi = _CountingAvailabilityApi(() => callCount++);
+
+      final now = DateTime(2026, 12, 1);
+      Widget buildSheet(Key key) => MaterialApp(
+        home: Scaffold(
+          body: AppointmentDatePickerBottomSheet(
+            key: key,
+            initialDate: now,
+            api: countingApi,
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(buildSheet(const ValueKey('sheet-1')));
+      await tester.pumpAndSettle();
+
+      expect(callCount, 1);
+
+      // Re-opening / re-building sheet within cache duration should hit cache
+      await tester.pumpWidget(buildSheet(const ValueKey('sheet-2')));
+      await tester.pumpAndSettle();
+
+      expect(callCount, 1); // No new network call!
+
+      // Clear cache and verify it re-fetches
+      AppointmentDatePickerBottomSheet.clearAvailabilityCache();
+      await tester.pumpWidget(buildSheet(const ValueKey('sheet-3')));
+      await tester.pumpAndSettle();
+
+      expect(callCount, 2);
+    },
+  );
+}
+
+class _CountingAvailabilityApi extends PatientAppointmentApi {
+  final VoidCallback onCall;
+  _CountingAvailabilityApi(this.onCall);
+
+  @override
+  Future<Map<String, dynamic>> getAvailability({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    onCall();
+    return {
+      'timezone': 'Asia/Kolkata',
+      'is_configured': true,
+      'booking_window_days': 90,
+      'slot_interval_minutes': 30,
+      'appointment_duration_minutes': 30,
+      'appointment_services': ['Consultation'],
+      'weekly_closed_weekdays': [7],
+      'sessions': [
+        {'label': 'Morning Session', 'opens_at': '10:00', 'closes_at': '12:30'},
+      ],
+      'closed_dates': [],
+      'booked_slots': [],
+    };
+  }
 }

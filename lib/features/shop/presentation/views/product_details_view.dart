@@ -1833,6 +1833,7 @@ class _PincodeDeliveryCard extends StatefulWidget {
 class _PincodeDeliveryCardState extends State<_PincodeDeliveryCard> {
   late final TextEditingController _controller;
   final CommerceRemoteDataSource _commerce = CommerceRemoteDataSource();
+  static final Map<String, Map<String, dynamic>> _quoteCache = {};
   Map<String, dynamic>? _quote;
   String? _error;
   bool _loading = false;
@@ -1854,14 +1855,24 @@ class _PincodeDeliveryCardState extends State<_PincodeDeliveryCard> {
   @override
   void didUpdateWidget(covariant _PincodeDeliveryCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.productId != widget.productId ||
-        oldWidget.plan != widget.plan) {
+    if (oldWidget.productId != widget.productId) {
       _quote = null;
       _checkPincode();
+    } else if (oldWidget.plan != widget.plan) {
+      final pin = _controller.text.trim();
+      final cacheKey = '$pin-${widget.productId}';
+      if (_quoteCache.containsKey(cacheKey)) {
+        setState(() {
+          _quote = _quoteCache[cacheKey];
+          _error = null;
+        });
+      } else {
+        _checkPincode();
+      }
     }
   }
 
-  Future<void> _checkPincode() async {
+  Future<void> _checkPincode({bool force = false}) async {
     final pin = _controller.text.trim();
     if (!PincodeDeliveryService.isValidPincode(pin)) {
       setState(() {
@@ -1870,6 +1881,17 @@ class _PincodeDeliveryCardState extends State<_PincodeDeliveryCard> {
       });
       return;
     }
+
+    final cacheKey = '$pin-${widget.productId}';
+    if (!force && _quoteCache.containsKey(cacheKey)) {
+      setState(() {
+        _quote = _quoteCache[cacheKey];
+        _error = null;
+        _loading = false;
+      });
+      return;
+    }
+
     HapticFeedback.lightImpact();
     await PincodeDeliveryService.rememberPincode(pin);
     setState(() {
@@ -1884,6 +1906,7 @@ class _PincodeDeliveryCardState extends State<_PincodeDeliveryCard> {
           {'productId': widget.productId, 'plan': widget.plan, 'quantity': 1},
         ],
       );
+      _quoteCache[cacheKey] = quote;
       if (mounted) {
         setState(() {
           _quote = quote;

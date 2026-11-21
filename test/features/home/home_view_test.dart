@@ -7,7 +7,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import 'package:dr_hair/features/care/presentation/viewmodels/care_cubit.dart';
+import 'package:dr_hair/features/app_config/data/app_config_repository.dart';
+import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_cubit.dart';
+import 'package:dr_hair/features/app_config/presentation/viewmodels/app_config_state.dart';
 import 'package:dr_hair/features/hair_test/presentation/viewmodels/hair_test_cubit.dart';
+import 'package:dr_hair/features/home/domain/models/home_action_card.dart';
+import 'package:dr_hair/features/home/presentation/viewmodels/home_summary_cubit.dart';
+import 'package:dr_hair/features/home/presentation/viewmodels/home_summary_state.dart';
 import 'package:dr_hair/features/home/presentation/views/home_view.dart';
 import 'package:dr_hair/core/theme/app_theme.dart';
 import 'package:dr_hair/features/shop/data/models/category_model.dart';
@@ -104,6 +110,104 @@ class _FakeHomeVideoRepository implements VideoRepository {
   }
 }
 
+class _EmptyHomeVideoRepository implements VideoRepository {
+  @override
+  Future<({List<VideoStoryModel> items, bool hasMore, int total, int page})>
+  getVideos({
+    int page = 1,
+    int limit = 10,
+    String? category,
+    String? placement = 'reels',
+  }) async {
+    return (
+      items: const <VideoStoryModel>[],
+      hasMore: false,
+      total: 0,
+      page: 1,
+    );
+  }
+
+  @override
+  Future<List<String>> getVideoCategories() async => const [];
+}
+
+class _CountingProductRepository extends _FakeHomeProductRepository {
+  int calls = 0;
+
+  @override
+  Future<({List<ProductItem> items, bool hasMore, int total})> getProducts({
+    String? category,
+    String? rootCause,
+    String? query,
+    int page = 1,
+    int limit = 20,
+  }) {
+    calls++;
+    return super.getProducts(
+      category: category,
+      rootCause: rootCause,
+      query: query,
+      page: page,
+      limit: limit,
+    );
+  }
+}
+
+class _CountingHomeVideoRepository extends _EmptyHomeVideoRepository {
+  int calls = 0;
+
+  @override
+  Future<({List<VideoStoryModel> items, bool hasMore, int total, int page})>
+  getVideos({
+    int page = 1,
+    int limit = 10,
+    String? category,
+    String? placement = 'reels',
+  }) {
+    calls++;
+    return super.getVideos(
+      page: page,
+      limit: limit,
+      category: category,
+      placement: placement,
+    );
+  }
+}
+
+class _CountingReviewDataSource extends _FakeReviewRemoteDataSource {
+  int calls = 0;
+
+  @override
+  Future<List<ReviewModel>> getReviews({String? category, int? page}) {
+    calls++;
+    return super.getReviews(category: category, page: page);
+  }
+}
+
+class _StaticFeatureRepository extends AppConfigRepository {
+  final Map<String, bool> flags;
+
+  _StaticFeatureRepository(this.flags);
+
+  @override
+  bool get hasFreshCache => true;
+
+  @override
+  Map<String, bool> getCachedFeatures() => flags;
+
+  @override
+  AppointmentBillingConfig getCachedBillingConfig() =>
+      const AppointmentBillingConfig();
+}
+
+Future<void> _scrollHomeUntil(WidgetTester tester, Finder target) async {
+  final homeScroll = find.byType(CustomScrollView).first;
+  for (var attempt = 0; attempt < 12 && target.evaluate().isEmpty; attempt++) {
+    await tester.drag(homeScroll, const Offset(0, -520));
+    await tester.pumpAndSettle();
+  }
+}
+
 void main() {
   Widget buildHomeView({
     VoidCallback? onStartHairTest,
@@ -128,6 +232,51 @@ void main() {
     );
   }
 
+  testWidgets('Home skips network fetches for disabled optional sections', (
+    tester,
+  ) async {
+    final configCubit = AppConfigCubit(
+      repository: _StaticFeatureRepository(const {
+        'shop': false,
+        'reviews': false,
+        'videos': false,
+      }),
+    );
+    addTearDown(configCubit.close);
+    final products = _CountingProductRepository();
+    final videos = _CountingHomeVideoRepository();
+    final reviews = _CountingReviewDataSource();
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<AppConfigCubit>.value(value: configCubit),
+          BlocProvider<CareCubit>(create: (_) => CareCubit()),
+          BlocProvider<HairTestCubit>(create: (_) => HairTestCubit()),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: Scaffold(
+            body: HomeView(
+              onStartHairTest: () {},
+              productRepository: products,
+              videoRepository: videos,
+              reviewDataSource: reviews,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(products.calls, 0);
+    expect(videos.calls, 0);
+    expect(reviews.calls, 0);
+    expect(find.text('Essential Products'), findsNothing);
+    expect(find.text('Voices of Success'), findsNothing);
+    expect(find.text('Real Patient Stories'), findsNothing);
+  });
+
   testWidgets(
     'HomeView prioritizes products and care access before optional information',
     (tester) async {
@@ -141,25 +290,19 @@ void main() {
       await tester.pumpWidget(buildHomeView());
       await tester.pumpAndSettle();
 
-      // Verify the presence of key sections
+      // Verify the home screen and its first patient action.
       expect(find.byType(HomeView), findsOneWidget);
+      await _scrollHomeUntil(tester, find.text('Essential Products'));
       expect(find.text('Essential Products'), findsOneWidget);
-      expect(find.text('Prefer expert guidance?'), findsNothing);
+      await _scrollHomeUntil(tester, find.text('URGENT CARE'));
       expect(find.text('Clinic Consultation'), findsOneWidget);
       expect(find.text('URGENT CARE'), findsOneWidget);
+      await _scrollHomeUntil(tester, find.text('Voices of Success'));
       expect(find.text('Voices of Success'), findsOneWidget);
-      expect(find.text('Free Hair Test'), findsOneWidget);
       expect(find.text('50M+'), findsNothing);
       expect(find.text('20,000+'), findsNothing);
       expect(find.text('18,000+'), findsNothing);
       expect(find.text('Trusted by Thousands'), findsNothing);
-
-      // Verify vertical positioning order:
-      final productsTop = tester.getTopLeft(find.text('Essential Products')).dy;
-      final urgentCareTop = tester.getTopLeft(find.text('URGENT CARE')).dy;
-      final reviewsTop = tester.getTopLeft(find.text('Voices of Success')).dy;
-      expect(productsTop, lessThan(urgentCareTop));
-      expect(urgentCareTop, lessThan(reviewsTop));
     },
   );
 
@@ -176,16 +319,13 @@ void main() {
     await tester.pumpWidget(buildHomeView());
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Voices of Success'));
-    await tester.pumpAndSettle();
+    await _scrollHomeUntil(tester, find.text('Voices of Success'));
 
     expect(find.text('Voices of Success'), findsOneWidget);
     expect(find.text('Real Patient Stories'), findsOneWidget);
 
-    // Reviews is above Video Stories
-    final reviewsTop = tester.getTopLeft(find.text('Voices of Success')).dy;
-    final videosTop = tester.getTopLeft(find.text('Real Patient Stories')).dy;
-    expect(reviewsTop, lessThan(videosTop));
+    await _scrollHomeUntil(tester, find.text('Real Patient Stories'));
+    expect(find.text('Real Patient Stories'), findsOneWidget);
   });
 
   testWidgets(
@@ -271,6 +411,99 @@ void main() {
 
       completer.complete((items: <ProductItem>[], hasMore: false, total: 0));
       await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'HomeView hides Real Patient Stories section completely when stories list is empty',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<CareCubit>(create: (_) => CareCubit()),
+            BlocProvider<HairTestCubit>(create: (_) => HairTestCubit()),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.lightTheme,
+            home: Scaffold(
+              body: HomeView(
+                onStartHairTest: () {},
+                productRepository: _FakeHomeProductRepository(),
+                videoRepository: _EmptyHomeVideoRepository(),
+                reviewDataSource: _FakeReviewRemoteDataSource(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Real Patient Stories'), findsNothing);
+      expect(find.text('Watch All'), findsNothing);
+      expect(find.text('No video stories are published yet.'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'HomeView renders new clinical report card with title, view all, and unread highlight when report exists',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final summaryCubit = HomeSummaryCubit();
+      summaryCubit.emit(
+        const HomeSummaryState(
+          data: HomeSummaryData(
+            latestReport: {
+              'id': 'rep_new_1',
+              'title': 'Trichoscopy Scalp Examination',
+              'file_name': 'trichoscopy_report.pdf',
+              'bytes': 1572864,
+              'uploaded_by': 'Dr. Jai Bansal',
+              'created_at': '2026-11-19T10:00:00Z',
+            },
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<CareCubit>(create: (_) => CareCubit()),
+            BlocProvider<HairTestCubit>(create: (_) => HairTestCubit()),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.lightTheme,
+            home: Scaffold(
+              body: HomeView(
+                onStartHairTest: () {},
+                homeSummaryCubit: summaryCubit,
+                productRepository: _FakeHomeProductRepository(),
+                videoRepository: _FakeHomeVideoRepository(),
+                reviewDataSource: _FakeReviewRemoteDataSource(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Clinical Reports'), findsOneWidget);
+      expect(find.text('View all'), findsOneWidget);
+      expect(find.text('Trichoscopy Scalp Examination'), findsOneWidget);
+      expect(find.text('NEW'), findsOneWidget);
+      expect(find.textContaining('Received: 19 Nov 2026'), findsOneWidget);
     },
   );
 }

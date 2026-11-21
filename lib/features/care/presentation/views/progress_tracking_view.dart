@@ -6,6 +6,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_toast.dart';
 import '../../../auth/presentation/viewmodels/auth_cubit.dart';
 import '../../domain/models/care_models.dart';
 import '../viewmodels/care_cubit.dart';
@@ -448,19 +450,22 @@ class _ProgressTrackingViewState extends State<ProgressTrackingView> {
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
+                    child: AppButton(
+                      height: 44,
+                      text: 'Keep check-in',
+                      variant: AppButtonVariant.outlined,
                       onPressed: () => Navigator.pop(sheetContext, false),
-                      child: const Text('Keep check-in'),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.danger,
-                      ),
+                    child: AppButton(
+                      height: 44,
+                      text: 'Delete check-in',
+                      variant: AppButtonVariant.filled,
+                      backgroundColor: AppColors.danger,
+                      foregroundColor: Colors.white,
                       onPressed: () => Navigator.pop(sheetContext, true),
-                      child: const Text('Delete check-in'),
                     ),
                   ),
                 ],
@@ -475,16 +480,13 @@ class _ProgressTrackingViewState extends State<ProgressTrackingView> {
     try {
       await context.read<CareCubit>().deleteProgressCheckIn(checkIn.id);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Progress check-in deleted.')),
-        );
+        AppToast.showSuccess(context, 'Progress check-in deleted.');
       }
     } catch (_) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not delete this check-in. Please retry.'),
-          ),
+        AppToast.showError(
+          context,
+          'Could not delete this check-in. Please retry.',
         );
       }
     }
@@ -720,25 +722,24 @@ class _ProgressTrackingViewState extends State<ProgressTrackingView> {
                             ),
                           ),
                           const SizedBox(height: 18),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 12,
-                              ),
+                          AppButton(
+                            height: 44,
+                            text: 'Add First Check-in',
+                            icon: const Icon(
+                              LucideIcons.camera,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                            variant: AppButtonVariant.filled,
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
                             ),
                             onPressed: () =>
                                 AddPhotoCheckInBottomSheet.show(context),
-                            icon: const Icon(LucideIcons.camera, size: 16),
-                            label: const Text(
-                              'Add First Check-in',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
                           ),
                         ],
                       ),

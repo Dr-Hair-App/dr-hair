@@ -7,6 +7,10 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/utils/whatsapp_launcher.dart';
+import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_dropdown_form_field.dart';
+import '../../../../core/widgets/app_text_form_field.dart';
+import '../../../../core/widgets/app_toast.dart';
 import '../viewmodels/care_cubit.dart';
 import '../viewmodels/care_state.dart';
 import '../widgets/add_routine_task_bottom_sheet.dart';
@@ -247,10 +251,15 @@ class RoutineTrackerView extends StatelessWidget {
 
               Align(
                 alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  onPressed: () => _showSymptomCheckIn(context),
+                child: AppButton(
+                  height: 38,
+                  text: 'Report a symptom',
                   icon: const Icon(LucideIcons.heartPulse, size: 16),
-                  label: const Text('Report a symptom'),
+                  variant: AppButtonVariant.outlined,
+                  foregroundColor: AppColors.primary,
+                  borderColor: AppColors.primary,
+                  borderRadius: BorderRadius.circular(12),
+                  onPressed: () => _showSymptomCheckIn(context),
                 ),
               ),
 
@@ -301,28 +310,20 @@ class RoutineTrackerView extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      OutlinedButton.icon(
+                      AppButton(
+                        height: 42,
+                        text: 'Book Doctor Consultation',
+                        icon: const Icon(LucideIcons.calendar, size: 16),
+                        variant: AppButtonVariant.outlined,
+                        foregroundColor: AppColors.primary,
+                        borderColor: AppColors.primary,
+                        borderRadius: BorderRadius.circular(14),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 10,
+                        ),
                         onPressed: () =>
                             context.push(RouteNames.clinicAppointment),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          side: const BorderSide(color: AppColors.primary),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 10,
-                          ),
-                        ),
-                        icon: const Icon(LucideIcons.calendar, size: 16),
-                        label: const Text(
-                          'Book Doctor Consultation',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                          ),
-                        ),
                       ),
                     ],
                   ),
@@ -600,9 +601,9 @@ Future<void> _showSymptomCheckIn(BuildContext context) async {
                         }),
                       ),
                     ),
-                    DropdownButtonFormField<String>(
+                    AppDropdownFormField<String>(
                       initialValue: severity,
-                      decoration: const InputDecoration(labelText: 'Severity'),
+                      labelText: 'Severity',
                       items: const [
                         DropdownMenuItem(value: 'mild', child: Text('Mild')),
                         DropdownMenuItem(
@@ -617,15 +618,11 @@ Future<void> _showSymptomCheckIn(BuildContext context) async {
                       onChanged: (value) =>
                           setDialogState(() => severity = value ?? 'mild'),
                     ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      maxLength: 1000,
+                    const SizedBox(height: 10),
+                    AppTextFormField(
+                      labelText: 'Anything else? (optional)',
                       maxLines: 3,
                       onChanged: (value) => note = value,
-                      decoration: const InputDecoration(
-                        labelText: 'Anything else? (optional)',
-                        border: OutlineInputBorder(),
-                      ),
                     ),
                   ],
                 ),
@@ -684,14 +681,11 @@ Future<void> _showSymptomCheckIn(BuildContext context) async {
       ),
     );
   } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          context.read<CareCubit>().state.isCareEventSyncPending
-              ? 'Saved on this device. It will sync when you are online.'
-              : 'Symptom check-in saved.',
-        ),
-      ),
+    AppToast.showSuccess(
+      context,
+      context.read<CareCubit>().state.isCareEventSyncPending
+          ? 'Saved on this device. It will sync when you are online.'
+          : 'Symptom check-in saved.',
     );
   }
 }

@@ -716,25 +716,16 @@ class _AddRoutineTaskBottomSheetState extends State<AddRoutineTaskBottomSheet> {
                 children: [
                   Expanded(
                     flex: 1,
-                    child: OutlinedButton(
+                    child: AppButton(
+                      height: 52,
+                      text: 'Cancel',
+                      variant: AppButtonVariant.outlined,
+                      foregroundColor: AppColors.neutral700,
+                      borderColor: AppColors.neutral300,
+                      borderRadius: BorderRadius.circular(16),
                       onPressed: _isSaving
                           ? null
                           : () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.neutral700,
-                        side: const BorderSide(color: AppColors.neutral300),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -748,7 +739,6 @@ class _AddRoutineTaskBottomSheetState extends State<AddRoutineTaskBottomSheet> {
                         color: Colors.white,
                       ),
                       variant: AppButtonVariant.filled,
-                      size: AppButtonSize.large,
                       height: 48,
                       borderRadius: BorderRadius.circular(16),
                       isLoading: _isSaving,

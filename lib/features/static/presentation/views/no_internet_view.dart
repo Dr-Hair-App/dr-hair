@@ -7,6 +7,8 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/services/network_connection_service.dart';
 import '../../../../core/storage/app_local_cache.dart';
+import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_toast.dart';
 import '../../../app_config/presentation/viewmodels/app_config_cubit.dart';
 import '../../../auth/presentation/viewmodels/auth_cubit.dart';
 
@@ -39,7 +41,7 @@ class _NoInternetViewState extends State<NoInternetView> {
       final appConfigCubit = context.read<AppConfigCubit?>();
       await Future.wait([
         authCubit.restoreSession(),
-        if (appConfigCubit != null) appConfigCubit.loadConfig(),
+        if (appConfigCubit != null) appConfigCubit.loadConfig(force: true),
       ]);
 
       if (!mounted) return;
@@ -65,17 +67,10 @@ class _NoInternetViewState extends State<NoInternetView> {
       }
     } else {
       setState(() => _isChecking = false);
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Still offline. Please check your Wi-Fi or mobile data and try again.',
-            ),
-            backgroundColor: Color(0xFFDC2626),
-            duration: Duration(seconds: 3),
-          ),
-        );
+      AppToast.showError(
+        context,
+        'Still offline. Please check your Wi-Fi or mobile data and try again.',
+      );
     }
   }
 
@@ -181,37 +176,27 @@ class _NoInternetViewState extends State<NoInternetView> {
                 const SizedBox(height: 32),
 
                 // Retry Button
-                SizedBox(
+                AppButton(
                   width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _isChecking ? null : _handleRetry,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    icon: _isChecking
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(LucideIcons.refreshCw, size: 18),
-                    label: Text(
-                      _isChecking ? 'Checking connection…' : 'Retry Connection',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                  height: 52,
+                  isLoading: _isChecking,
+                  text: _isChecking
+                      ? 'Checking connection…'
+                      : 'Retry Connection',
+                  icon: const Icon(
+                    LucideIcons.refreshCw,
+                    size: 18,
+                    color: Colors.white,
                   ),
+                  variant: AppButtonVariant.filled,
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  textStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  onPressed: _handleRetry,
                 ),
                 const SizedBox(height: 12),
 

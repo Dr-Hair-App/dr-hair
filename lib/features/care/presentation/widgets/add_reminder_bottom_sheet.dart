@@ -457,19 +457,22 @@ class _AddReminderBottomSheetState extends State<AddReminderBottomSheet> {
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
+                    child: AppButton(
+                      height: 44,
+                      text: 'Keep reminder',
+                      variant: AppButtonVariant.outlined,
                       onPressed: () => Navigator.pop(sheetContext, false),
-                      child: const Text('Keep reminder'),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.danger,
-                      ),
+                    child: AppButton(
+                      height: 44,
+                      text: 'Delete reminder',
+                      variant: AppButtonVariant.filled,
+                      backgroundColor: AppColors.danger,
+                      foregroundColor: Colors.white,
                       onPressed: () => Navigator.pop(sheetContext, true),
-                      child: const Text('Delete reminder'),
                     ),
                   ),
                 ],
@@ -1223,7 +1226,6 @@ class _AddReminderBottomSheetState extends State<AddReminderBottomSheet> {
                     child: AppButton(
                       text: _isEditing ? 'Update Reminder' : 'Save Reminder',
                       variant: AppButtonVariant.filled,
-                      size: AppButtonSize.large,
                       isLoading: _isSaving,
                       icon: const Icon(
                         LucideIcons.check,

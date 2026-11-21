@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
@@ -8,23 +9,25 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/media/data/smart_image_upload_service.dart';
 import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_text_form_field.dart';
+import '../../../../core/widgets/app_toast.dart';
+import '../../../../core/widgets/apple_bottom_sheet.dart';
+import '../../../../core/widgets/dotted_divider.dart';
 import '../../../../core/widgets/photo_source_bottom_sheet.dart';
 import '../../../auth/presentation/viewmodels/auth_cubit.dart';
 import '../../data/patient_progress_api.dart';
 import '../viewmodels/care_cubit.dart';
-import '../../../../core/widgets/app_toast.dart';
 
 /// Reusable bottom sheet for capturing and logging scalp progress check-in photos
 /// across 3 clinical angles: Front, Top/Crown, and Back.
 class AddPhotoCheckInBottomSheet extends StatefulWidget {
   const AddPhotoCheckInBottomSheet({super.key});
 
-  static Future<void> show(BuildContext context) {
-    return showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+  static Future<void> show(BuildContext context) async {
+    await showAppleBottomSheet<void>(
+      context,
       builder: (modalContext) => const AddPhotoCheckInBottomSheet(),
     );
   }
@@ -44,11 +47,34 @@ class _AddPhotoCheckInBottomSheetState
   bool _savingProgress = false;
   final TextEditingController _notesController = TextEditingController();
   final PatientProgressApi _progressApi = PatientProgressApi();
+  final SmartImageUploadService _imageUploadService =
+      const SmartImageUploadService();
+  final Map<String, PreparedUploadImage> _preparedImages = {};
+  bool _preservePreparedPhotos = false;
 
   @override
   void dispose() {
     _notesController.dispose();
+    if (!_preservePreparedPhotos) {
+      for (final prepared in _preparedImages.values) {
+        unawaited(
+          _imageUploadService.deletePrepared(
+            prepared.originalPath,
+            prepared.uploadPath,
+          ),
+        );
+      }
+    }
     super.dispose();
+  }
+
+  Future<void> _removePreparedPhoto(String angle) async {
+    final prepared = _preparedImages.remove(angle);
+    if (prepared == null) return;
+    await _imageUploadService.deletePrepared(
+      prepared.originalPath,
+      prepared.uploadPath,
+    );
   }
 
   Future<void> _pickPhoto(String angle) async {
@@ -78,17 +104,27 @@ class _AddPhotoCheckInBottomSheetState
       onSelectSource: (source) async {
         try {
           final picker = ImagePicker();
-          final XFile? image = await picker.pickImage(
-            source: source,
-            maxWidth: 1280,
-            maxHeight: 1280,
-            imageQuality: 85,
-          );
+          final XFile? image = await picker.pickImage(source: source);
           if (image != null && mounted) {
+            final prepared = await _imageUploadService.prepare(image.path);
+            if (!mounted) {
+              await _imageUploadService.deletePrepared(
+                prepared.originalPath,
+                prepared.uploadPath,
+              );
+              return;
+            }
+            await _removePreparedPhoto(angle);
+            if (prepared.optimized &&
+                prepared.originalPath != prepared.uploadPath) {
+              final original = File(prepared.originalPath);
+              if (await original.exists()) await original.delete();
+            }
+            _preparedImages[angle] = prepared;
             setState(() {
-              if (angle == 'front') _frontImagePath = image.path;
-              if (angle == 'top') _topImagePath = image.path;
-              if (angle == 'back') _backImagePath = image.path;
+              if (angle == 'front') _frontImagePath = prepared.uploadPath;
+              if (angle == 'top') _topImagePath = prepared.uploadPath;
+              if (angle == 'back') _backImagePath = prepared.uploadPath;
             });
             HapticFeedback.lightImpact();
           }
@@ -160,6 +196,7 @@ class _AddPhotoCheckInBottomSheetState
             ? 'Shared with the clinic. Awaiting clinician review.'
             : null,
       );
+      _preservePreparedPhotos = true;
       HapticFeedback.mediumImpact();
       Navigator.pop(context);
     } catch (error) {
@@ -189,142 +226,148 @@ class _AddPhotoCheckInBottomSheetState
   }) {
     final hasImage = imagePath != null;
 
+    final tile = Container(
+      height: 125,
+      decoration: BoxDecoration(
+        color: hasImage ? Colors.black : AppColors.background,
+        borderRadius: BorderRadius.circular(16),
+        border: hasImage
+            ? Border.all(color: AppColors.primary, width: 2)
+            : null,
+      ),
+      child: Stack(
+        children: [
+          if (hasImage) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.file(
+                File(imagePath),
+                width: double.infinity,
+                height: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+            Positioned(
+              top: 6,
+              right: 6,
+              child: GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  unawaited(_removePreparedPhoto(angle));
+                  setState(() {
+                    if (angle == 'front') _frontImagePath = null;
+                    if (angle == 'top') _topImagePath = null;
+                    if (angle == 'back') _backImagePath = null;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    LucideIcons.x,
+                    size: 12,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 6,
+              left: 6,
+              right: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      LucideIcons.checkCircle2,
+                      size: 11,
+                      color: Color(0xFF10B981),
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: AppColors.primary5,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        fallbackIcon,
+                        color: AppColors.primary,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primaryDark,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      '+ Add Photo',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+
     return Expanded(
       child: GestureDetector(
         onTap: () => _pickPhoto(angle),
-        child: Container(
-          height: 125,
-          decoration: BoxDecoration(
-            color: hasImage ? Colors.black : AppColors.background,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: hasImage ? AppColors.primary : AppColors.border,
-              width: hasImage ? 2 : 1,
-            ),
-          ),
-          child: Stack(
-            children: [
-              if (hasImage) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: Image.file(
-                    File(imagePath),
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                Positioned(
-                  top: 6,
-                  right: 6,
-                  child: GestureDetector(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      setState(() {
-                        if (angle == 'front') _frontImagePath = null;
-                        if (angle == 'top') _topImagePath = null;
-                        if (angle == 'back') _backImagePath = null;
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.black54,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        LucideIcons.x,
-                        size: 12,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 6,
-                  left: 6,
-                  right: 6,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.72),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          LucideIcons.checkCircle2,
-                          size: 11,
-                          color: Color(0xFF10B981),
-                        ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ] else ...[
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: AppColors.primary5,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            fallbackIcon,
-                            color: AppColors.primary,
-                            size: 18,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          label,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primaryDark,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          '+ Add Photo',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
+        child: hasImage
+            ? tile
+            : DottedBorder(
+                radius: 16,
+                color: AppColors.primary100,
+                strokeWidth: 1.2,
+                child: tile,
+              ),
       ),
     );
   }
@@ -508,19 +551,13 @@ class _AddPhotoCheckInBottomSheetState
                     ),
 
                     const SizedBox(height: 16),
-                    TextField(
+                    AppTextFormField(
                       controller: _notesController,
                       maxLines: 3,
-                      decoration: InputDecoration(
-                        // labelText: 'Clinical Notes / Scalp Observations',
-                        hintText: 'e.g. Less hair fall, thicker feel at crown, regular serum application.',
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppColors.border),
-                        ),
-                      ),
+                      hintText: 'e.g. Less hair fall, thicker feel at crown, regular serum application.',
+                      fillColor: AppColors.background,
+                      filled: true,
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ],
                 ),

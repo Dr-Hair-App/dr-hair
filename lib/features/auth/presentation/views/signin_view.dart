@@ -139,6 +139,7 @@ class _SigninViewState extends State<SigninView>
   void _onLoginSuccess() {
     if (!mounted) return;
     final authCubit = context.read<AuthCubit>();
+    final authState = authCubit.state;
     String? redirect;
     try {
       redirect = GoRouterState.of(context).uri.queryParameters['redirect'];
@@ -146,23 +147,56 @@ class _SigninViewState extends State<SigninView>
       // In tests or non-GoRouter contexts
     }
 
-    if (authCubit.state.requiresProfileCompletion ||
-        authCubit.state.nextStep == 'COMPLETE_PROFILE') {
-      final target = redirect != null && redirect.isNotEmpty
-          ? '${RouteNames.completeProfile}?redirect=${Uri.encodeComponent(redirect)}'
-          : RouteNames.completeProfile;
-      context.go(target);
-    } else if (redirect != null &&
-        redirect.isNotEmpty &&
-        redirect != RouteNames.signin) {
-      context.go(redirect);
-    } else if (authCubit.state.nextStep == 'ASSESSMENT' ||
-        !authCubit.state.hasCompletedAssessment) {
+    final requestedRoute =
+        redirect != null &&
+            redirect.startsWith('/') &&
+            redirect != RouteNames.signin &&
+            redirect != RouteNames.completeProfile
+        ? redirect
+        : null;
+    final profileGender = authState.user?.gender?.trim().toLowerCase();
+    final needsGoogleGender =
+        authState.socialProvider == 'google' &&
+        !const {
+          'female',
+          'male',
+          'non-binary',
+          'prefer not to say',
+        }.contains(profileGender);
+    final needsProfile =
+        authState.requiresProfileCompletion ||
+        authState.nextStep == 'COMPLETE_PROFILE' ||
+        needsGoogleGender;
+    final shouldStartAssessment =
+        authState.nextStep == 'ASSESSMENT' || !authState.hasCompletedAssessment;
+
+    if (needsProfile) {
+      // A just-created Google patient starts onboarding with the assessment.
+      // Returning patients resume the originally requested deep link.
+      final returnTo = authState.isNewSocialSignup || requestedRoute == null
+          ? RouteNames.hairTest
+          : requestedRoute;
+      final query = <String, String>{'redirect': returnTo};
+      if (needsGoogleGender) query['requireGender'] = 'true';
+      context.go(
+        Uri(
+          path: RouteNames.completeProfile,
+          queryParameters: query,
+        ).toString(),
+      );
+    } else if (requestedRoute != null && !authState.isNewSocialSignup) {
+      context.go(requestedRoute);
+    } else if (shouldStartAssessment) {
       final cachedCompleted =
           AppLocalCache.instance.getBool('has_completed_hair_test') ?? false;
       final cachedSkipped =
           AppLocalCache.instance.getBool('has_skipped_hair_test') ?? false;
-      if (!cachedCompleted && !cachedSkipped) {
+      final isNewGoogleSignup =
+          authState.isNewSocialSignup &&
+          authState.socialProvider == 'google' &&
+          authState.nextStep == 'ASSESSMENT' &&
+          !authState.hasCompletedAssessment;
+      if (isNewGoogleSignup || (!cachedCompleted && !cachedSkipped)) {
         context.go(RouteNames.hairTest);
       } else {
         _navigateToHome();
@@ -1562,43 +1596,20 @@ class _SigninViewState extends State<SigninView>
         const SizedBox(height: 16),
 
         // Sign In Button
-        SizedBox(
-          width: double.infinity,
+        AppButton(
           height: 48,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              elevation: 0,
-            ),
-            onPressed: isBusy ? null : _handlePasswordLogin,
-            child: isBusy
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Text(
-                        'Sign In',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(LucideIcons.arrowRight, size: 16),
-                    ],
-                  ),
+          isLoading: isBusy,
+          text: 'Sign In',
+          trailingIcon: const Icon(
+            LucideIcons.arrowRight,
+            size: 16,
+            color: Colors.white,
           ),
+          variant: AppButtonVariant.filled,
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          onPressed: isBusy ? null : _handlePasswordLogin,
         ),
 
         const SizedBox(height: 18),
@@ -1629,72 +1640,38 @@ class _SigninViewState extends State<SigninView>
         Row(
           children: [
             Expanded(
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  side: const BorderSide(color: AppColors.border),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  backgroundColor: Colors.white,
-                  elevation: 0,
+              child: AppButton(
+                height: 44,
+                text: 'Google',
+                variant: AppButtonVariant.outlined,
+                foregroundColor: AppColors.primaryDark,
+                borderColor: AppColors.border,
+                borderRadius: BorderRadius.circular(14),
+                icon: SvgPicture.asset(
+                  'assets/icons/google.svg',
+                  width: 18,
+                  height: 18,
+                  fit: BoxFit.contain,
                 ),
                 onPressed: isBusy ? null : _handleGoogleSignIn,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SvgPicture.asset(
-                      'assets/icons/google.svg',
-                      width: 18,
-                      height: 18,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Google',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  side: const BorderSide(color: AppColors.border),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  backgroundColor: Colors.white,
-                  elevation: 0,
+              child: AppButton(
+                height: 44,
+                text: 'Apple',
+                variant: AppButtonVariant.outlined,
+                foregroundColor: AppColors.primaryDark,
+                borderColor: AppColors.border,
+                borderRadius: BorderRadius.circular(14),
+                icon: SvgPicture.asset(
+                  'assets/icons/apple.svg',
+                  width: 18,
+                  height: 18,
+                  fit: BoxFit.contain,
                 ),
                 onPressed: isBusy ? null : _handleAppleSignIn,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SvgPicture.asset(
-                      'assets/icons/apple.svg',
-                      width: 18,
-                      height: 18,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Apple',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ),
           ],
@@ -1864,43 +1841,20 @@ class _SigninViewState extends State<SigninView>
         const SizedBox(height: 20),
 
         // Send OTP & Continue Button
-        SizedBox(
-          width: double.infinity,
+        AppButton(
           height: 48,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              elevation: 0,
-            ),
-            onPressed: isBusy ? null : _proceedToSignupOtp,
-            child: isBusy
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Text(
-                        'Send Verification OTP',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(LucideIcons.arrowRight, size: 16),
-                    ],
-                  ),
+          isLoading: isBusy,
+          text: 'Send Verification OTP',
+          trailingIcon: const Icon(
+            LucideIcons.arrowRight,
+            size: 16,
+            color: Colors.white,
           ),
+          variant: AppButtonVariant.filled,
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          onPressed: isBusy ? null : _proceedToSignupOtp,
         ),
 
         const SizedBox(height: 18),
@@ -2097,7 +2051,6 @@ class _SigninViewState extends State<SigninView>
         const SizedBox(height: 16),
 
         AppButton(
-          size: AppButtonSize.large,
           height: 50,
           isLoading: isBusy,
           onPressed: _submitRegistration,

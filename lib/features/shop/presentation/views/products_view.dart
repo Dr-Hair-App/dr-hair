@@ -2,11 +2,13 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/app_destination.dart';
 import '../../../../core/routes/route_names.dart';
+import '../../../../core/widgets/app_skeletonizer.dart';
+import '../../../../core/widgets/app_text_form_field.dart';
+import '../../../../core/widgets/app_toast.dart';
 import '../../../../core/widgets/custom_cached_image.dart';
 import '../../data/models/category_model.dart';
 import '../../data/models/product_model.dart';
@@ -52,9 +54,7 @@ class _ProductsContent extends StatefulWidget {
   State<_ProductsContent> createState() => _ProductsContentState();
 }
 
-class _ProductsContentState extends State<_ProductsContent>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _ProductsContentState extends State<_ProductsContent> {
   List<CategoryItem> _categories = CategoryItem.defaultProductCategories();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -67,147 +67,45 @@ class _ProductsContentState extends State<_ProductsContent>
     if (cubitCategories.isNotEmpty) {
       _categories = cubitCategories;
     }
-    _tabController = TabController(length: _categories.length, vsync: this);
-    _tabController.addListener(_handleTabSelection);
   }
 
   void _syncCategories(List<CategoryItem> newCategories) {
     if (newCategories.isEmpty) return;
-    if (newCategories.length != _categories.length) {
-      final oldIndex = _tabController.index;
-      _tabController.removeListener(_handleTabSelection);
-      _tabController.dispose();
-      _categories = newCategories;
-      final safeIndex = oldIndex.clamp(0, newCategories.length - 1);
-      _tabController = TabController(
-        length: newCategories.length,
-        initialIndex: safeIndex,
-        vsync: this,
-      );
-      _tabController.addListener(_handleTabSelection);
-    } else {
-      _categories = newCategories;
-    }
-  }
-
-  void _handleTabSelection() {
-    if (!_tabController.indexIsChanging) {
-      context.read<ProductsCubit>().selectCategory(_tabController.index);
-    }
+    _categories = newCategories;
   }
 
   @override
   void dispose() {
-    _tabController.removeListener(_handleTabSelection);
-    _tabController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
   }
 
-  List<ProductItem> _getFilteredProductsForCategory(
-    String categoryId,
-    List<ProductItem> source,
-  ) {
-    Iterable<ProductItem> products = source;
-    final category = categoryId.trim().toLowerCase();
-    if (category.isNotEmpty && category != 'all') {
-      products = products.where(
-        (product) =>
-            product.rootCause.trim().toLowerCase() == category ||
-            product.category.trim().toLowerCase() == category,
-      );
-    }
-
-    final query = _searchQuery.trim().toLowerCase();
-    if (query.isNotEmpty) {
-      products = products.where((product) {
-        final inName = product.name.toLowerCase().contains(query);
-        final inSubtitle = product.subtitle.toLowerCase().contains(query);
-        final inCategory = product.category.toLowerCase().contains(query);
-        final inRoot = product.rootCause.toLowerCase().contains(query);
-        final inIngredients = product.ingredients.any(
-          (i) =>
-              i.name.toLowerCase().contains(query) ||
-              i.purpose.toLowerCase().contains(query),
-        );
-        final inBenefits = product.benefits.any(
-          (b) =>
-              b.title.toLowerCase().contains(query) ||
-              b.description.toLowerCase().contains(query),
-        );
-        return inName ||
-            inSubtitle ||
-            inCategory ||
-            inRoot ||
-            inIngredients ||
-            inBenefits;
-      });
-    }
-
-    return products.toList(growable: false);
+  double _productGridMainAxisExtent(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final baseExtent = screenWidth < 360 ? 274.0 : 270.0;
+    final textScale = MediaQuery.textScalerOf(context).scale(12) / 12;
+    final scaledExtent = baseExtent + ((textScale - 1).clamp(0.0, 0.8) * 90);
+    return scaledExtent.clamp(baseExtent, 342.0).toDouble();
   }
 
   void _handleAddToCart(ProductItem product) {
     if (product.supplyPlans.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('This product has no purchase option yet.'),
-        ),
-      );
+      AppToast.showInfo(context, 'This product has no purchase option yet.');
       return;
     }
     final plan = product.supplyPlans.first;
 
     final cartCubit = context.read<CartCubit?>();
     if (cartCubit == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Cart is unavailable. Please reopen the shop and try again.',
-          ),
-        ),
+      AppToast.showError(
+        context,
+        'Cart is unavailable. Please reopen the shop and try again.',
       );
       return;
     }
     cartCubit.addProduct(product: product, plan: plan, quantity: 1);
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        backgroundColor: AppColors.primaryDark,
-        duration: const Duration(seconds: 2),
-        content: Row(
-          children: [
-            const Icon(
-              LucideIcons.checkCircle2,
-              color: AppColors.success,
-              size: 18,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '${product.name} added to cart',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ],
-        ),
-        action: SnackBarAction(
-          label: 'View Cart',
-          textColor: AppColors.primary100,
-          onPressed: () => context.push(RouteNames.cart),
-        ),
-      ),
-    );
+    AppToast.showSuccess(context, '${product.name} added to cart');
   }
 
   @override
@@ -224,303 +122,391 @@ class _ProductsContentState extends State<_ProductsContent>
           }
         },
         builder: (context, state) {
-          final catalog = state.products;
-
-          return RefreshIndicator(
-            color: AppColors.primary,
-            backgroundColor: Colors.white,
-            onRefresh: () async {
-              await context.read<ProductsCubit>().loadProducts(refresh: true);
-            },
-            child: NestedScrollView(
-              headerSliverBuilder:
-                  (BuildContext context, bool innerBoxIsScrolled) {
-                    return <Widget>[
-                      SliverOverlapAbsorber(
-                        handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
-                          context,
-                        ),
-                        sliver: SliverAppBar(
-                          pinned: true,
-                          floating: true,
-                          snap: false,
-                          centerTitle: true,
-                          elevation: innerBoxIsScrolled ? 1 : 0,
-                          backgroundColor: Colors.white,
-                          surfaceTintColor: Colors.transparent,
-                          title: const FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Medicines & Products',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primaryDark,
-                              ),
-                            ),
-                          ),
-                          actions: [
-                            // Cart Button with badge
-                            _buildCartButton(context),
-                            const SizedBox(width: 8),
-                          ],
-                          bottom: PreferredSize(
-                            preferredSize: const Size.fromHeight(104),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [_buildSearchBar(), _buildTabBar()],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ];
+          final length = _categories.length;
+          final initialIndex = state.selectedCategoryIndex
+              .clamp(0, length - 1)
+              .toInt();
+          return DefaultTabController(
+            length: length,
+            initialIndex: initialIndex,
+            child: _ProductTabSelectionListener(
+              onChanged: (index) =>
+                  context.read<ProductsCubit>().selectCategory(index),
+              child: Builder(
+                builder: (tabsContext) => RefreshIndicator(
+                  color: AppColors.primary,
+                  backgroundColor: Colors.white,
+                  onRefresh: () async {
+                    await context
+                        .read<ProductsCubit>()
+                        .refreshSelectedCategory();
                   },
-              body: TabBarView(
-                controller: _tabController,
-                children: _categories.map((category) {
-                  return SafeArea(
-                    top: false,
-                    bottom: false,
-                    child: Builder(
-                      builder: (BuildContext context) {
-                        final products = _getFilteredProductsForCategory(
-                          category.id,
-                          catalog,
-                        );
-                        final displayList = products;
-
-                        return CustomScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          key: PageStorageKey<String>(category.id),
-                          slivers: <Widget>[
-                            SliverOverlapInjector(
+                  child: NestedScrollView(
+                    headerSliverBuilder:
+                        (BuildContext context, bool innerBoxIsScrolled) {
+                          return <Widget>[
+                            SliverOverlapAbsorber(
                               handle:
                                   NestedScrollView.sliverOverlapAbsorberHandleFor(
                                     context,
                                   ),
+                              sliver: SliverAppBar(
+                                pinned: true,
+                                floating: true,
+                                snap: false,
+                                centerTitle: true,
+                                elevation: innerBoxIsScrolled ? 1 : 0,
+                                backgroundColor: Colors.white,
+                                surfaceTintColor: Colors.transparent,
+                                title: const FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'Medicines & Products',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.primaryDark,
+                                    ),
+                                  ),
+                                ),
+                                actions: [
+                                  // Cart Button with badge
+                                  _buildCartButton(context),
+                                  const SizedBox(width: 8),
+                                ],
+                                bottom: PreferredSize(
+                                  preferredSize: const Size.fromHeight(104),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _buildSearchBar(),
+                                      _buildTabBar(tabsContext),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
-                            if (state.errorMessage != null &&
-                                state.products.isNotEmpty)
-                              SliverPadding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  8,
-                                  16,
-                                  0,
-                                ),
-                                sliver: SliverToBoxAdapter(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.error.withValues(
-                                        alpha: 0.1,
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: AppColors.error.withValues(
-                                          alpha: 0.3,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.info_outline,
-                                          size: 16,
-                                          color: AppColors.error,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            state.errorMessage!,
-                                            style: const TextStyle(
-                                              fontSize: 11.5,
-                                              color: AppColors.error,
-                                            ),
+                          ];
+                        },
+                    body: TabBarView(
+                      controller: DefaultTabController.of(tabsContext),
+                      children: _categories.asMap().entries.map((entry) {
+                        final categoryIndex = entry.key;
+                        final category = entry.value;
+                        return SafeArea(
+                          top: false,
+                          bottom: false,
+                          child: Builder(
+                            builder: (BuildContext context) {
+                              final catalog = state.productsFor(
+                                category.id,
+                                state.searchQuery,
+                              );
+                              // The API already applies the selected category and
+                              // search query. Keep its result intact so searches by
+                              // fields such as SKU are not filtered out locally.
+                              final displayList = catalog;
+                              final isActiveCategory =
+                                  state.selectedCategoryIndex == categoryIndex;
+
+                              return NotificationListener<ScrollNotification>(
+                                onNotification: (notification) {
+                                  if (notification.metrics.axis ==
+                                          Axis.vertical &&
+                                      notification.metrics.extentAfter < 420 &&
+                                      state.hasMoreFor(
+                                        category.id,
+                                        state.searchQuery,
+                                      )) {
+                                    context.read<ProductsCubit>().loadNextPage(
+                                      category.id,
+                                      query: state.searchQuery,
+                                    );
+                                  }
+                                  return false;
+                                },
+                                child: CustomScrollView(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  key: PageStorageKey<String>(category.id),
+                                  slivers: <Widget>[
+                                    SliverOverlapInjector(
+                                      handle:
+                                          NestedScrollView.sliverOverlapAbsorberHandleFor(
+                                            context,
                                           ),
+                                    ),
+                                    if (isActiveCategory &&
+                                        state.errorMessage != null &&
+                                        displayList.isNotEmpty)
+                                      SliverPadding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          16,
+                                          8,
+                                          16,
+                                          0,
                                         ),
-                                        TextButton(
-                                          onPressed: () => context
-                                              .read<ProductsCubit>()
-                                              .loadProducts(refresh: true),
-                                          style: TextButton.styleFrom(
+                                        sliver: SliverToBoxAdapter(
+                                          child: Container(
                                             padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 4,
+                                              horizontal: 12,
+                                              vertical: 8,
                                             ),
-                                            minimumSize: Size.zero,
-                                            tapTargetSize: MaterialTapTargetSize
-                                                .shrinkWrap,
-                                          ),
-                                          child: const Text(
-                                            'Retry',
-                                            style: TextStyle(
-                                              fontSize: 11.5,
-                                              fontWeight: FontWeight.bold,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.error.withValues(
+                                                alpha: 0.1,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: AppColors.error
+                                                    .withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                const Icon(
+                                                  Icons.info_outline,
+                                                  size: 16,
+                                                  color: AppColors.error,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    state.errorMessage!,
+                                                    style: const TextStyle(
+                                                      fontSize: 11.5,
+                                                      color: AppColors.error,
+                                                    ),
+                                                  ),
+                                                ),
+                                                TextButton(
+                                                  onPressed: () => context
+                                                      .read<ProductsCubit>()
+                                                      .refreshSelectedCategory(),
+                                                  style: TextButton.styleFrom(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 4,
+                                                        ),
+                                                    minimumSize: Size.zero,
+                                                    tapTargetSize:
+                                                        MaterialTapTargetSize
+                                                            .shrinkWrap,
+                                                  ),
+                                                  child: const Text(
+                                                    'Retry',
+                                                    style: TextStyle(
+                                                      fontSize: 11.5,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            if (state.isLoading && displayList.isEmpty) ...[
-                              SliverPadding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  12,
-                                  16,
-                                  4,
-                                ),
-                                sliver: SliverToBoxAdapter(
-                                  child: Skeletonizer(
-                                    enabled: true,
-                                    effect: _kProductShimmerEffect,
-                                    containersColor: Colors.white,
-                                    child: Container(
-                                      height: 12,
-                                      width: 76,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFE9EEF5),
-                                        borderRadius: BorderRadius.circular(4),
                                       ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SliverPadding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  10,
-                                  8,
-                                  10,
-                                  32,
-                                ),
-                                sliver: SliverGrid(
-                                  gridDelegate:
-                                      SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount:
-                                            MediaQuery.sizeOf(context).width >=
-                                                1000
-                                            ? 4
-                                            : MediaQuery.sizeOf(context)
-                                                      .width >=
-                                                  640
-                                            ? 3
-                                            : 2,
-                                        crossAxisSpacing: 8,
-                                        mainAxisSpacing: 8,
-                                        mainAxisExtent:
-                                            MediaQuery.sizeOf(context).width <
-                                                360
-                                            ? 274
-                                            : 242,
-                                      ),
-                                  delegate: SliverChildBuilderDelegate((
-                                    context,
-                                    index,
-                                  ) {
-                                    return Skeletonizer(
-                                      enabled: true,
-                                      effect: _kProductShimmerEffect,
-                                      containersColor: Colors.white,
-                                      child: const _ProductGridSkeletonCard(),
-                                    );
-                                  }, childCount: 6),
-                                ),
-                              ),
-                            ] else if (displayList.isEmpty)
-                              SliverFillRemaining(
-                                hasScrollBody: false,
-                                child: state.errorMessage != null
-                                    ? _buildErrorState(state.errorMessage!)
-                                    : _buildEmptyState(),
-                              )
-                            else ...[
-                              SliverPadding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  12,
-                                  16,
-                                  4,
-                                ),
-                                sliver: SliverToBoxAdapter(
-                                  child: Skeletonizer(
-                                    enabled: state.isLoading,
-                                    effect: _kProductShimmerEffect,
-                                    containersColor: Colors.white,
-                                    child: Text(
-                                      '${displayList.length} ${displayList.length == 1 ? 'product' : 'products'}',
-                                      style: const TextStyle(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SliverPadding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  10,
-                                  8,
-                                  10,
-                                  32,
-                                ),
-                                sliver: SliverGrid(
-                                  gridDelegate:
-                                      SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount:
-                                            MediaQuery.sizeOf(context).width >=
-                                                1000
-                                            ? 4
-                                            : MediaQuery.sizeOf(context)
-                                                      .width >=
-                                                  640
-                                            ? 3
-                                            : 2,
-                                        crossAxisSpacing: 8,
-                                        mainAxisSpacing: 8,
-                                        mainAxisExtent:
-                                            MediaQuery.sizeOf(context).width <
-                                                360
-                                            ? 274
-                                            : 242,
-                                      ),
-                                  delegate: SliverChildBuilderDelegate((
-                                    context,
-                                    index,
-                                  ) {
-                                    final product = displayList[index];
-                                    return Skeletonizer(
-                                      enabled: state.isLoading,
-                                      effect: _kProductShimmerEffect,
-                                      containersColor: Colors.white,
-                                      child: _ProductGridCard(
-                                        product: product,
-                                        onTap: () => context.push(
-                                          AppDestination.product(product.id)
-                                                  .location ??
-                                              RouteNames.products,
+                                    if (isActiveCategory &&
+                                        state.isLoading &&
+                                        displayList.isEmpty) ...[
+                                      SliverPadding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          16,
+                                          12,
+                                          16,
+                                          4,
                                         ),
-                                        onAddToCart: () =>
-                                            _handleAddToCart(product),
+                                        sliver: SliverToBoxAdapter(
+                                          child: AppSkeletonizer(
+                                            enabled: true,
+                                            child: Container(
+                                              height: 12,
+                                              width: 76,
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFE9EEF5),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    );
-                                  }, childCount: displayList.length),
+                                      SliverPadding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          10,
+                                          8,
+                                          10,
+                                          32,
+                                        ),
+                                        sliver: SliverGrid(
+                                          gridDelegate:
+                                              SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount:
+                                                    MediaQuery.sizeOf(context)
+                                                            .width >=
+                                                        1000
+                                                    ? 4
+                                                    : MediaQuery.sizeOf(context)
+                                                              .width >=
+                                                          640
+                                                    ? 3
+                                                    : 2,
+                                                crossAxisSpacing: 8,
+                                                mainAxisSpacing: 8,
+                                                mainAxisExtent:
+                                                    _productGridMainAxisExtent(
+                                                      context,
+                                                    ),
+                                              ),
+                                          delegate: SliverChildBuilderDelegate((
+                                            context,
+                                            index,
+                                          ) {
+                                            return AppSkeletonizer(
+                                              enabled: true,
+                                              child:
+                                                  const _ProductGridSkeletonCard(),
+                                            );
+                                          }, childCount: 6),
+                                        ),
+                                      ),
+                                    ] else if (displayList.isEmpty)
+                                      SliverFillRemaining(
+                                        hasScrollBody: false,
+                                        child:
+                                            isActiveCategory &&
+                                                state.errorMessage != null
+                                            ? _buildErrorState(
+                                                state.errorMessage!,
+                                              )
+                                            : _buildEmptyState(tabsContext),
+                                      )
+                                    else ...[
+                                      SliverPadding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          16,
+                                          12,
+                                          16,
+                                          4,
+                                        ),
+                                        sliver: SliverToBoxAdapter(
+                                          child: AppSkeletonizer(
+                                            enabled: state.isLoading,
+                                            child: Text(
+                                              state.totalFor(
+                                                        category.id,
+                                                        state.searchQuery,
+                                                      ) >
+                                                      displayList.length
+                                                  ? '${displayList.length} of ${state.totalFor(category.id, state.searchQuery)} products'
+                                                  : '${displayList.length} ${displayList.length == 1 ? 'product' : 'products'}',
+                                              style: const TextStyle(
+                                                color: AppColors.textSecondary,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      SliverPadding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          10,
+                                          8,
+                                          10,
+                                          32,
+                                        ),
+                                        sliver: SliverGrid(
+                                          gridDelegate:
+                                              SliverGridDelegateWithFixedCrossAxisCount(
+                                                crossAxisCount:
+                                                    MediaQuery.sizeOf(context)
+                                                            .width >=
+                                                        1000
+                                                    ? 4
+                                                    : MediaQuery.sizeOf(context)
+                                                              .width >=
+                                                          640
+                                                    ? 3
+                                                    : 2,
+                                                crossAxisSpacing: 8,
+                                                mainAxisSpacing: 8,
+                                                mainAxisExtent:
+                                                    _productGridMainAxisExtent(
+                                                      context,
+                                                    ),
+                                              ),
+                                          delegate: SliverChildBuilderDelegate((
+                                            context,
+                                            index,
+                                          ) {
+                                            final product = displayList[index];
+                                            return AppSkeletonizer(
+                                              enabled:
+                                                  isActiveCategory &&
+                                                  state.isLoading,
+                                              child: _ProductGridCard(
+                                                product: product,
+                                                onTap: () {
+                                                  final destination =
+                                                      AppDestination.product(
+                                                        product.id,
+                                                      ).location;
+                                                  if (destination == null) {
+                                                    AppToast.showError(
+                                                      context,
+                                                      'This product is unavailable right now.',
+                                                    );
+                                                    return;
+                                                  }
+                                                  context.push(
+                                                    destination,
+                                                    extra: product,
+                                                  );
+                                                },
+                                                onAddToCart: () =>
+                                                    _handleAddToCart(product),
+                                              ),
+                                            );
+                                          }, childCount: displayList.length),
+                                        ),
+                                      ),
+                                      if (isActiveCategory &&
+                                          state.isLoadingMore &&
+                                          displayList.isNotEmpty)
+                                        const SliverToBoxAdapter(
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(
+                                              vertical: 18,
+                                            ),
+                                            child: Center(
+                                              child: SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: AppColors.primary,
+                                                    ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ],
                                 ),
-                              ),
-                            ],
-                          ],
+                              );
+                            },
+                          ),
                         );
-                      },
+                      }).toList(),
                     ),
-                  );
-                }).toList(),
+                  ),
+                ),
               ),
             ),
           );
@@ -598,7 +584,7 @@ class _ProductsContentState extends State<_ProductsContent>
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: TextField(
+      child: AppTextFormField(
         key: const ValueKey('product-search'),
         controller: _searchController,
         focusNode: _searchFocusNode,
@@ -607,49 +593,36 @@ class _ProductsContentState extends State<_ProductsContent>
           context.read<ProductsCubit>().search(value);
         },
         textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          hintText: 'Search medicines, products, ingredients…',
-          hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
-          prefixIcon: const Icon(
-            Icons.search_rounded,
-            color: AppColors.primary,
-            size: 20,
-          ),
-          suffixIcon: _searchQuery.isEmpty
-              ? null
-              : IconButton(
-                  tooltip: 'Clear search',
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _searchQuery = '');
-                    context.read<ProductsCubit>().clearSearch();
-                  },
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            vertical: 10,
-            horizontal: 14,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: AppColors.border),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: AppColors.border),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-          ),
+        hintText: 'Search medicines, products, ingredients…',
+        hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+        prefixIcon: const Icon(
+          Icons.search_rounded,
+          color: AppColors.primary,
+          size: 20,
+        ),
+        suffixIcon: _searchQuery.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Clear search',
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _searchQuery = '');
+                  context.read<ProductsCubit>().clearSearch();
+                },
+                icon: const Icon(Icons.close_rounded, size: 18),
+              ),
+        filled: true,
+        fillColor: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 10,
+          horizontal: 14,
         ),
       ),
     );
   }
 
-  Widget _buildTabBar() {
+  Widget _buildTabBar(BuildContext tabsContext) {
     return Container(
       height: 44,
       alignment: Alignment.centerLeft,
@@ -658,7 +631,7 @@ class _ProductsContentState extends State<_ProductsContent>
         border: Border(bottom: BorderSide(color: AppColors.border, width: 0.8)),
       ),
       child: TabBar(
-        controller: _tabController,
+        controller: DefaultTabController.of(tabsContext),
         isScrollable: true,
         tabAlignment: TabAlignment.start,
         indicatorColor: AppColors.primary,
@@ -728,7 +701,7 @@ class _ProductsContentState extends State<_ProductsContent>
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext tabsContext) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
@@ -772,7 +745,7 @@ class _ProductsContentState extends State<_ProductsContent>
                 });
                 context.read<ProductsCubit>().clearSearch();
                 context.read<ProductsCubit>().selectCategory(0);
-                _tabController.animateTo(0);
+                DefaultTabController.of(tabsContext).animateTo(0);
               },
               child: const Text('Clear filters'),
             ),
@@ -824,7 +797,7 @@ class _ProductsContentState extends State<_ProductsContent>
             FilledButton.icon(
               key: const ValueKey('products-retry-button'),
               onPressed: () =>
-                  context.read<ProductsCubit>().loadProducts(refresh: true),
+                  context.read<ProductsCubit>().refreshSelectedCategory(),
               icon: const Icon(Icons.refresh_rounded, size: 16),
               label: const Text('Try Again'),
             ),
@@ -835,12 +808,63 @@ class _ProductsContentState extends State<_ProductsContent>
   }
 }
 
-/// Light clinical medical shimmer effect matching Dr. Hair theme
-const _kProductShimmerEffect = ShimmerEffect(
-  baseColor: Color(0xFFE9EEF5),
-  highlightColor: Colors.white,
-  duration: Duration(milliseconds: 1400),
-);
+class _ProductTabSelectionListener extends StatefulWidget {
+  final ValueChanged<int> onChanged;
+  final Widget child;
+
+  const _ProductTabSelectionListener({
+    required this.onChanged,
+    required this.child,
+  });
+
+  @override
+  State<_ProductTabSelectionListener> createState() =>
+      _ProductTabSelectionListenerState();
+}
+
+class _ProductTabSelectionListenerState
+    extends State<_ProductTabSelectionListener> {
+  TabController? _controller;
+  int? _lastIndex;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextController = DefaultTabController.of(context);
+    if (identical(nextController, _controller)) return;
+    final previousIndex = _lastIndex;
+    _controller?.removeListener(_handleTabSelection);
+    _controller = nextController..addListener(_handleTabSelection);
+    _lastIndex = nextController.index;
+    if (previousIndex != null && previousIndex != nextController.index) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && identical(_controller, nextController)) {
+          widget.onChanged(nextController.index);
+        }
+      });
+    }
+  }
+
+  void _handleTabSelection() {
+    final controller = _controller;
+    if (mounted &&
+        controller != null &&
+        !controller.indexIsChanging &&
+        controller.index != _lastIndex) {
+      _lastIndex = controller.index;
+      widget.onChanged(controller.index);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_handleTabSelection);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
 
 /// Skeleton placeholder card designed specifically for the 2-column clinical product grid
 class _ProductGridSkeletonCard extends StatelessWidget {
@@ -1065,27 +1089,30 @@ class _ProductGridCard extends StatelessWidget {
                   // Image with category badge, discount & rating
                   Stack(
                     children: [
-                      CustomCachedImage(
-                        imageUrl: product.images.isNotEmpty
-                            ? product.images.first
-                            : '',
-                        height: isNarrow ? 92 : 104,
-                        width: double.infinity,
-                        borderRadius: 14,
-                        fit: BoxFit.cover,
-                        errorWidget: Container(
-                          height: 104,
+                      Hero(
+                        tag: 'product_image_${product.id}_0',
+                        child: CustomCachedImage(
+                          imageUrl: product.images.isNotEmpty
+                              ? product.images.first
+                              : '',
+                          height: isNarrow ? 92 : 104,
                           width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary5,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(
-                            isAyurveda ? LucideIcons.leaf : LucideIcons.pill,
-                            color: isAyurveda
-                                ? AppColors.success
-                                : AppColors.primary,
-                            size: 28,
+                          borderRadius: 14,
+                          fit: BoxFit.cover,
+                          errorWidget: Container(
+                            height: 104,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary5,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
+                              isAyurveda ? LucideIcons.leaf : LucideIcons.pill,
+                              color: isAyurveda
+                                  ? AppColors.success
+                                  : AppColors.primary,
+                              size: 28,
+                            ),
                           ),
                         ),
                       ),
@@ -1112,7 +1139,7 @@ class _ProductGridCard extends StatelessWidget {
                           child: Text(
                             tagLabel,
                             style: TextStyle(
-                              fontSize: 9.5,
+                              fontSize: 8,
                               fontWeight: FontWeight.w700,
                               color: isAyurveda
                                   ? AppColors.success
@@ -1125,7 +1152,7 @@ class _ProductGridCard extends StatelessWidget {
                       // Discount badge (Top-Right)
                       if (discountPercent != null && discountPercent > 0)
                         Positioned(
-                          top: 6,
+                          bottom: 6,
                           right: 6,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -1139,7 +1166,7 @@ class _ProductGridCard extends StatelessWidget {
                             child: Text(
                               '$discountPercent% OFF',
                               style: const TextStyle(
-                                fontSize: 9,
+                                fontSize: 8,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
                               ),

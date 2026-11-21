@@ -37,7 +37,28 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
     }
   }
 
-  Future<void> loadFromApi([String? token]) async {
+  DateTime? _lastApiLoadAt;
+  Future<void>? _pendingApiLoad;
+  static const Duration _appointmentFreshness = Duration(minutes: 2);
+
+  Future<void> loadFromApi([String? token, bool force = false]) {
+    final pending = _pendingApiLoad;
+    if (pending != null) return pending;
+
+    final last = _lastApiLoadAt;
+    if (!force &&
+        last != null &&
+        DateTime.now().difference(last) < _appointmentFreshness &&
+        state.isNotEmpty) {
+      return Future<void>.value();
+    }
+    _lastApiLoadAt = DateTime.now();
+    final request = _performLoad(token);
+    _pendingApiLoad = request;
+    return request;
+  }
+
+  Future<void> _performLoad(String? token) async {
     final activeToken = token ?? await SecureSessionStore().readToken();
     if (activeToken == null || activeToken.trim().isEmpty) return;
     isLoading = true;
@@ -55,6 +76,7 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
       loadError = error.toString();
     } finally {
       isLoading = false;
+      _pendingApiLoad = null;
       emit(List<ClinicAppointment>.from(state));
     }
   }
@@ -107,7 +129,7 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
           await _persist();
         }
       }
-      await loadFromApi(accessToken);
+      await loadFromApi(accessToken, true);
       return null;
     } catch (error) {
       return _errorMessage(error, 'Payment verification or booking failed.');
@@ -168,7 +190,7 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
           },
         );
       }
-      await loadFromApi(activeToken);
+      await loadFromApi(activeToken, true);
       return null;
     } catch (error) {
       return _errorMessage(error, 'Appointment request could not be saved.');
@@ -218,10 +240,10 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
         emit(state.map((item) => item.id == id ? updatedApt : item).toList());
         await _persist();
       }
-      await loadFromApi(activeToken);
+      await loadFromApi(activeToken, true);
       return null;
     } catch (error) {
-      await loadFromApi(activeToken);
+      await loadFromApi(activeToken, true);
       return _errorMessage(error, 'Appointment could not be rescheduled.');
     }
   }
@@ -241,7 +263,7 @@ class ClinicAppointmentCubit extends Cubit<List<ClinicAppointment>> {
         appointmentId: id,
         data: {'action': 'cancel'},
       );
-      await loadFromApi(activeToken);
+      await loadFromApi(activeToken, true);
       return null;
     } catch (error) {
       return _errorMessage(

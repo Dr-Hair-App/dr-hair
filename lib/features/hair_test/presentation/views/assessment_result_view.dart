@@ -15,30 +15,33 @@ import 'assessment_report_view.dart';
 /// Accessible from Profile ("Assessment result") and direct navigation.
 class AssessmentResultView extends StatelessWidget {
   final HairTestCubit? cubit;
+  final String? referenceNo;
 
-  const AssessmentResultView({super.key, this.cubit});
+  const AssessmentResultView({super.key, this.cubit, this.referenceNo});
 
   @override
   Widget build(BuildContext context) {
     if (cubit != null) {
       return BlocProvider.value(
         value: cubit!,
-        child: const _AssessmentResultContent(),
+        child: _AssessmentResultContent(referenceNo: referenceNo),
       );
     }
     final existingCubit = context.read<HairTestCubit?>();
     if (existingCubit != null) {
-      return const _AssessmentResultContent();
+      return _AssessmentResultContent(referenceNo: referenceNo);
     }
     return BlocProvider(
       create: (_) => HairTestCubit()..loadSavedState(),
-      child: const _AssessmentResultContent(),
+      child: _AssessmentResultContent(referenceNo: referenceNo),
     );
   }
 }
 
 class _AssessmentResultContent extends StatefulWidget {
-  const _AssessmentResultContent();
+  final String? referenceNo;
+
+  const _AssessmentResultContent({this.referenceNo});
 
   @override
   State<_AssessmentResultContent> createState() =>
@@ -53,7 +56,11 @@ class _AssessmentResultContentState extends State<_AssessmentResultContent> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        context.read<HairTestCubit?>()?.refreshClinicalReports();
+        final hairCubit = context.read<HairTestCubit?>();
+        if (widget.referenceNo != null && widget.referenceNo!.trim().isNotEmpty) {
+          hairCubit?.loadAssessmentByReference(widget.referenceNo!.trim());
+        }
+        hairCubit?.refreshClinicalReports();
       }
     });
   }
@@ -174,13 +181,23 @@ class _AssessmentResultContentState extends State<_AssessmentResultContent> {
   Widget build(BuildContext context) {
     return BlocBuilder<HairTestCubit, HairTestState>(
       builder: (context, state) {
+        final hasRef = widget.referenceNo != null &&
+            widget.referenceNo!.trim().isNotEmpty;
         final bool hasReport =
             state.isCompleted ||
             state.isSubmitted ||
-            state.clinicalReports.isNotEmpty;
+            state.clinicalReports.isNotEmpty ||
+            hasRef;
 
         if (hasReport) {
-          return AssessmentReportView(state: state);
+          final effectiveState = (hasRef &&
+                  state.referenceNo != widget.referenceNo!.trim())
+              ? state.copyWith(
+                  referenceNo: widget.referenceNo!.trim(),
+                  isCompleted: true,
+                )
+              : state;
+          return AssessmentReportView(state: effectiveState);
         }
 
         if (_previewSample) {

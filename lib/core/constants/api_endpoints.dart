@@ -200,12 +200,7 @@ class ApiEndpoints {
   static const String supportInquiries = '/api/v1/support/inquiries';
 
   // ---------------------------------------------------------------------------
-  // 14. Media Upload Endpoints (/api/v1/media)
-  // ---------------------------------------------------------------------------
-  static const String mediaUpload = '/api/v1/media/upload';
-
-  // ---------------------------------------------------------------------------
-  // 15. App Config & Health Endpoints
+  // 14. App Config & Health Endpoints
   // ---------------------------------------------------------------------------
   static const String appConfig = '/api/v1/app/config';
   static const String appVersion = '/api/v1/app/version';

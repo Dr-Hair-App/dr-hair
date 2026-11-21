@@ -424,94 +424,72 @@ class _AssessmentActionableSuggestionsCardState
               if (isCritical) ...[
                 Expanded(
                   flex: 3,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFD97706),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                  child: AppButton(
+                    height: 40,
+                    text: 'Book In-Clinic Slot',
+                    icon: const Icon(
+                      LucideIcons.calendarCheck,
+                      size: 16,
+                      color: Colors.white,
                     ),
-                    icon: const Icon(LucideIcons.calendarCheck, size: 16),
-                    label: const Text(
-                      'Book In-Clinic Slot',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    variant: AppButtonVariant.filled,
+                    backgroundColor: const Color(0xFFD97706),
+                    foregroundColor: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
                     onPressed: () => context.push(RouteNames.clinicAppointment),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   flex: 2,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF92400E),
-                      side: const BorderSide(color: Color(0xFFD97706)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                  child: AppButton(
+                    height: 40,
+                    text: 'WhatsApp',
+                    icon: const Icon(
+                      LucideIcons.messageCircle,
+                      size: 15,
+                      color: Color(0xFF92400E),
                     ),
-                    icon: const Icon(LucideIcons.messageCircle, size: 15),
-                    label: const Text(
-                      'WhatsApp',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    variant: AppButtonVariant.outlined,
+                    foregroundColor: const Color(0xFF92400E),
+                    borderColor: const Color(0xFFD97706),
+                    borderRadius: BorderRadius.circular(10),
                     onPressed: _contactDoctorOnWhatsApp,
                   ),
                 ),
               ] else ...[
                 Expanded(
                   flex: 3,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF16A34A),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                  child: AppButton(
+                    height: 40,
+                    text: 'Connect on WhatsApp',
+                    icon: const Icon(
+                      LucideIcons.messageCircle,
+                      size: 16,
+                      color: Colors.white,
                     ),
-                    icon: const Icon(LucideIcons.messageCircle, size: 16),
-                    label: const Text(
-                      'Connect on WhatsApp',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    variant: AppButtonVariant.filled,
+                    backgroundColor: const Color(0xFF16A34A),
+                    foregroundColor: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
                     onPressed: _contactDoctorOnWhatsApp,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   flex: 2,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF166534),
-                      side: const BorderSide(color: Color(0xFF16A34A)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                  child: AppButton(
+                    height: 40,
+                    text: 'Clinic Visit',
+                    icon: const Icon(
+                      LucideIcons.calendar,
+                      size: 15,
+                      color: Color(0xFF166534),
                     ),
-                    icon: const Icon(LucideIcons.calendar, size: 15),
-                    label: const Text(
-                      'Clinic Visit',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    variant: AppButtonVariant.outlined,
+                    foregroundColor: const Color(0xFF166534),
+                    borderColor: const Color(0xFF16A34A),
+                    borderRadius: BorderRadius.circular(10),
                     onPressed: () => context.push(RouteNames.clinicAppointment),
                   ),
                 ),
@@ -784,38 +762,26 @@ class _AssessmentActionableSuggestionsCardState
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF065F46),
-                      side: const BorderSide(color: Color(0xFF059669)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
+                  child: AppButton(
+                    height: 40,
+                    text: 'Open Routine',
+                    variant: AppButtonVariant.outlined,
+                    foregroundColor: const Color(0xFF065F46),
+                    borderColor: const Color(0xFF059669),
+                    borderRadius: BorderRadius.circular(10),
                     onPressed: () => context.push(RouteNames.routine),
-                    child: const Text(
-                      'Open Routine',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF065F46),
-                      side: const BorderSide(color: Color(0xFF059669)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
+                  child: AppButton(
+                    height: 40,
+                    text: 'Open Diet Plan',
+                    variant: AppButtonVariant.outlined,
+                    foregroundColor: const Color(0xFF065F46),
+                    borderColor: const Color(0xFF059669),
+                    borderRadius: BorderRadius.circular(10),
                     onPressed: () => context.push(RouteNames.dietPlan),
-                    child: const Text(
-                      'Open Diet Plan',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                    ),
                   ),
                 ),
               ],

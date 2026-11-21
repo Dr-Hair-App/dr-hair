@@ -36,5 +36,11 @@ class RouteNames {
   static const String cancellationPolicy = '/cancellation-policy';
   static const String products = '/products';
   static const String assessmentResult = '/assessment-result';
+  static const String hairTestAssessment = '/hair-test/assessment/:refNo';
+  static const String universalAssessment = '/assessment/:refNo';
+  static String hairTestAssessmentPath(String refNo) =>
+      '/hair-test/assessment/${Uri.encodeComponent(refNo.trim())}';
+  static String universalAssessmentPath(String refNo) =>
+      '/assessment/${Uri.encodeComponent(refNo.trim())}';
   static const String noInternet = '/no-internet';
 }

@@ -7,6 +7,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/routes/route_names.dart';
 import '../../../../core/utils/whatsapp_launcher.dart';
 import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_toast.dart';
 import '../../../auth/presentation/viewmodels/auth_cubit.dart';
 import '../../../care/domain/models/care_models.dart';
 import '../../../care/presentation/viewmodels/care_cubit.dart';
@@ -19,8 +20,6 @@ import '../viewmodels/hair_test_cubit.dart';
 import '../viewmodels/hair_test_state.dart';
 import '../widgets/ai_analysis_loading_overlay.dart';
 import '../widgets/ai_assessment_cards.dart';
-import '../widgets/assessment_actionable_suggestions.dart';
-import '../widgets/assessment_language_sheet.dart';
 import '../widgets/assessment_lifestyle_summary_card.dart';
 import '../widgets/assessment_overview_card.dart';
 import '../widgets/assessment_product_usage_reminders.dart';
@@ -60,7 +59,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
         if (!mounted) return;
         final cubit = context.read<HairTestCubit?>();
         if (cubit != null && cubit.state.aiAssessment == null) {
-          await cubit.fetchAiAssessment();
+          await cubit.refreshAiAssessmentStatus();
         }
         if (mounted) setState(() => _isRequestingAi = false);
       });
@@ -74,6 +73,23 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
       await context.read<HairTestCubit?>()?.fetchAiAssessment(
         forceRefresh: true,
       );
+    } catch (_) {
+      if (mounted) {
+        AppToast.showError(
+          context,
+          'Could not retry the AI assessment. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isRequestingAi = false);
+    }
+  }
+
+  Future<void> _checkAiAssessmentStatus() async {
+    if (_isRequestingAi) return;
+    setState(() => _isRequestingAi = true);
+    try {
+      await context.read<HairTestCubit?>()?.refreshAiAssessmentStatus();
     } finally {
       if (mounted) setState(() => _isRequestingAi = false);
     }
@@ -114,11 +130,34 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
     );
 
     if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open WhatsApp. Please try again.'),
-        ),
+      AppToast.showError(context, 'Could not open WhatsApp. Please try again.');
+    }
+  }
+
+  Future<void> _requestDoctorReviewOnWhatsApp(HairTestState state) async {
+    final user = context.read<AuthCubit?>()?.state.user;
+    final patientDatabaseId = user?.id.trim() ?? '';
+    final patientCode = state.patientId?.trim().isNotEmpty == true
+        ? state.patientId!.trim()
+        : user?.patientId.trim() ?? '';
+    final referenceNo = state.referenceNo?.trim() ?? '';
+    if (patientDatabaseId.isEmpty ||
+        patientCode.isEmpty ||
+        referenceNo.isEmpty) {
+      AppToast.showError(
+        context,
+        'Assessment details are not ready yet. Please try again shortly.',
       );
+      return;
+    }
+
+    final launched = await WhatsAppLauncher.launchAssessmentReviewRequest(
+      patientDatabaseId: patientDatabaseId,
+      patientCode: patientCode,
+      referenceNo: referenceNo,
+    );
+    if (!launched && mounted) {
+      AppToast.showError(context, 'Could not open WhatsApp. Please try again.');
     }
   }
 
@@ -139,14 +178,18 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
     setState(() => _isAddingRoutine = true);
     try {
       final now = DateTime.now().millisecondsSinceEpoch;
-      final tasks = routineSteps.map((step) => RoutineTask(
-        id: 'assessment_plan_${now}_${step.step.replaceAll(' ', '_')}',
-        title: 'Assessment plan · ${step.step}',
-        subtitle: step.instruction,
-        category: 'Daily care',
-        timeOfDay: step.step,
-        createdBy: 'ai_assessment',
-      )).toList();
+      final tasks = routineSteps
+          .map(
+            (step) => RoutineTask(
+              id: 'assessment_plan_${now}_${step.step.replaceAll(' ', '_')}',
+              title: 'Assessment plan · ${step.step}',
+              subtitle: step.instruction,
+              category: 'Daily care',
+              timeOfDay: step.step,
+              createdBy: 'ai_assessment',
+            ),
+          )
+          .toList();
       await careCubit.addMultipleRoutineTasks(tasks);
     } finally {
       if (mounted) setState(() => _isAddingRoutine = false);
@@ -193,8 +236,8 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
             state.aiAssessment?.nextStepType == 'doctor_appointment';
         final List<AiRegimenStep> careRoutineSteps =
             state.aiAssessment?.isAvailable == true
-                ? state.aiAssessment!.recommendedRegimen.dailySteps
-                : const <AiRegimenStep>[];
+            ? state.aiAssessment!.recommendedRegimen.dailySteps
+            : const <AiRegimenStep>[];
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -229,66 +272,15 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               ),
             ),
             actions: [
-              // Multilingual Selector Icon Button
+              // Share icon button in AppBar (language selector is in AssessmentOverviewCard)
               IconButton(
-                tooltip: 'Language / भाषा (${_currentLanguage.displayName})',
-                icon: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary5,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.25),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        LucideIcons.languages,
-                        size: 15,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _currentLanguage == AssessmentLanguage.english
-                            ? 'EN'
-                            : (_currentLanguage == AssessmentLanguage.hindi
-                                ? 'हिंदी'
-                                : 'HI-EN'),
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
+                tooltip: 'Share Assessment',
+                icon: const Icon(
+                  LucideIcons.share2,
+                  color: AppColors.primaryDark,
+                  size: 20,
                 ),
-                onPressed: () {
-                  AssessmentLanguageSheet.show(
-                    context,
-                    currentLanguage: _currentLanguage,
-                    onSelect: (lang) => setState(() => _currentLanguage = lang),
-                  );
-                },
-              ),
-              TextButton(
-                onPressed: () {
-                  context.read<HairTestCubit>().startRetest();
-                  context.push(RouteNames.hairTest);
-                },
-                child: Text(
-                  AssessmentTranslations.t('retest', _currentLanguage),
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
-                ),
+                onPressed: () => AssessmentPdfGenerator.sharePdf(widget.state),
               ),
               const SizedBox(width: 4),
             ],
@@ -300,8 +292,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                 final cubit = context.read<HairTestCubit?>();
                 await Future.wait([
                   cubit?.refreshClinicalReports() ?? Future.value(),
-                  cubit?.fetchAiAssessment(forceRefresh: true) ??
-                      Future.value(),
+                  cubit?.refreshAiAssessmentStatus() ?? Future.value(),
                 ]);
               },
               child: SingleChildScrollView(
@@ -325,6 +316,21 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                           isReviewed: isReviewed,
                           isUnderReview: isUnderReview,
                           language: _currentLanguage,
+                          layout: ExpertReviewCardLayout.detailed,
+                          showProgress: true,
+                          showReviewer: true,
+                          secondaryActionLabel: AssessmentTranslations.t(
+                            'review_action_request',
+                            _currentLanguage,
+                          ),
+                          onSecondaryPressed:
+                              !isReviewed &&
+                                  (aiUnavailable ||
+                                      aiAssessment.requiresClinician ||
+                                      isUnderReview ||
+                                      state.isSubmitting)
+                              ? () => _requestDoctorReviewOnWhatsApp(state)
+                              : null,
                         ),
 
                         const SizedBox(height: 16),
@@ -333,6 +339,8 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                         AssessmentOverviewCard(
                           state: state,
                           language: _currentLanguage,
+                          onLanguageChanged: (lang) =>
+                              setState(() => _currentLanguage = lang),
                         ),
 
                         // Clinician fallback banner if AI is not available
@@ -340,7 +348,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                           const SizedBox(height: 16),
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               color: const Color(0xFFEFF6FF),
                               borderRadius: BorderRadius.circular(18),
@@ -352,8 +360,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Icon(
                                       LucideIcons.stethoscope,
@@ -365,7 +372,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                       child: Text(
                                         'The Assistant cannot safely prepare guidance for this assessment. Please contact the clinic for your next step.',
                                         style: TextStyle(
-                                          fontSize: 13,
+                                          fontSize: 12,
                                           height: 1.45,
                                           color: Color(0xFF1E3A8A),
                                         ),
@@ -375,13 +382,20 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                 ),
                                 if (!isCritical) ...[
                                   const SizedBox(height: 10),
-                                  OutlinedButton.icon(
-                                    onPressed: _contactDoctorOnWhatsApp,
-                                    icon: const Icon(
-                                      LucideIcons.messageCircle,
-                                      size: 16,
+                                  AppButton(
+                                    height: 45,
+                                    width: 180,
+                                    textStyle: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
                                     ),
-                                    label: const Text('Contact the clinic'),
+                                    onPressed: _contactDoctorOnWhatsApp,
+                                    icon: Icon(
+                                      LucideIcons.messageCircle,
+                                      color: Colors.white,
+                                      size: 15,
+                                    ),
+                                    text: 'Contact the clinic',
                                   ),
                                 ],
                               ],
@@ -423,26 +437,22 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                             onAddToCart: (product) {
                               final cartCubit = context.read<CartCubit?>();
                               if (cartCubit != null) {
-                                final plan = product.supplyPlans.isNotEmpty
-                                    ? product.supplyPlans.first
-                                    : const ProductSupplyPlan(
-                                        title: '1 Month',
-                                        subtitle: 'Monthly Supply',
-                                        price: 499,
-                                        mrp: 599,
-                                      );
+                                if (product.supplyPlans.isEmpty) {
+                                  context.push(
+                                    RouteNames.productPath(product.id),
+                                  );
+                                  return;
+                                }
+                                final plan = product.supplyPlans.first;
                                 cartCubit.addProduct(
                                   product: product,
                                   plan: plan,
                                   quantity: 1,
                                 );
                                 if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        '${product.name} added to cart',
-                                      ),
-                                    ),
+                                  AppToast.showSuccess(
+                                    context,
+                                    '${product.name} added to cart',
                                   );
                                 }
                               }
@@ -455,13 +465,9 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                             language: _currentLanguage,
                           ),
                           const SizedBox(height: 20),
-                          AssessmentActionableSuggestionsCard(
-                            state: state,
-                            aiAssessment: state.aiAssessment!,
-                            language: _currentLanguage,
-                          ),
                           const SizedBox(height: 14),
-                          // PDF Slip Card
+                          // This local PDF is an AI summary, not a signed
+                          // clinical document.
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
@@ -492,7 +498,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Official Clinical Summary (PDF)',
+                                        'Assessment Summary (PDF)',
                                         style: TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.w800,
@@ -501,7 +507,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                       ),
                                       SizedBox(height: 2),
                                       Text(
-                                        'Doctor-signed prescription slip with diagnosis & regimen.',
+                                        'AI-generated summary for your records. Not a signed clinical report.',
                                         style: TextStyle(
                                           fontSize: 11,
                                           color: Color(0xFF0F766E),
@@ -511,35 +517,26 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                OutlinedButton.icon(
+                                AppButton(
+                                  height: 34,
+                                  text: 'PDF',
+                                  icon: const Icon(
+                                    LucideIcons.download,
+                                    size: 13,
+                                    color: Color(0xFF0F766E),
+                                  ),
+                                  variant: AppButtonVariant.outlined,
+                                  foregroundColor: const Color(0xFF0F766E),
+                                  borderColor: const Color(0xFF0F766E),
+                                  borderRadius: BorderRadius.circular(8),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
                                   onPressed: () =>
                                       AssessmentPdfGenerator.downloadOrPrint(
                                         widget.state,
                                       ),
-                                  icon: const Icon(
-                                    LucideIcons.download,
-                                    size: 13,
-                                  ),
-                                  label: const Text(
-                                    'PDF',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFF0F766E),
-                                    side: const BorderSide(
-                                      color: Color(0xFF0F766E),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
                                 ),
                               ],
                             ),
@@ -549,10 +546,10 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                           const SizedBox(height: 16),
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: const Color(0xFFE2E8F0),
                               ),
@@ -570,10 +567,10 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                   child: const Icon(
                                     LucideIcons.sparkles,
                                     color: AppColors.primary,
-                                    size: 20,
+                                    size: 16,
                                   ),
                                 ),
-                                const SizedBox(width: 14),
+                                const SizedBox(width: 10),
                                 const Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -591,7 +588,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                       Text(
                                         'AI screening summary, possible factors, and daily care ideas.',
                                         style: TextStyle(
-                                          fontSize: 11.5,
+                                          fontSize: 10,
                                           color: Color(0xFF64748B),
                                         ),
                                       ),
@@ -608,25 +605,25 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                           color: AppColors.primary,
                                         ),
                                       )
-                                    : ElevatedButton(
-                                        onPressed: _retryAiAssessment,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppColors.primary,
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 8,
-                                          ),
-                                          elevation: 0,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                          ),
-                                        ),
-                                        child: const Text(
-                                          'Analyze',
+                                    : AppButton(
+                                        onPressed:
+                                            state.aiAssessmentStatus ==
+                                                    'failed' ||
+                                                state.aiAssessmentStatus ==
+                                                    'unavailable'
+                                            ? _retryAiAssessment
+                                            : _checkAiAssessmentStatus,
+                                        height: 45,
+                                        child: Text(
+                                          state.aiAssessmentStatus ==
+                                                      'failed' ||
+                                                  state.aiAssessmentStatus ==
+                                                      'unavailable'
+                                              ? 'Try again'
+                                              : 'Check status',
                                           style: TextStyle(
                                             fontSize: 12,
+                                            color: Colors.white,
                                             fontWeight: FontWeight.w700,
                                           ),
                                         ),
@@ -787,9 +784,8 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                     Expanded(
                                       flex: 3,
                                       child: TextButton(
-                                        onPressed: () => context.push(
-                                          RouteNames.reminders,
-                                        ),
+                                        onPressed: () =>
+                                            context.push(RouteNames.reminders),
                                         child: const Text('Set a reminder'),
                                       ),
                                     ),
@@ -800,9 +796,7 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                                           RouteNames.progress,
                                           extra: true,
                                         ),
-                                        child: const Text(
-                                          'Add progress photo',
-                                        ),
+                                        child: const Text('Add progress photo'),
                                       ),
                                     ),
                                   ],
@@ -819,7 +813,6 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                           height: 48,
                           text: 'Done',
                           variant: AppButtonVariant.outlined,
-                          size: AppButtonSize.large,
                           width: double.infinity,
                           onPressed: () {
                             context.read<HairTestCubit>().dismissReport();
@@ -838,12 +831,13 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
             ),
           ),
           bottomNavigationBar: Container(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
             decoration: const BoxDecoration(
               color: Colors.white,
               border: Border(
                 top: BorderSide(color: AppColors.border, width: 0.5),
               ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black12,
@@ -857,9 +851,11 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // ── Primary action (full-width) ──────────────────────────
                   if (isCritical) ...[
                     AppButton(
                       height: 48,
+                      width: double.infinity,
                       text: 'Book In-Clinic Consultation',
                       variant: AppButtonVariant.filled,
                       backgroundColor: const Color(0xFFD97706),
@@ -872,128 +868,80 @@ class _AssessmentReportViewState extends State<AssessmentReportView> {
                       onPressed: () =>
                           context.push(RouteNames.clinicAppointment),
                     ),
-                  ] else if (aiUnavailable) ...[
-                    AppButton(
-                      height: 48,
-                      text: 'Contact doctor on WhatsApp',
-                      variant: AppButtonVariant.filled,
-                      backgroundColor: AppColors.whatsapp,
-                      foregroundColor: Colors.white,
-                      icon: const Icon(
-                        LucideIcons.messageCircle,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                      onPressed: () => _contactDoctorOnWhatsApp(state),
-                    ),
-                  ] else ...[
-                    AppButton(
-                      height: 48,
-                      text: _isAddingRoutine
-                          ? 'Adding care plan…'
-                          : 'Open daily care routine',
-                      variant: AppButtonVariant.filled,
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      icon: const Icon(
-                        LucideIcons.listChecks,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                      onPressed: _isAddingRoutine
-                          ? null
-                          : () => _saveAssessmentRoutine(
-                              context,
-                              careRoutineSteps,
-                            ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton.icon(
-                            onPressed: () => _contactDoctorOnWhatsApp(state),
-                            icon: const Icon(
-                              LucideIcons.messageCircle,
-                              size: 15,
-                            ),
-                            label: const Text(
-                              'WhatsApp doctor',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
+                  ] else if (!aiUnavailable) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10.0),
+                      child: AppButton(
+                        height: 48,
+                        width: double.infinity,
+                        text: _isAddingRoutine
+                            ? 'Adding care plan…'
+                            : 'Open daily care routine',
+                        variant: AppButtonVariant.filled,
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        icon: const Icon(
+                          LucideIcons.listChecks,
+                          size: 16,
+                          color: Colors.white,
                         ),
-                        Expanded(
-                          child: TextButton.icon(
-                            onPressed: () =>
-                                context.push(RouteNames.clinicAppointment),
-                            icon: const Icon(
-                              LucideIcons.calendarCheck2,
-                              size: 15,
-                            ),
-                            label: const Text(
-                              'Book consultation',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
+                        onPressed: _isAddingRoutine
+                            ? null
+                            : () => _saveAssessmentRoutine(
+                                context,
+                                careRoutineSteps,
+                              ),
+                      ),
                     ),
                   ],
-                  const SizedBox(height: 4),
+                  // const SizedBox(height: 8),
+                  // ── WhatsApp Doctor + Retest row (always visible) ────────
                   Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () =>
-                              AssessmentPdfGenerator.downloadOrPrint(
-                                widget.state,
-                              ),
-                          icon: const Icon(LucideIcons.fileDown, size: 14),
-                          label: const Text(
-                            'Download PDF',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        child: AppButton(
+                          height: 44,
+                          textStyle: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
                           ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.primary,
-                            side: const BorderSide(color: AppColors.primary),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                          text: AssessmentTranslations.t(
+                            'whatsapp_doctor_bottom',
+                            _currentLanguage,
                           ),
+                          variant: AppButtonVariant.outlined,
+                          borderColor: AppColors.whatsapp,
+                          foregroundColor: const Color(0xFF075E54),
+                          icon: Image.asset(
+                            'assets/icons/whatsapp.png',
+                            width: 15,
+                            height: 15,
+                          ),
+                          onPressed: () => _contactDoctorOnWhatsApp(state),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () =>
-                              AssessmentPdfGenerator.sharePdf(widget.state),
-                          icon: const Icon(LucideIcons.share2, size: 14),
-                          label: const Text(
-                            'Share Summary',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        child: AppButton(
+                          height: 44,
+                          text: AssessmentTranslations.t(
+                            'retake_hair_test',
+                            _currentLanguage,
                           ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.primaryDark,
-                            side: const BorderSide(color: AppColors.border),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                          textStyle: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
                           ),
+                          variant: AppButtonVariant.outlined,
+                          icon: const Icon(
+                            LucideIcons.refreshCw,
+                            size: 15,
+                            color: AppColors.primary,
+                          ),
+                          onPressed: () {
+                            context.read<HairTestCubit>().startRetest();
+                            context.push(RouteNames.hairTest);
+                          },
                         ),
                       ),
                     ],

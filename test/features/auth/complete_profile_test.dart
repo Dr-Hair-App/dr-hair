@@ -81,7 +81,7 @@ class _AppointmentConfigCubit extends AppConfigCubit {
   }
 
   @override
-  Future<void> loadConfig() async {}
+  Future<void> loadConfig({bool force = false}) async {}
 }
 
 void main() {
@@ -161,6 +161,50 @@ void main() {
 
         expect(find.text('Please enter your full name'), findsNothing);
         expect(cubit.state.user?.name, 'Aarav Sharma');
+      },
+    );
+
+    testWidgets(
+      'Google profile name is prefilled and missing gender is required before assessment',
+      (tester) async {
+        final cubit = AuthCubit(repository: FakeAuthRepository());
+        cubit.emit(
+          AuthState(
+            status: AuthStatus.authenticated,
+            user: const UserModel(
+              id: 'google-user',
+              name: '',
+              emailOrPhone: 'google@example.com',
+              patientId: 'DHP0099',
+            ),
+            sessionToken: 'unit-test-token',
+            isRegistered: true,
+            nextStep: 'ASSESSMENT',
+            socialProvider: 'google',
+            socialEmail: 'google@example.com',
+            socialName: 'Google Patient',
+          ),
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: BlocProvider<AuthCubit>.value(
+              value: cubit,
+              child: const CompleteProfileView(requireGender: true),
+            ),
+          ),
+        );
+
+        final nameField = tester.widget<TextFormField>(
+          find.widgetWithText(TextFormField, 'Full name *'),
+        );
+        expect(nameField.controller?.text, 'Google Patient');
+        expect(find.text('Age (optional)'), findsOneWidget);
+        expect(find.text('Gender *'), findsOneWidget);
+
+        await tester.tap(find.text('Save & Continue'));
+        await tester.pumpAndSettle();
+        expect(find.text('Please select your gender'), findsOneWidget);
       },
     );
 

@@ -20,6 +20,9 @@ class AuthCubit extends Cubit<AuthState> {
   bool _handleAuthVerificationResult(
     AuthVerification result, {
     required String login,
+    String? socialProvider,
+    String? socialEmail,
+    String? socialName,
   }) {
     if (result.requiresPhoneVerification) {
       emit(
@@ -50,6 +53,9 @@ class AuthCubit extends Cubit<AuthState> {
         hasCompletedAssessment: result.hasCompletedAssessment,
         nextStep: result.nextStep,
         latestAssessment: result.latestAssessment,
+        socialProvider: socialProvider ?? state.socialProvider,
+        socialEmail: socialEmail ?? state.socialEmail,
+        socialName: socialName ?? state.socialName,
       ),
     );
     if (result.token.isNotEmpty) {
@@ -243,10 +249,7 @@ class AuthCubit extends Cubit<AuthState> {
         state.copyWith(
           status: AuthStatus.failure,
           isOtpSent: false,
-          errorMessage: _message(
-            error,
-            'Could not send the signup code.',
-          ),
+          errorMessage: _message(error, 'Could not send the signup code.'),
         ),
       );
       return false;
@@ -295,8 +298,7 @@ class AuthCubit extends Cubit<AuthState> {
         scopes: ['email', 'profile'],
         // This is the project's web OAuth client ID. It makes Google return
         // an ID token whose audience the API can validate.
-        serverClientId:
-            '141443100024-ootcl7edmtcuk9qtbd8e9m3mtulqd75s.apps.googleusercontent.com',
+        serverClientId: '141443100024-ootcl7edmtcuk9qtbd8e9m3mtulqd75s.apps.googleusercontent.com',
       );
       // Always disconnect or signOut prior to prompt so Android/iOS presents the account chooser dialog
       try {
@@ -329,7 +331,13 @@ class AuthCubit extends Cubit<AuthState> {
         name: account.displayName,
       );
 
-      return _handleAuthVerificationResult(result, login: account.email);
+      return _handleAuthVerificationResult(
+        result,
+        login: account.email,
+        socialProvider: 'google',
+        socialEmail: account.email,
+        socialName: account.displayName,
+      );
     } catch (error) {
       emit(
         state.copyWith(
@@ -362,9 +370,10 @@ class AuthCubit extends Cubit<AuthState> {
       final idToken =
           credential.identityToken ?? credential.userIdentifier ?? '';
       final email = credential.email;
-      final name = [credential.givenName, credential.familyName]
-          .where((n) => n != null && n.isNotEmpty)
-          .join(' ');
+      final name = [
+        credential.givenName,
+        credential.familyName,
+      ].where((n) => n != null && n.isNotEmpty).join(' ');
 
       final repo = repository;
       if (repo == null) {
@@ -379,7 +388,13 @@ class AuthCubit extends Cubit<AuthState> {
         name: name.isNotEmpty ? name : null,
       );
 
-      return _handleAuthVerificationResult(result, login: email ?? 'apple-user');
+      return _handleAuthVerificationResult(
+        result,
+        login: email ?? 'apple-user',
+        socialProvider: 'apple',
+        socialEmail: email,
+        socialName: name,
+      );
     } catch (error) {
       emit(
         state.copyWith(
@@ -412,14 +427,23 @@ class AuthCubit extends Cubit<AuthState> {
     try {
       final repo = repository;
       if (repo == null) {
-        throw const AuthRepositoryException('Authentication is not configured.');
+        throw const AuthRepositoryException(
+          'Authentication is not configured.',
+        );
       }
       final result = await repo.verifySocialSignup(
         phone: phone.trim(),
         otp: otp.trim(),
         tempToken: tempToken,
       );
-      return _handleAuthVerificationResult(result, login: phone.trim());
+      final authenticated = _handleAuthVerificationResult(
+        result,
+        login: phone.trim(),
+      );
+      if (authenticated && !isClosed) {
+        emit(state.copyWith(isNewSocialSignup: true));
+      }
+      return authenticated;
     } catch (error) {
       emit(
         state.copyWith(
@@ -445,7 +469,9 @@ class AuthCubit extends Cubit<AuthState> {
         );
       }
       await repo.forgotPassword(login.trim());
-      emit(state.copyWith(status: AuthStatus.unauthenticated, clearError: true));
+      emit(
+        state.copyWith(status: AuthStatus.unauthenticated, clearError: true),
+      );
       return true;
     } catch (error) {
       emit(
@@ -467,14 +493,18 @@ class AuthCubit extends Cubit<AuthState> {
     try {
       final repo = repository;
       if (repo == null) {
-        throw const AuthRepositoryException('Authentication is not configured.');
+        throw const AuthRepositoryException(
+          'Authentication is not configured.',
+        );
       }
       await repo.resetPassword(
         login: login.trim(),
         otp: otp.trim(),
         newPassword: newPassword,
       );
-      emit(state.copyWith(status: AuthStatus.unauthenticated, clearError: true));
+      emit(
+        state.copyWith(status: AuthStatus.unauthenticated, clearError: true),
+      );
       return true;
     } catch (error) {
       emit(
@@ -567,13 +597,6 @@ class AuthCubit extends Cubit<AuthState> {
           'Authentication is not configured.',
         );
       } else {
-        String? uploadedPhotoUrl;
-        if (!clearPhoto && photoBytes != null && photoFilename != null) {
-          uploadedPhotoUrl = await repo.uploadProfilePhoto(
-            bytes: photoBytes,
-            filename: photoFilename,
-          );
-        }
         updated = await repo.updateProfile(
           name: name,
           age: age,
@@ -581,8 +604,10 @@ class AuthCubit extends Cubit<AuthState> {
           gender: gender,
           city: city,
           occupation: occupation,
-          profileUrl: uploadedPhotoUrl,
+          profileUrl: photoUrl,
           clearProfileUrl: clearPhoto,
+          profilePhotoBytes: !clearPhoto ? photoBytes : null,
+          profilePhotoFilename: !clearPhoto ? photoFilename : null,
         );
       }
       emit(

@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:dr_hair/core/widgets/app_button.dart';
 import 'package:dr_hair/features/shop/data/models/delivery_address_model.dart';
 import 'package:dr_hair/features/shop/presentation/views/checkout_view.dart';
 import 'package:dr_hair/features/shop/presentation/viewmodels/cart_cubit.dart';
@@ -47,10 +48,10 @@ void main() {
         );
         expect(find.textContaining('Place Order'), findsOneWidget);
 
-        final placeOrder = tester.widget<ElevatedButton>(
+        final placeOrder = tester.widget<AppButton>(
           find.ancestor(
             of: find.textContaining('Place Order'),
-            matching: find.byType(ElevatedButton),
+            matching: find.byType(AppButton),
           ),
         );
         expect(

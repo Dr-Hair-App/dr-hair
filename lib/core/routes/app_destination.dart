@@ -3,6 +3,10 @@ import 'route_names.dart';
 /// The supported destinations for app content and notification actions.
 /// Unknown targets resolve to a safe screen rather than an arbitrary URL.
 class AppDestination {
+  static final RegExp _safeProductId = RegExp(
+    r'^[a-zA-Z0-9_-][a-zA-Z0-9._-]{0,127}$',
+  );
+
   final String type;
   final String? screen;
   final String? entityId;
@@ -62,8 +66,8 @@ class AppDestination {
       return '${RouteNames.treatmentDetails}?report_id=${Uri.encodeQueryComponent(id)}';
     }
     if (type == 'product') {
-      final id = entityId;
-      if (id == null || !RegExp(r'^[a-zA-Z0-9_\-]+$').hasMatch(id)) {
+      final id = entityId?.trim();
+      if (id == null || !_safeProductId.hasMatch(id)) {
         return null;
       }
       return RouteNames.productPath(id);
@@ -165,9 +169,8 @@ class AppDestination {
       return reportId != null &&
           RegExp(r'^[a-zA-Z0-9_-]{1,128}$').hasMatch(reportId);
     }
-    if (clean.startsWith('/products/')) {
-      final id = clean.substring('/products/'.length);
-      return id.isNotEmpty && RegExp(r'^[a-zA-Z0-9_\-]+$').hasMatch(id);
+    if (uri?.pathSegments case ['products', final productId]) {
+      return _safeProductId.hasMatch(productId);
     }
     return false;
   }

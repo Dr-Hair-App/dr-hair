@@ -36,7 +36,8 @@ class AssessmentRecommendationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isCritical = aiAssessment.isCritical;
-    final bool hasProducts = recommendedProducts.isNotEmpty && aiAssessment.shopEnabled;
+    final bool hasProducts =
+        recommendedProducts.isNotEmpty && aiAssessment.shopEnabled;
 
     if (isCritical) {
       return _buildCriticalAppointmentOnlyCard(context);
@@ -249,7 +250,9 @@ class AssessmentRecommendationCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          ...recommendedProducts.take(3).map((product) => _buildProductItemRow(context, product)),
+          ...recommendedProducts
+              .take(3)
+              .map((product) => _buildProductItemRow(context, product)),
         ],
       ),
     );
@@ -257,7 +260,9 @@ class AssessmentRecommendationCard extends StatelessWidget {
 
   Widget _buildProductItemRow(BuildContext context, ProductItem product) {
     final image = product.images.isNotEmpty ? product.images.first : '';
-    final plan = product.supplyPlans.isNotEmpty ? product.supplyPlans.first : null;
+    final plan = product.supplyPlans.isNotEmpty
+        ? product.supplyPlans.first
+        : null;
     final price = plan?.price ?? 0;
     final mrp = plan?.mrp ?? price;
 
@@ -277,10 +282,7 @@ class AssessmentRecommendationCard extends StatelessWidget {
               width: 58,
               height: 58,
               child: image.isNotEmpty
-                  ? CustomCachedImage(
-                      imageUrl: image,
-                      fit: BoxFit.cover,
-                    )
+                  ? CustomCachedImage(imageUrl: image, fit: BoxFit.cover)
                   : Container(
                       color: const Color(0xFFE2E8F0),
                       child: const Icon(
@@ -316,44 +318,51 @@ class AssessmentRecommendationCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      '₹$price',
-                      style: const TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primary,
-                      ),
+                if (plan == null)
+                  const Text(
+                    'View for price',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
                     ),
-                    if (mrp > price) ...[
-                      const SizedBox(width: 6),
+                  )
+                else
+                  Row(
+                    children: [
                       Text(
-                        '₹$mrp',
+                        '₹$price',
                         style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                          decoration: TextDecoration.lineThrough,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary,
                         ),
                       ),
+                      if (mrp > price) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          '₹$mrp',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
+                  ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              minimumSize: const Size(36, 36),
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
+          AppButton(
+            height: 36,
+            text: plan == null ? 'View' : 'Add',
+            variant: AppButtonVariant.filled,
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            borderRadius: BorderRadius.circular(10),
             onPressed: () {
               if (onAddToCart != null) {
                 onAddToCart!(product);
@@ -361,13 +370,6 @@ class AssessmentRecommendationCard extends StatelessWidget {
                 context.push(RouteNames.productPath(product.id));
               }
             },
-            child: const Text(
-              'Add',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
           ),
         ],
       ),
@@ -381,11 +383,13 @@ class AssessmentRecommendationCard extends StatelessWidget {
     final patientId = (state.patientId?.trim().isNotEmpty == true)
         ? state.patientId!.trim()
         : (aiAssessment.patientCode?.trim().isNotEmpty == true
-            ? aiAssessment.patientCode!.trim()
-            : (aiAssessment.patientId?.trim().isNotEmpty == true
-                ? aiAssessment.patientId!.trim()
-                : (state.referenceNo ?? 'Patient')));
-    final adminLink = AppUrls.adminPatientDetailUrl(patientId, state.referenceNo);
+              ? aiAssessment.patientCode!.trim()
+              : (aiAssessment.patientId?.trim().isNotEmpty == true
+                    ? aiAssessment.patientId!.trim()
+                    : (state.referenceNo ?? 'Patient')));
+    final assessmentLink = AppUrls.assessmentUniversalLink(
+      state.referenceNo ?? '',
+    );
 
     return Container(
       width: double.infinity,
@@ -471,11 +475,15 @@ class AssessmentRecommendationCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(LucideIcons.link2, size: 14, color: Color(0xFF16A34A)),
+                    const Icon(
+                      LucideIcons.smartphone,
+                      size: 14,
+                      color: Color(0xFF16A34A),
+                    ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'Direct Admin Link: $adminLink',
+                        'App Assessment Link: $assessmentLink',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(

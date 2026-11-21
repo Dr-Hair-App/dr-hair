@@ -60,9 +60,9 @@ void main() {
         expect(find.textContaining('Dr. Jai Bansal'), findsNothing);
 
         // 3-step timeline
-        expect(find.text('Intake Sent'), findsOneWidget);
+        expect(find.text('Intake Done'), findsOneWidget);
+        expect(find.text('AI Review Done'), findsOneWidget);
         expect(find.text('Doctor Review'), findsOneWidget);
-        expect(find.text('Regimen Prescribed'), findsOneWidget);
 
         cubit.close();
       },
@@ -212,8 +212,8 @@ void main() {
 
         expect(find.text(liveProduct.name), findsWidgets);
         expect(find.text('Open daily care routine'), findsOneWidget);
-        expect(find.text('WhatsApp doctor'), findsOneWidget);
-        expect(find.text('Book consultation'), findsOneWidget);
+        expect(find.text('WhatsApp Doctor'), findsOneWidget);
+        expect(find.text('Retest'), findsOneWidget);
         await cubit.close();
       },
     );
@@ -249,8 +249,8 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Open daily care routine'), findsOneWidget);
-        expect(find.text('WhatsApp doctor'), findsOneWidget);
-        expect(find.text('Book consultation'), findsOneWidget);
+        expect(find.text('WhatsApp Doctor'), findsOneWidget);
+        expect(find.text('Retest'), findsOneWidget);
 
         await cubit.close();
       },
@@ -305,7 +305,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text('WhatsApp doctor'), findsOneWidget);
+      expect(find.text('WhatsApp Doctor'), findsOneWidget);
       await cubit.close();
     });
   });

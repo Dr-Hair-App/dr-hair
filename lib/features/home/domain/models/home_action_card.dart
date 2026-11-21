@@ -32,9 +32,9 @@ class HomeActionCard {
     final rawProducts = json['products'];
     final productList = rawProducts is List
         ? rawProducts
-            .whereType<Map>()
-            .map((p) => Map<String, dynamic>.from(p))
-            .toList()
+              .whereType<Map>()
+              .map((p) => Map<String, dynamic>.from(p))
+              .toList()
         : const <Map<String, dynamic>>[];
 
     DateTime? parsedDate;
@@ -78,6 +78,7 @@ class HomeSummaryData {
   final int upcomingAppointmentsCount;
   final bool shopEnabled;
   final bool clinicAppointmentEnabled;
+  final Map<String, dynamic>? latestReport;
 
   const HomeSummaryData({
     this.actionCards = const [],
@@ -88,29 +89,63 @@ class HomeSummaryData {
     this.upcomingAppointmentsCount = 0,
     this.shopEnabled = true,
     this.clinicAppointmentEnabled = true,
+    this.latestReport,
   });
+
+  HomeSummaryData copyWith({
+    List<HomeActionCard>? actionCards,
+    Map<String, dynamic>? latestReport,
+    bool clearLatestReport = false,
+  }) => HomeSummaryData(
+    actionCards: actionCards ?? this.actionCards,
+    hasCompletedAssessment: hasCompletedAssessment,
+    assessmentStatus: assessmentStatus,
+    hasActiveCarePlan: hasActiveCarePlan,
+    sharedReportsCount: sharedReportsCount,
+    upcomingAppointmentsCount: upcomingAppointmentsCount,
+    shopEnabled: shopEnabled,
+    clinicAppointmentEnabled: clinicAppointmentEnabled,
+    latestReport: clearLatestReport ? null : (latestReport ?? this.latestReport),
+  );
 
   factory HomeSummaryData.fromJson(Map<String, dynamic> json) {
     final rawCards = json['action_cards'];
     final cards = rawCards is List
         ? rawCards
-            .whereType<Map>()
-            .map((c) => HomeActionCard.fromJson(Map<String, dynamic>.from(c)))
-            .toList()
+              .whereType<Map>()
+              .map((c) => HomeActionCard.fromJson(Map<String, dynamic>.from(c)))
+              .toList()
         : const <HomeActionCard>[];
 
-    final status = json['patient_status'] is Map ? json['patient_status'] as Map : null;
-    final flags = json['feature_flags'] is Map ? json['feature_flags'] as Map : null;
+    final rawReport = json['latest_report'];
+    final report = rawReport is Map<String, dynamic>
+        ? rawReport
+        : rawReport is Map
+            ? Map<String, dynamic>.from(rawReport)
+            : null;
+
+    final status = json['patient_status'] is Map
+        ? json['patient_status'] as Map
+        : null;
+    final flags = json['feature_flags'] is Map
+        ? json['feature_flags'] as Map
+        : null;
 
     return HomeSummaryData(
       actionCards: cards,
       hasCompletedAssessment: status?['has_completed_assessment'] == true,
       assessmentStatus: status?['assessment_status']?.toString() ?? 'none',
       hasActiveCarePlan: status?['has_active_care_plan'] == true,
-      sharedReportsCount: int.tryParse(status?['shared_reports_count']?.toString() ?? '') ?? 0,
-      upcomingAppointmentsCount: int.tryParse(status?['upcoming_appointments_count']?.toString() ?? '') ?? 0,
+      sharedReportsCount:
+          int.tryParse(status?['shared_reports_count']?.toString() ?? '') ?? 0,
+      upcomingAppointmentsCount:
+          int.tryParse(
+            status?['upcoming_appointments_count']?.toString() ?? '',
+          ) ??
+          0,
       shopEnabled: flags?['shop_enabled'] != false,
       clinicAppointmentEnabled: flags?['clinic_appointment_enabled'] != false,
+      latestReport: report,
     );
   }
 }

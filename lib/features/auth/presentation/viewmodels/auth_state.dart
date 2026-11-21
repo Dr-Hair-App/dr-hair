@@ -27,6 +27,7 @@ class AuthState {
   final String? socialEmail;
   final String? socialName;
   final String? socialProvider;
+  final bool isNewSocialSignup;
 
   const AuthState({
     this.status = AuthStatus.initial,
@@ -46,6 +47,7 @@ class AuthState {
     this.socialEmail,
     this.socialName,
     this.socialProvider,
+    this.isNewSocialSignup = false,
   });
 
   bool get isAuthenticated {
@@ -86,6 +88,7 @@ class AuthState {
     String? socialEmail,
     String? socialName,
     String? socialProvider,
+    bool? isNewSocialSignup,
     bool clearUser = false,
     bool clearError = false,
     bool clearSession = false,
@@ -112,10 +115,16 @@ class AuthState {
           ? false
           : (requiresPhoneVerification ?? this.requiresPhoneVerification),
       tempToken: clearPhoneVerification ? null : (tempToken ?? this.tempToken),
-      socialEmail: clearPhoneVerification ? null : (socialEmail ?? this.socialEmail),
-      socialName: clearPhoneVerification ? null : (socialName ?? this.socialName),
-      socialProvider:
-          clearPhoneVerification ? null : (socialProvider ?? this.socialProvider),
+      socialEmail: clearPhoneVerification
+          ? null
+          : (socialEmail ?? this.socialEmail),
+      socialName: clearPhoneVerification
+          ? null
+          : (socialName ?? this.socialName),
+      socialProvider: clearPhoneVerification
+          ? null
+          : (socialProvider ?? this.socialProvider),
+      isNewSocialSignup: isNewSocialSignup ?? this.isNewSocialSignup,
     );
   }
 }

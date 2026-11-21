@@ -1,14 +1,13 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 
 import '../../../core/constants/api_endpoints.dart';
-import '../../../core/media/data/media_upload_api.dart';
 import '../../../core/network/dio_client.dart';
 
 class PatientProgressApi {
   final Dio _dio;
-  late final MediaUploadApi _mediaUploadApi = MediaUploadApi(dio: _dio);
 
   PatientProgressApi({Dio? dio})
     : _dio = dio ?? DioClient(baseUrl: ApiEndpoints.backendBaseUrl).dio;
@@ -23,49 +22,34 @@ class PatientProgressApi {
     required String notes,
     required int densityRating,
   }) async {
-    final entries = photoPaths.entries.toList();
-    final files = await Future.wait(
-      entries.map((entry) async {
-        return MultipartFile.fromFile(
-          entry.value,
-          filename: File(entry.value).uri.pathSegments.last,
-        );
-      }),
+    final formData = FormData();
+    formData.fields.add(
+      MapEntry(
+        'payload',
+        jsonEncode({
+          'id': id,
+          'date': date.toIso8601String(),
+          'scalp_region': scalpRegion,
+          'shedding_level': sheddingLevel,
+          'notes': notes,
+          'density_rating': densityRating,
+        }),
+      ),
     );
-    final uploaded = await _mediaUploadApi.uploadFiles(
-      token: token,
-      purpose: 'progress',
-      files: files,
-    );
-    final photos = List<Map<String, dynamic>>.generate(entries.length, (index) {
-      final asset = uploaded[index];
-      if (asset['resource_type'] != 'image' ||
-          asset['public_id'] is! String ||
-          asset['url'] is! String) {
-        throw const FormatException(
-          'Progress image upload returned invalid asset data.',
-        );
-      }
-      return {
-        'angle': entries[index].key,
-        'public_id': asset['public_id'],
-        'url': asset['url'],
-        'file_name': File(entries[index].value).uri.pathSegments.last,
-        'mime_type': asset['mime_type'] ?? 'image/jpeg',
-        'bytes': asset['bytes'] ?? 0,
-      };
-    });
+    for (final entry in photoPaths.entries) {
+      formData.files.add(
+        MapEntry(
+          'photo_${entry.key}',
+          await MultipartFile.fromFile(
+            entry.value,
+            filename: File(entry.value).uri.pathSegments.last,
+          ),
+        ),
+      );
+    }
     await _dio.post<Map<String, dynamic>>(
       ApiEndpoints.patientProgressCheckins,
-      data: {
-        'id': id,
-        'date': date.toIso8601String(),
-        'scalp_region': scalpRegion,
-        'shedding_level': sheddingLevel,
-        'notes': notes,
-        'density_rating': densityRating,
-        'photos': photos,
-      },
+      data: formData,
       options: Options(headers: {'Authorization': 'Bearer $token'}),
     );
   }

@@ -1,11 +1,15 @@
 import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 
+/// Image upload preparation shared by profile, progress, and assessment APIs.
+///
+/// Images are resized and re-encoded once on-device before they are attached to
+/// their domain save request. If the native codec fails or produces a larger
+/// image, the original bytes are kept so upload preparation never blocks a
+/// valid image.
 class PreparedUploadImage {
   const PreparedUploadImage({
     required this.originalPath,
@@ -24,32 +28,69 @@ class PreparedUploadImage {
   final String optimizationStatus;
 }
 
-typedef SmartImageCompressor = Future<Uint8List?> Function(
-  String path, {
-  required int quality,
-  required int maxDimension,
-});
+class PreparedUploadBytes {
+  const PreparedUploadBytes({
+    required this.bytes,
+    required this.filename,
+    required this.originalBytes,
+    required this.uploadBytes,
+    required this.optimized,
+    required this.optimizationStatus,
+  });
 
-/// Keeps a durable app-private original and builds a smaller upload copy when
-/// the source is large enough to justify decoding and re-encoding it.
+  final Uint8List bytes;
+  final String filename;
+  final int originalBytes;
+  final int uploadBytes;
+  final bool optimized;
+  final String optimizationStatus;
+}
+
 class SmartImageUploadService {
   const SmartImageUploadService({
-    this.compressor,
     this.supportDirectoryProvider,
+    this.compressFile,
+    this.compressBytes,
   });
 
   @visibleForTesting
-  final SmartImageCompressor? compressor;
-  @visibleForTesting
   final Future<Directory> Function()? supportDirectoryProvider;
 
-  static const int maxFileBytes = 25 * 1024 * 1024;
-  static const int maxSourceFileBytes = 100 * 1024 * 1024;
-  static const int optimizeAboveBytes = 1536 * 1024;
-  static const int targetUploadBytes = 2 * 1024 * 1024;
-  static const int maxDimension = 2560;
+  @visibleForTesting
+  final Future<Uint8List?> Function(String path, int maxDimension, int quality)?
+  compressFile;
 
-  Future<PreparedUploadImage> prepare(String sourcePath) async {
+  @visibleForTesting
+  final Future<Uint8List?> Function(
+    Uint8List bytes,
+    int maxDimension,
+    int quality,
+  )?
+  compressBytes;
+
+  static const int maxFileBytes = 25 * 1024 * 1024;
+  static const int maxSourceBytes = 100 * 1024 * 1024;
+  static const int defaultMaxDimension = 3072;
+  static const int defaultQuality = 92;
+
+  static String _extension(String path) {
+    final basename = path.split(RegExp(r'[/\\]')).last;
+    final dot = basename.lastIndexOf('.');
+    return dot < 0 ? '' : basename.substring(dot);
+  }
+
+  static String _jpegFilename(String filename) {
+    final basename = filename.split(RegExp(r'[/\\]')).last;
+    final dot = basename.lastIndexOf('.');
+    final stem = dot <= 0 ? basename : basename.substring(0, dot);
+    return '$stem.jpg';
+  }
+
+  Future<PreparedUploadImage> prepare(
+    String sourcePath, {
+    int maxDimension = defaultMaxDimension,
+    int quality = defaultQuality,
+  }) async {
     final source = File(sourcePath);
     if (!await source.exists()) {
       throw const FileSystemException(
@@ -60,183 +101,152 @@ class SmartImageUploadService {
     if (sourceBytes <= 0) {
       throw const FileSystemException('The selected image is empty.');
     }
-    if (sourceBytes > maxSourceFileBytes) {
+    if (sourceBytes > maxSourceBytes) {
       throw const FileSystemException(
-        'This image is larger than the 100 MiB preparation limit. Choose a smaller image.',
+        'This image is larger than 100 MiB. Choose a smaller image.',
       );
     }
-    final sourceExceedsUploadLimit = sourceBytes > maxFileBytes;
 
     final support =
         await (supportDirectoryProvider?.call() ??
             getApplicationSupportDirectory());
     final uploadDirectory = Directory('${support.path}/drhair_uploads');
     await uploadDirectory.create(recursive: true);
-    final id = _randomId();
-    final extension = _safeExtension(sourcePath);
-    final originalPath = '${uploadDirectory.path}/$id.original$extension';
-    await source.copy(originalPath);
+    final sourceExtension = _extension(sourcePath);
+    final extension = sourceExtension.isEmpty ? '.img' : sourceExtension;
+    final stem = DateTime.now().microsecondsSinceEpoch.toString();
+    final durablePath = '${uploadDirectory.path}/$stem.original$extension';
+    await source.copy(durablePath);
 
-    final lowerExtension = extension.toLowerCase();
-    final isAnimatedGif = lowerExtension == '.gif';
-    final alreadyWebp = lowerExtension == '.webp';
-    if (isAnimatedGif && sourceExceedsUploadLimit) {
-      throw const FileSystemException(
-        'Animated images larger than 25 MiB cannot be uploaded. Choose a smaller image.',
-      );
-    }
-    if (isAnimatedGif && !sourceExceedsUploadLimit) {
-      return PreparedUploadImage(
-        originalPath: originalPath,
-        uploadPath: originalPath,
-        originalBytes: sourceBytes,
-        uploadBytes: sourceBytes,
-        optimized: false,
-        optimizationStatus: isAnimatedGif
-            ? 'animation_preserved'
-            : 'already_optimized',
-      );
-    }
-
-    if (alreadyWebp && sourceBytes <= targetUploadBytes) {
-      return PreparedUploadImage(
-        originalPath: originalPath,
-        uploadPath: originalPath,
-        originalBytes: sourceBytes,
-        uploadBytes: sourceBytes,
-        optimized: false,
-        optimizationStatus: 'already_optimized',
-      );
-    }
-
-    if (!sourceExceedsUploadLimit &&
-        sourceBytes <= optimizeAboveBytes &&
-        lowerExtension != '.avif') {
-      return PreparedUploadImage(
-        originalPath: originalPath,
-        uploadPath: originalPath,
-        originalBytes: sourceBytes,
-        uploadBytes: sourceBytes,
-        optimized: false,
-        optimizationStatus: 'below_optimization_threshold',
-      );
-    }
-
-    try {
-      Uint8List? best;
-      for (final settings in const [
-        (quality: 88, dimension: maxDimension),
-        (quality: 80, dimension: maxDimension),
-        (quality: 76, dimension: 1920),
-        (quality: 70, dimension: 1600),
-        (quality: 64, dimension: 1280),
-      ]) {
-        final result =
-            await (compressor?.call(
-                  originalPath,
-                  quality: settings.quality,
-                  maxDimension: settings.dimension,
-                ) ??
-                FlutterImageCompress.compressWithFile(
-                  originalPath,
-                  minWidth: settings.dimension,
-                  minHeight: settings.dimension,
-                  quality: settings.quality,
-                  format: CompressFormat.webp,
-                  autoCorrectionAngle: true,
-                  keepExif: false,
-                ));
-        if (result == null || result.isEmpty) continue;
-        best = result;
-        if (result.length <= targetUploadBytes) break;
-      }
-
-      if (best == null ||
-          best.length > maxFileBytes ||
-          (!sourceExceedsUploadLimit &&
-              sourceBytes <= targetUploadBytes &&
-              lowerExtension != '.avif' &&
-              best.length >= sourceBytes * 0.9)) {
-        if (sourceExceedsUploadLimit) {
-          throw const FileSystemException(
-            'This image could not be compressed below 25 MiB. Choose a smaller image.',
-          );
-        }
-        return PreparedUploadImage(
-          originalPath: originalPath,
-          uploadPath: originalPath,
-          originalBytes: sourceBytes,
-          uploadBytes: sourceBytes,
-          optimized: false,
-          optimizationStatus: 'kept_original_no_size_saving',
-        );
-      }
-
-      final optimizedPath = '${uploadDirectory.path}/$id.upload.webp';
-      await File(optimizedPath).writeAsBytes(best, flush: true);
-      return PreparedUploadImage(
-        originalPath: originalPath,
-        uploadPath: optimizedPath,
-        originalBytes: sourceBytes,
-        uploadBytes: best.length,
-        optimized: true,
-        optimizationStatus: 'webp_ready',
-      );
-    } on UnsupportedError {
-      if (sourceExceedsUploadLimit) {
+    final Uint8List? candidate = await _compressFile(
+      durablePath,
+      maxDimension,
+      quality,
+    );
+    if (candidate == null ||
+        candidate.isEmpty ||
+        candidate.length >= sourceBytes) {
+      if (sourceBytes > maxFileBytes) {
+        await File(durablePath).delete();
         throw const FileSystemException(
-          'This image format could not be compressed below 25 MiB. Choose a smaller image.',
+          'This image could not be reduced below the 25 MiB upload limit. Choose a smaller image.',
         );
       }
       return PreparedUploadImage(
-        originalPath: originalPath,
-        uploadPath: originalPath,
+        originalPath: durablePath,
+        uploadPath: durablePath,
         originalBytes: sourceBytes,
         uploadBytes: sourceBytes,
         optimized: false,
-        optimizationStatus: 'encoder_unavailable_original_preserved',
+        optimizationStatus: 'original_preserved',
+      );
+    }
+
+    final optimizedPath = '${uploadDirectory.path}/$stem.upload.jpg';
+    if (candidate.length > maxFileBytes) {
+      await File(durablePath).delete();
+      throw const FileSystemException(
+        'This image remains larger than the 25 MiB upload limit after optimization. Choose a smaller image.',
+      );
+    }
+    await File(optimizedPath).writeAsBytes(candidate, flush: true);
+    return PreparedUploadImage(
+      originalPath: durablePath,
+      uploadPath: optimizedPath,
+      originalBytes: sourceBytes,
+      uploadBytes: candidate.length,
+      optimized: true,
+      optimizationStatus: 'client_jpeg',
+    );
+  }
+
+  /// Shared byte-based entry point for profile and other in-memory uploads.
+  Future<PreparedUploadBytes> prepareBytes(
+    Uint8List sourceBytes, {
+    required String filename,
+    int maxDimension = defaultMaxDimension,
+    int quality = defaultQuality,
+  }) async {
+    if (sourceBytes.isEmpty) {
+      throw const FileSystemException('The selected image is empty.');
+    }
+    if (sourceBytes.length > maxSourceBytes) {
+      throw const FileSystemException(
+        'This image is larger than 100 MiB. Choose a smaller image.',
+      );
+    }
+    final candidate = await _compressBytes(sourceBytes, maxDimension, quality);
+    final useCandidate =
+        candidate != null &&
+        candidate.isNotEmpty &&
+        candidate.length < sourceBytes.length;
+    final uploadBytes = useCandidate ? candidate : sourceBytes;
+    if (uploadBytes.length > maxFileBytes) {
+      throw const FileSystemException(
+        'This image could not be reduced below the 25 MiB upload limit. Choose a smaller image.',
+      );
+    }
+    return PreparedUploadBytes(
+      bytes: uploadBytes,
+      filename: useCandidate ? _jpegFilename(filename) : filename,
+      originalBytes: sourceBytes.length,
+      uploadBytes: uploadBytes.length,
+      optimized: useCandidate,
+      optimizationStatus: useCandidate ? 'client_jpeg' : 'original_preserved',
+    );
+  }
+
+  Future<Uint8List?> _compressFile(
+    String path,
+    int maxDimension,
+    int quality,
+  ) async {
+    try {
+      if (compressFile case final compressor?) {
+        return await compressor(path, maxDimension, quality);
+      }
+      return await FlutterImageCompress.compressWithFile(
+        path,
+        minWidth: maxDimension,
+        minHeight: maxDimension,
+        quality: quality,
+        format: CompressFormat.jpeg,
+        autoCorrectionAngle: true,
       );
     } catch (_) {
-      if (sourceExceedsUploadLimit) {
-        throw const FileSystemException(
-          'This image could not be compressed below 25 MiB. Choose a smaller image.',
-        );
+      // Unsupported formats and native codec failures retain the source.
+      return null;
+    }
+  }
+
+  Future<Uint8List?> _compressBytes(
+    Uint8List bytes,
+    int maxDimension,
+    int quality,
+  ) async {
+    try {
+      if (compressBytes case final compressor?) {
+        return await compressor(bytes, maxDimension, quality);
       }
-      return PreparedUploadImage(
-        originalPath: originalPath,
-        uploadPath: originalPath,
-        originalBytes: sourceBytes,
-        uploadBytes: sourceBytes,
-        optimized: false,
-        optimizationStatus: 'optimization_failed_original_preserved',
+      return await FlutterImageCompress.compressWithList(
+        bytes,
+        minWidth: maxDimension,
+        minHeight: maxDimension,
+        quality: quality,
+        format: CompressFormat.jpeg,
+        autoCorrectionAngle: true,
       );
+    } catch (_) {
+      // Unsupported formats and native codec failures retain the source.
+      return null;
     }
   }
 
-  Future<void> deletePrepared(String originalPath, [String? uploadPath]) async {
+  Future<void> deletePrepared(String originalPath, String? uploadPath) async {
     for (final path in {originalPath, ?uploadPath}) {
-      try {
-        final file = File(path);
-        if (await file.exists()) await file.delete();
-      } catch (_) {}
+      if (!path.contains('/drhair_uploads/')) continue;
+      final file = File(path);
+      if (await file.exists()) await file.delete();
     }
-  }
-
-  static String _safeExtension(String path) {
-    final name = path.split('/').last;
-    final dot = name.lastIndexOf('.');
-    if (dot < 0 || dot == name.length - 1) return '.img';
-    final extension = name.substring(dot).toLowerCase();
-    return RegExp(r'^\.[a-z0-9]{1,8}$').hasMatch(extension)
-        ? extension
-        : '.img';
-  }
-
-  static String _randomId() {
-    final random = Random.secure();
-    return List<int>.generate(
-      16,
-      (_) => random.nextInt(256),
-    ).map((value) => value.toRadixString(16).padLeft(2, '0')).join();
   }
 }

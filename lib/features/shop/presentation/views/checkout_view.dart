@@ -21,6 +21,7 @@ import '../widgets/delivery_address_bottom_sheet.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_toast.dart';
 import '../../../care/presentation/viewmodels/care_cubit.dart';
 import '../viewmodels/cart_cubit.dart';
@@ -1011,48 +1012,26 @@ class _CheckoutViewState extends State<CheckoutView> {
             const SizedBox(height: 20),
 
             // Place Order Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed:
-                    _isSubmitting ||
-                        (_pendingPaymentOrder == null && _shippingQuote == null)
-                    ? null
-                    : _handlePlaceOrder,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                ),
-                child: _isSubmitting
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
-                        ),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '${_pendingPaymentOrder != null ? 'Check Payment Status' : (_selectedPaymentGateway == 'razorpay' ? 'Pay Securely' : 'Place Order')} • ₹$buttonAmount',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          const Icon(LucideIcons.arrowRight, size: 20),
-                        ],
-                      ),
+            AppButton(
+              height: 52,
+              isLoading: _isSubmitting,
+              text:
+                  '${_pendingPaymentOrder != null ? 'Check Payment Status' : (_selectedPaymentGateway == 'razorpay' ? 'Pay Securely' : 'Place Order')} • ₹$buttonAmount',
+              trailingIcon: const Icon(
+                LucideIcons.arrowRight,
+                size: 20,
+                color: Colors.white,
               ),
+              variant: AppButtonVariant.filled,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              onPressed:
+                  _isSubmitting ||
+                          (_pendingPaymentOrder == null &&
+                              _shippingQuote == null)
+                      ? null
+                      : _handlePlaceOrder,
             ),
             const SizedBox(height: 20),
 

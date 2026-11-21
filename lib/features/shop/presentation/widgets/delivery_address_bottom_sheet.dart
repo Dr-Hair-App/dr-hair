@@ -3,6 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/widgets/app_button.dart';
+import '../../../../core/widgets/app_text_form_field.dart';
 import '../../data/models/delivery_address_model.dart';
 
 /// Modal bottom sheet allowing users to view saved delivery addresses, select an
@@ -721,39 +722,32 @@ class _DeliveryAddressBottomSheetState
           ),
         ),
         const SizedBox(height: 6),
-        TextFormField(
+        AppTextFormField(
           controller: controller,
           keyboardType: keyboardType,
           validator: validator,
-          style: const TextStyle(fontSize: 13.5, color: AppColors.primaryDark),
-          decoration: InputDecoration(
-            hintText: hint,
-            prefixText: prefixText,
-            prefixIcon: icon != null
-                ? Icon(icon, size: 16, color: AppColors.primary)
-                : null,
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: AppColors.primary,
-                width: 1.5,
-              ),
-            ),
+          hintText: hint,
+          prefix: prefixText != null
+              ? Text(
+                  prefixText,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryDark,
+                  ),
+                )
+              : null,
+          prefixIcon: icon != null
+              ? Icon(icon, size: 16, color: AppColors.primary)
+              : null,
+          fillColor: Colors.grey.shade50,
+          filled: true,
+          borderRadius: BorderRadius.circular(12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 12,
           ),
+          style: const TextStyle(fontSize: 13.5, color: AppColors.primaryDark),
         ),
       ],
     );

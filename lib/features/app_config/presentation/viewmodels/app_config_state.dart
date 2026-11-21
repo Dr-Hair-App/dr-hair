@@ -2,6 +2,8 @@ import 'package:equatable/equatable.dart';
 
 class AppointmentBillingConfig extends Equatable {
   final bool configured;
+  final bool payAtClinicEnabled;
+  final bool onlinePayEnabled;
   final bool paymentRequired;
   final int? consultationFee;
   final String currency;
@@ -11,9 +13,11 @@ class AppointmentBillingConfig extends Equatable {
   final bool? effectivePaymentRequired;
 
   const AppointmentBillingConfig({
-    this.configured = false,
+    this.configured = true,
+    this.payAtClinicEnabled = true,
+    this.onlinePayEnabled = true,
     this.paymentRequired = false,
-    this.consultationFee,
+    this.consultationFee = 500,
     this.currency = 'INR',
     this.firstAppointmentFree = false,
     this.isFirstAppointment = false,
@@ -23,10 +27,20 @@ class AppointmentBillingConfig extends Equatable {
 
   factory AppointmentBillingConfig.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const AppointmentBillingConfig();
+    final fee = (json['consultation_fee'] as num?)?.toInt();
+    final configured = json['configured'] == true || (fee != null && fee >= 0);
+    final payAtClinic = json['pay_at_clinic_enabled'] != null
+        ? json['pay_at_clinic_enabled'] == true
+        : (json['payment_required'] == true ? false : true);
+    final onlinePay = json['online_pay_enabled'] != null
+        ? json['online_pay_enabled'] == true
+        : (json['payment_required'] == true ? true : true);
     return AppointmentBillingConfig(
-      configured: json['configured'] == true,
-      paymentRequired: json['payment_required'] == true,
-      consultationFee: (json['consultation_fee'] as num?)?.toInt(),
+      configured: configured,
+      payAtClinicEnabled: payAtClinic,
+      onlinePayEnabled: onlinePay,
+      paymentRequired: json['payment_required'] == true || (onlinePay && !payAtClinic),
+      consultationFee: fee ?? (configured ? 500 : null),
       currency: (json['currency'] as String?) ?? 'INR',
       firstAppointmentFree: json['first_appointment_free'] == true,
       isFirstAppointment: json['is_first_appointment'] == true,
@@ -37,6 +51,8 @@ class AppointmentBillingConfig extends Equatable {
 
   Map<String, dynamic> toJson() => {
     'configured': configured,
+    'pay_at_clinic_enabled': payAtClinicEnabled,
+    'online_pay_enabled': onlinePayEnabled,
     'payment_required': paymentRequired,
     'consultation_fee': consultationFee,
     'currency': currency,
@@ -50,6 +66,8 @@ class AppointmentBillingConfig extends Equatable {
   @override
   List<Object?> get props => [
     configured,
+    payAtClinicEnabled,
+    onlinePayEnabled,
     paymentRequired,
     consultationFee,
     currency,

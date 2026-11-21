@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:dr_hair/features/reviews/presentation/views/reviews_view.dart';
 import 'package:dr_hair/features/reviews/data/datasources/review_remote_data_source.dart';
 import 'package:dr_hair/features/reviews/data/models/review_model.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 
 class _FakeReviewDataSource extends ReviewRemoteDataSource {
   final Future<List<ReviewModel>> Function(String? category) load;
@@ -51,9 +54,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Patient Stories'), findsOneWidget);
-
-      // Category chips
+      // Category chips in app bar
       expect(find.text('All'), findsOneWidget);
       expect(find.text('Hair Fall'), findsOneWidget);
       expect(find.text('Regrowth'), findsOneWidget);
@@ -90,18 +91,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Verify initial un-docked state
-      expect(find.byType(NestedScrollView), findsOneWidget);
-      expect(find.text('Patient Stories'), findsOneWidget);
+      // Verify CustomScrollView is present
+      expect(find.byType(CustomScrollView), findsOneWidget);
+      expect(find.byType(RefreshIndicator), findsOneWidget);
 
-      // Scroll down to collapse header and dock category bar
-      await tester.drag(find.byType(NestedScrollView), const Offset(0, -300));
+      // Scroll down to dock category bar
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
       await tester.pumpAndSettle();
 
       // Category chips remain pinned and accessible
       expect(find.text('All'), findsOneWidget);
       expect(find.text('Hair Fall'), findsOneWidget);
-      expect(find.text('Patient Stories'), findsOneWidget);
     },
   );
 
@@ -146,4 +146,56 @@ void main() {
     expect(find.text('Test Patient One'), findsOneWidget);
     expect(calls, 2);
   });
+
+  testWidgets(
+    'ReviewsView renders Skeletonizer shimmer cards during page and category load',
+    (tester) async {
+      final completer = Completer<List<ReviewModel>>();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ReviewsView(
+            remoteDataSource: _FakeReviewDataSource((_) => completer.future),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Verify Skeletonizer shimmer cards are displayed during loading
+      expect(
+        find.byWidgetPredicate((widget) => widget is Skeletonizer),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('reviews_loading')), findsOneWidget);
+
+      // Verify no basic CircularProgressIndicator is rendered
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      completer.complete(_testReviews);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Test Patient One'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'ReviewsView shimmer skeleton renders without overflow on compact 320px screen',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final completer = Completer<List<ReviewModel>>();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ReviewsView(
+            remoteDataSource: _FakeReviewDataSource((_) => completer.future),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('reviews_loading')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

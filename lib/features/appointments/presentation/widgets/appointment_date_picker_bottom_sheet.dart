@@ -4,6 +4,7 @@ import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/app_toast.dart';
 import '../../data/patient_appointment_api.dart';
 
 class AppointmentDatePickerBottomSheet extends StatefulWidget {
@@ -19,6 +20,14 @@ class AppointmentDatePickerBottomSheet extends StatefulWidget {
     this.api,
     this.onScheduleLoaded,
   });
+
+  static final Map<String, _AvailabilityCacheEntry> _availabilityCache = {};
+  static const Duration _cacheTtl = Duration(minutes: 1);
+
+  /// Clears in-memory availability cache so newly booked slots refresh immediately.
+  static void clearAvailabilityCache() {
+    _availabilityCache.clear();
+  }
 
   /// Static helper to open the reusable bottom sheet
   static Future<DateTime?> show(
@@ -95,8 +104,19 @@ class _AppointmentDatePickerBottomSheetState
     }
   }
 
-  Future<void> _loadAvailability({bool showLoading = true}) async {
+  Future<void> _loadAvailability({bool showLoading = true, bool force = false}) async {
     final month = _focusedMonth;
+    final cacheKey = '${month.year}-${month.month}';
+    if (!force) {
+      final cached = AppointmentDatePickerBottomSheet._availabilityCache[cacheKey];
+      if (cached != null &&
+          DateTime.now().difference(cached.timestamp) < AppointmentDatePickerBottomSheet._cacheTtl) {
+        if (mounted) {
+          _applyAvailability(cached.data, month);
+        }
+        return;
+      }
+    }
     if (showLoading && mounted) {
       setState(() {
         _isLoadingAvailability = true;
@@ -134,7 +154,6 @@ class _AppointmentDatePickerBottomSheetState
           'Clinic availability response is incomplete.',
         );
       }
-      final rawWeekdays = response['weekly_closed_weekdays'] as List;
       final sessions = rawSessions
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
@@ -144,56 +163,9 @@ class _AppointmentDatePickerBottomSheetState
           'Clinic availability has no valid sessions.',
         );
       }
-      setState(() {
-        _bookingWindowDays = (response['booking_window_days'] as num).toInt();
-        _slotIntervalMinutes = (response['slot_interval_minutes'] as num)
-            .toInt();
-        _appointmentDurationMinutes =
-            (response['appointment_duration_minutes'] as num).toInt();
-        _timezone = response['timezone'] as String;
-        try {
-          final location = tz.getLocation(_timezone);
-          if (widget.initialDate != null) {
-            final clinicInitial = tz.TZDateTime.from(
-              widget.initialDate!,
-              location,
-            );
-            _selectedDate = DateTime(
-              clinicInitial.year,
-              clinicInitial.month,
-              clinicInitial.day,
-            );
-          } else {
-            final now = _clinicNow;
-            _focusedMonth = DateTime(now.year, now.month);
-          }
-        } catch (_) {
-          // Keep the device-local calendar if the server returns an unsupported timezone.
-        }
-        _closedWeekdays = rawWeekdays
-            .whereType<num>()
-            .map((day) => day.toInt())
-            .toSet();
-        _sessions = sessions;
-        _clinicName = response['clinic_name']?.toString() ?? '';
-        _doctorName = response['doctor_name']?.toString() ?? '';
-        _closedDates = rawClosedDates
-            .whereType<Map>()
-            .map((item) => item['date']?.toString() ?? '')
-            .where((date) => date.isNotEmpty)
-            .toSet();
-        _bookedSlots = rawBookedSlots.map((item) => item.toString()).toSet();
-        _isLoadingAvailability = false;
-        _availabilityError = null;
-        if (_selectedDate == null || !_isDateSelectable(_selectedDate!)) {
-          _selectedDate = _firstSelectableDateInMonth(month);
-          _selectedSlot = null;
-        } else if (_selectedSlot != null &&
-            _isSlotUnavailable(_selectedDate!, _selectedSlot!)) {
-          _selectedSlot = null;
-        }
-      });
-      widget.onScheduleLoaded?.call(Map<String, dynamic>.from(response));
+      AppointmentDatePickerBottomSheet._availabilityCache[cacheKey] =
+          _AvailabilityCacheEntry(timestamp: DateTime.now(), data: response);
+      _applyAvailability(response, month);
     } catch (error) {
       if (!mounted ||
           month.year != _focusedMonth.year ||
@@ -206,6 +178,67 @@ class _AppointmentDatePickerBottomSheetState
         _selectedSlot = null;
       });
     }
+  }
+
+  void _applyAvailability(Map<String, dynamic> response, DateTime month) {
+    final rawSessions = response['sessions'] as List;
+    final rawClosedDates = response['closed_dates'] as List;
+    final rawBookedSlots = response['booked_slots'] as List;
+    final rawWeekdays = response['weekly_closed_weekdays'] as List;
+    final sessions = rawSessions
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+
+    setState(() {
+      _bookingWindowDays = (response['booking_window_days'] as num).toInt();
+      _slotIntervalMinutes = (response['slot_interval_minutes'] as num).toInt();
+      _appointmentDurationMinutes =
+          (response['appointment_duration_minutes'] as num).toInt();
+      _timezone = response['timezone'] as String;
+      try {
+        final location = tz.getLocation(_timezone);
+        if (widget.initialDate != null) {
+          final clinicInitial = tz.TZDateTime.from(
+            widget.initialDate!,
+            location,
+          );
+          _selectedDate = DateTime(
+            clinicInitial.year,
+            clinicInitial.month,
+            clinicInitial.day,
+          );
+        } else {
+          final now = _clinicNow;
+          _focusedMonth = DateTime(now.year, now.month);
+        }
+      } catch (_) {
+        // Keep the device-local calendar if the server returns an unsupported timezone.
+      }
+      _closedWeekdays = rawWeekdays
+          .whereType<num>()
+          .map((day) => day.toInt())
+          .toSet();
+      _sessions = sessions;
+      _clinicName = response['clinic_name']?.toString() ?? '';
+      _doctorName = response['doctor_name']?.toString() ?? '';
+      _closedDates = rawClosedDates
+          .whereType<Map>()
+          .map((item) => item['date']?.toString() ?? '')
+          .where((date) => date.isNotEmpty)
+          .toSet();
+      _bookedSlots = rawBookedSlots.map((item) => item.toString()).toSet();
+      _isLoadingAvailability = false;
+      _availabilityError = null;
+      if (_selectedDate == null || !_isDateSelectable(_selectedDate!)) {
+        _selectedDate = _firstSelectableDateInMonth(month);
+        _selectedSlot = null;
+      } else if (_selectedSlot != null &&
+          _isSlotUnavailable(_selectedDate!, _selectedSlot!)) {
+        _selectedSlot = null;
+      }
+    });
+    widget.onScheduleLoaded?.call(Map<String, dynamic>.from(response));
   }
 
   DateTime? _firstSelectableDateInMonth(DateTime month) {
@@ -364,12 +397,9 @@ class _AppointmentDatePickerBottomSheetState
         !_isDateSelectable(selectedDate) ||
         _isSlotUnavailable(selectedDate, selectedSlot)) {
       setState(() => _selectedSlot = null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'That slot is no longer available. Choose another time.',
-          ),
-        ),
+      AppToast.showError(
+        context,
+        'That slot is no longer available. Choose another time.',
       );
       return;
     }
@@ -791,22 +821,14 @@ class _AppointmentDatePickerBottomSheetState
                   onTap: isDisabled
                       ? () {
                           if (isSunday) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'The clinic is closed on this day.',
-                                ),
-                                duration: Duration(seconds: 2),
-                              ),
+                            AppToast.showInfo(
+                              context,
+                              'The clinic is closed on this day.',
                             );
                           } else if (isHoliday) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Selected date is an official clinic holiday.',
-                                ),
-                                duration: Duration(seconds: 2),
-                              ),
+                            AppToast.showInfo(
+                              context,
+                              'Selected date is an official clinic holiday.',
                             );
                           }
                         }
@@ -958,4 +980,14 @@ class _AppointmentDatePickerBottomSheetState
       ],
     );
   }
+}
+
+class _AvailabilityCacheEntry {
+  final DateTime timestamp;
+  final Map<String, dynamic> data;
+
+  _AvailabilityCacheEntry({
+    required this.timestamp,
+    required this.data,
+  });
 }

@@ -107,9 +107,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      // Multilingual switcher button is in AppBar
+      // Multilingual switcher button is in AssessmentOverviewCard (top of body)
       expect(find.byIcon(LucideIcons.languages), findsOneWidget);
-      expect(find.text('EN'), findsOneWidget);
 
       // Scalp Photos Gallery is displayed prominently
       expect(find.text('Clinical Scalp Photos'), findsOneWidget);
@@ -128,7 +127,7 @@ void main() {
       await tester.tap(find.text('हिंदी'));
       await tester.pumpAndSettle();
 
-      // UI switches to Hindi
+      // UI switches to Hindi – report title and Retest button in bottom bar
       expect(find.text('हेयर असेसमेंट रिपोर्ट'), findsOneWidget);
       expect(find.text('पुनः जाँच'), findsOneWidget);
 
